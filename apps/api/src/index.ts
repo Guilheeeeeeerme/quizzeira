@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { env } from "./lib/env";
+import { redis } from "./lib/redis";
 import { registerCors } from "./plugins/cors";
 import { registerCookie } from "./plugins/cookie";
 import { registerRateLimit } from "./plugins/rate-limit";
@@ -7,6 +8,8 @@ import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { quizRoutes } from "./routes/quiz";
 import { progressRoutes } from "./routes/progress";
+import { internalRoutes } from "./routes/internal";
+import { seedPrompts } from "./services/prompt-store";
 
 async function bootstrap() {
   const app = Fastify({
@@ -22,6 +25,13 @@ async function bootstrap() {
   await app.register(authRoutes);
   await app.register(quizRoutes);
   await app.register(progressRoutes);
+  await app.register(internalRoutes, { prefix: "/internal" });
+
+  await seedPrompts();
+
+  app.addHook("onClose", async () => {
+    await redis.quit();
+  });
 
   app.setErrorHandler((error, _request, reply) => {
     app.log.error(error);

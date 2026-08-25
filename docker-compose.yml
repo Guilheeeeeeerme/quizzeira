@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - private
 
   redis:
     image: redis:7-alpine
@@ -27,6 +29,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - private
 
   api:
     build:
@@ -38,6 +42,7 @@ services:
     environment:
       DATABASE_URL: mysql://${MYSQL_USER:-quizapp}:${MYSQL_PASSWORD:-quizapp}@mysql:3306/${MYSQL_DATABASE:-quizapp}
       REDIS_URL: redis://redis:6379
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
     ports:
       - "3000:3000"
     volumes:
@@ -51,6 +56,21 @@ services:
       redis:
         condition: service_healthy
     command: sh /app/apps/api/docker-entrypoint.sh
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - dmz
+      - private
 
   web:
     build:
@@ -70,6 +90,63 @@ services:
       - /app/apps/web/node_modules
     depends_on:
       - api
+    networks:
+      - dmz
+
+  quiz-corrector:
+    build:
+      context: .
+      dockerfile: apps/quiz-corrector/Dockerfile.dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+    volumes:
+      - ./apps/quiz-corrector:/app/apps/quiz-corrector
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/quiz-corrector/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - dmz
+
+  question-updater:
+    build:
+      context: .
+      dockerfile: apps/question-updater/Dockerfile.dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+    volumes:
+      - ./apps/question-updater:/app/apps/question-updater
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/question-updater/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - dmz
 
 volumes:
   mysql_data:
+
+networks:
+  dmz:
+    driver: bridge
+  private:
+    driver: bridge
+    internal: true

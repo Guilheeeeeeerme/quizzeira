@@ -48,25 +48,27 @@ model Question {
   referenceAnswer String?         @db.Text
   explanation     String?         @db.Text
   isActive        Boolean         @default(true)
+  lastReviewedAt  DateTime?
   answers         QuizAnswer[]
   attemptQuestions AttemptQuestion[]
 }
 
 model QuizAttempt {
-  id             String          @id @default(cuid())
-  userId         String
-  user           User            @relation(fields: [userId], references: [id])
-  levelId        Int
-  level          DifficultyLevel @relation(fields: [levelId], references: [id])
-  score          Int?
-  maxScore       Int             @default(5)
-  generalComment String?         @db.Text
-  status         AttemptStatus   @default(IN_PROGRESS)
-  startedAt      DateTime        @default(now())
-  submittedAt    DateTime?
-  correctedAt    DateTime?
-  answers        QuizAnswer[]
-  questions      AttemptQuestion[]
+  id                   String            @id @default(cuid())
+  userId               String
+  user                 User              @relation(fields: [userId], references: [id])
+  levelId              Int
+  level                DifficultyLevel   @relation(fields: [levelId], references: [id])
+  score                Int?
+  maxScore             Int               @default(5)
+  generalComment       String?           @db.Text
+  status               AttemptStatus     @default(IN_PROGRESS)
+  startedAt            DateTime          @default(now())
+  submittedAt          DateTime?
+  correctedAt          DateTime?
+  correctionStartedAt  DateTime?
+  answers              QuizAnswer[]
+  questions            AttemptQuestion[]
 }
 
 model AttemptQuestion {

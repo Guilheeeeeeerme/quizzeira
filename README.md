@@ -45,20 +45,10 @@ Copy [`.env.sample`](.env.sample) to `.env`. Key variables:
 2. Pick a level (Beginner → Pro)
 3. Answer **4 MCQ + 1 open** question
 4. Submit → status `PENDING` (no grading at submit time)
-5. Correction pipeline: `PENDING` → `IN_CORRECTION` → `CORRECTED`
-6. View results when `CORRECTED` (score, general comment, per-question feedback)
+5. **Automatic correction:** the `quiz-corrector` worker picks up pending attempts → `IN_CORRECTION` → `CORRECTED`
+6. Results page polls until `CORRECTED` (score, general comment, per-question feedback)
 
 The UI **never** receives answer keys (`correctIndex`, `referenceAnswer`).
-
-### Dev: trigger correction
-
-In development, simulate async correction:
-
-```bash
-curl -X POST http://localhost:3000/quiz/<attemptId>/correct
-```
-
-Or use **Dev: trigger correction** on the results page.
 
 ## API overview
 

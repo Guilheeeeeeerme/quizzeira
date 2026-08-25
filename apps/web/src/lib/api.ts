@@ -30,10 +30,3 @@ export async function api<T>(
 
   return data as T;
 }
-
-export async function triggerCorrection(attemptId: string) {
-  return api<{ attemptId: string; status: string; score: number }>(
-    `/quiz/${attemptId}/correct`,
-    { method: "POST" },
-  );
-}

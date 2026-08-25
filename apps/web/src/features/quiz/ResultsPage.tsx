@@ -11,12 +11,12 @@ import {
 } from "@chakra-ui/react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import type { AttemptStatus, QuizResultsDto } from "@quiz-app/shared";
-import { api, triggerCorrection } from "../../lib/api";
+import { api } from "../../lib/api";
 
 const statusMessages: Record<AttemptStatus, string> = {
   IN_PROGRESS: "Quiz in progress.",
-  PENDING: "Submitted — awaiting correction.",
-  IN_CORRECTION: "Your quiz is being corrected.",
+  PENDING: "Submitted — your quiz is queued for automatic correction.",
+  IN_CORRECTION: "Your quiz is being corrected automatically.",
   CORRECTED: "Correction complete.",
 };
 
@@ -24,7 +24,6 @@ export function ResultsPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const [results, setResults] = useState<QuizResultsDto | null>(null);
   const [error, setError] = useState("");
-  const [devLoading, setDevLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!attemptId) return;
@@ -43,19 +42,6 @@ export function ResultsPage() {
     }, 3000);
     return () => clearInterval(id);
   }, [results, load]);
-
-  async function runDevCorrection() {
-    if (!attemptId) return;
-    setDevLoading(true);
-    try {
-      await triggerCorrection(attemptId);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Correction failed");
-    } finally {
-      setDevLoading(false);
-    }
-  }
 
   if (error) {
     return <Text color="red.500">{error}</Text>;
@@ -85,13 +71,11 @@ export function ResultsPage() {
 
       {!isCorrected && (
         <Card.Root p={5}>
-          <Stack gap={3}>
-            <Text>Your answers were saved. Feedback will appear once correction is complete.</Text>
-            {import.meta.env.DEV && (
-              <Button size="sm" variant="outline" loading={devLoading} onClick={() => void runDevCorrection()}>
-                Dev: trigger correction
-              </Button>
-            )}
+          <Stack gap={3} align="center">
+            <Text textAlign="center">
+              Your answers were saved. Correction runs automatically — this page will refresh with
+              your score and feedback when it&apos;s ready.
+            </Text>
             <Spinner size="sm" />
           </Stack>
         </Card.Root>

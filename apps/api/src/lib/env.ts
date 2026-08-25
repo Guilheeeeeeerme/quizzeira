@@ -29,4 +29,5 @@ export const env = {
   jwtRefreshTtl: requireEnv("JWT_REFRESH_TTL", "7d"),
   port: Number(process.env.PORT ?? 3000),
   isProduction: process.env.NODE_ENV === "production",
+  internalApiKey: requireEnv("INTERNAL_API_KEY", "dev-internal-key"),
 };
