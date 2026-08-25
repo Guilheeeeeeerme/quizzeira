@@ -1,0 +1,15 @@
+{
+  "name": "quiz-app",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @quiz-app/api",
+    "dev:web": "npm run dev -w @quiz-app/web",
+    "build": "npm run build -w @quiz-app/shared && npm run build -w @quiz-app/api && npm run build -w @quiz-app/web",
+    "db:migrate": "npm run db:migrate -w @quiz-app/api",
+    "db:seed": "npm run db:seed -w @quiz-app/api"
+  }
+}

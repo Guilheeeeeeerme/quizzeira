@@ -1,0 +1,31 @@
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./shell/AuthContext";
+import { AuthGuard, GuestGuard } from "./shell/AuthGuard";
+import { LoginPage } from "./features/auth/LoginPage";
+import { RegisterPage } from "./features/auth/RegisterPage";
+import { DashboardPage } from "./features/quiz/DashboardPage";
+import { QuizPage } from "./features/quiz/QuizPage";
+import { ResultsPage } from "./features/quiz/ResultsPage";
+import { ProgressPage } from "./features/quiz/ProgressPage";
+
+export function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route element={<GuestGuard />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+          </Route>
+          <Route element={<AuthGuard />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/quiz/:attemptId" element={<QuizPage />} />
+            <Route path="/results/:attemptId" element={<ResultsPage />} />
+            <Route path="/progress" element={<ProgressPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}

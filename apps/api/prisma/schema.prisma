@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  OPEN
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  PENDING
+  IN_CORRECTION
+  CORRECTED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime      @default(now())
+  attempts     QuizAttempt[]
+}
+
+model DifficultyLevel {
+  id        Int           @id @default(autoincrement())
+  slug      String        @unique
+  label     String
+  sortOrder Int
+  questions Question[]
+  attempts  QuizAttempt[]
+}
+
+model Question {
+  id              String          @id @default(cuid())
+  levelId         Int
+  level           DifficultyLevel @relation(fields: [levelId], references: [id])
+  type            QuestionType
+  prompt          String          @db.Text
+  options         Json?
+  correctIndex    Int?
+  referenceAnswer String?         @db.Text
+  explanation     String?         @db.Text
+  isActive        Boolean         @default(true)
+  answers         QuizAnswer[]
+  attemptQuestions AttemptQuestion[]
+}
+
+model QuizAttempt {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id])
+  levelId        Int
+  level          DifficultyLevel @relation(fields: [levelId], references: [id])
+  score          Int?
+  maxScore       Int             @default(5)
+  generalComment String?         @db.Text
+  status         AttemptStatus   @default(IN_PROGRESS)
+  startedAt      DateTime        @default(now())
+  submittedAt    DateTime?
+  correctedAt    DateTime?
+  answers        QuizAnswer[]
+  questions      AttemptQuestion[]
+}
+
+model AttemptQuestion {
+  id         String      @id @default(cuid())
+  attemptId  String
+  attempt    QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question    @relation(fields: [questionId], references: [id])
+  sortOrder  Int
+
+  @@unique([attemptId, questionId])
+}
+
+model QuizAnswer {
+  id            String      @id @default(cuid())
+  attemptId     String
+  attempt       QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      Question    @relation(fields: [questionId], references: [id])
+  selectedIndex Int?
+  openText      String?     @db.Text
+  grade         Int?
+  comment       String?     @db.Text
+  isCorrect     Boolean?
+  correctedAt   DateTime?
+
+  @@unique([attemptId, questionId])
+}
