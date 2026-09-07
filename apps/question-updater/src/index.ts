@@ -3,6 +3,8 @@ import {
   dmzGet,
   dmzPatch,
   generateJson,
+  hasLlmProvider,
+  llmErrorCode,
   loadPrompt,
   runLoop,
   workerEnv,
@@ -41,8 +43,8 @@ function adjacentLevel(current: LevelSlug, proposed?: LevelSlug): LevelSlug {
 }
 
 async function tick(): Promise<void> {
-  if (!workerEnv.geminiApiKey) {
-    console.warn(`[${NAME}] GEMINI_API_KEY not set, skipping`);
+  if (!hasLlmProvider()) {
+    console.warn(`[${NAME}] no LLM provider key configured, skipping`);
     return;
   }
 
@@ -76,43 +78,49 @@ async function tick(): Promise<void> {
     2,
   );
 
-  const modernize = await generateJson<ModernizeResult>(modernizePrompt, payload, {
-    googleSearch: true,
-  });
+  try {
+    const modernize = await generateJson<ModernizeResult>(modernizePrompt, payload, {
+      grounding: true,
+      requiredKeys: ["shouldUpdate"],
+    });
 
-  const relevel = await generateJson<RelevelResult>(relevelPrompt, payload);
-  const nextLevel = adjacentLevel(question.levelSlug, relevel.levelSlug);
+    const relevel = await generateJson<RelevelResult>(relevelPrompt, payload);
+    const nextLevel = adjacentLevel(question.levelSlug, relevel.levelSlug);
 
-  const update: QuestionUpdateInput = {};
-  if (modernize.shouldUpdate) {
-    if (modernize.prompt) update.prompt = modernize.prompt;
-    if (question.type === "MULTIPLE_CHOICE") {
-      if (Array.isArray(modernize.options) && modernize.options.length === 4) {
-        update.options = modernize.options;
+    const update: QuestionUpdateInput = {};
+    if (modernize.shouldUpdate) {
+      if (modernize.prompt) update.prompt = modernize.prompt;
+      if (question.type === "MULTIPLE_CHOICE") {
+        if (Array.isArray(modernize.options) && modernize.options.length === 4) {
+          update.options = modernize.options;
+        }
+        if (
+          typeof modernize.correctIndex === "number" &&
+          modernize.correctIndex >= 0 &&
+          modernize.correctIndex <= 3
+        ) {
+          update.correctIndex = modernize.correctIndex;
+        }
+        if (modernize.explanation) update.explanation = modernize.explanation;
+      } else if (modernize.referenceAnswer) {
+        update.referenceAnswer = modernize.referenceAnswer;
       }
-      if (
-        typeof modernize.correctIndex === "number" &&
-        modernize.correctIndex >= 0 &&
-        modernize.correctIndex <= 3
-      ) {
-        update.correctIndex = modernize.correctIndex;
-      }
-      if (modernize.explanation) update.explanation = modernize.explanation;
-    } else if (modernize.referenceAnswer) {
-      update.referenceAnswer = modernize.referenceAnswer;
     }
-  }
-  if (nextLevel !== question.levelSlug) {
-    update.levelSlug = nextLevel;
-  }
+    if (nextLevel !== question.levelSlug) {
+      update.levelSlug = nextLevel;
+    }
 
-  await dmzPatch(`/internal/questions/${question.id}`, update);
-  console.log(
-    `[${NAME}] reviewed ${question.id} updated=${Boolean(modernize.shouldUpdate)} level=${nextLevel} modernize=${modernize.reason ?? ""} relevel=${relevel.reason ?? ""}`,
-  );
+    await dmzPatch(`/internal/questions/${question.id}`, update);
+    console.log(
+      `[${NAME}] reviewed ${question.id} updated=${Boolean(modernize.shouldUpdate)} level=${nextLevel} modernize=${modernize.reason ?? ""} relevel=${relevel.reason ?? ""}`,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[${NAME}] question skipped: code=${llmErrorCode(err) ?? "unknown"} message=${message}`,
+    );
+  }
 }
 
-console.log(
-  `[${NAME}] starting model=${workerEnv.geminiModel} intervalMs=${workerEnv.intervalMs}`,
-);
+console.log(`[${NAME}] starting intervalMs=${workerEnv.intervalMs}`);
 void runLoop(NAME, workerEnv.intervalMs, tick);
