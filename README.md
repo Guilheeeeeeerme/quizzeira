@@ -104,6 +104,10 @@ packages/shared/   Shared TypeScript DTOs
 2. Keep auth cookies on shared domain (`.localhost`)
 3. Backend API unchanged
 
+## Production
+
+Production builds, domains and Hostinger deployment are managed in the private [infra repository](https://github.com/Guilheeeeeeerme/infra). This repository retains local development configuration only. Its GitHub workflow notifies infra when deployment is enabled.
+
 ## License
 
 Private — MVP scaffold.
