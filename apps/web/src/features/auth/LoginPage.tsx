@@ -11,10 +11,12 @@ import {
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../shell/AuthContext";
 import { ApiError } from "../../lib/api";
+import { localizeApiError, useT } from "../../i18n";
 
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -28,7 +30,7 @@ export function LoginPage() {
       await login(email, password);
       navigate("/");
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Login failed");
+      setError(localizeApiError(err instanceof ApiError ? err.message : "Login failed", t));
     } finally {
       setLoading(false);
     }
@@ -37,24 +39,24 @@ export function LoginPage() {
   return (
     <Box maxW="md" mx="auto" mt={16} p={8} bg="white" rounded="lg" shadow="md">
       <Heading size="lg" mb={6}>
-        Sign in
+        {t("Sign in")}
       </Heading>
       <form onSubmit={handleSubmit}>
         <Stack gap={4}>
           <Field.Root>
-            <Field.Label>Email</Field.Label>
+            <Field.Label>{t("Email")}</Field.Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </Field.Root>
           <Field.Root>
-            <Field.Label>Password</Field.Label>
+            <Field.Label>{t("Password")}</Field.Label>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </Field.Root>
           {error && <Text color="red.500">{error}</Text>}
           <Button type="submit" colorPalette="blue" loading={loading}>
-            Sign in
+            {t("Sign in")}
           </Button>
           <Text fontSize="sm">
-            No account? <RouterLink to="/register">Register</RouterLink>
+            {t("No account?")} <RouterLink to="/register">{t("Register")}</RouterLink>
           </Text>
         </Stack>
       </form>

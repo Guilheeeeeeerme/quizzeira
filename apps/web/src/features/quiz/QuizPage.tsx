@@ -13,6 +13,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import type { QuizQuestionDto, SubmitAnswer } from "@quizzeira/shared";
 import { api } from "../../lib/api";
+import { localizeApiError, useT } from "../../i18n";
 
 export function storeQuizSession(attemptId: string, questions: QuizQuestionDto[]) {
   sessionStorage.setItem(`quiz:${attemptId}`, JSON.stringify({ questions }));
@@ -27,6 +28,7 @@ function loadQuizSession(attemptId: string): QuizQuestionDto[] | null {
 export function QuizPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const navigate = useNavigate();
+  const t = useT();
   const [questions, setQuestions] = useState<QuizQuestionDto[]>([]);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, SubmitAnswer>>({});
@@ -85,21 +87,21 @@ export function QuizPage() {
       sessionStorage.removeItem(`quiz:${attemptId}`);
       navigate(`/results/${attemptId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submit failed");
+      setError(localizeApiError(err instanceof Error ? err.message : "Submit failed", t));
     } finally {
       setLoading(false);
     }
   }
 
   if (!current) {
-    return <Text>Loading quiz...</Text>;
+    return <Text>{t("Loading quiz...")}</Text>;
   }
 
   return (
     <Stack gap={6} maxW="2xl">
       <Box>
         <Text fontSize="sm" color="gray.600" mb={2}>
-          Question {step + 1} of {questions.length}
+          {t("Question {current} of {total}", { current: step + 1, total: questions.length })}
         </Text>
         <Progress.Root value={progress} max={100}>
           <Progress.Track>
@@ -129,7 +131,7 @@ export function QuizPage() {
 
       {current.type === "OPEN" && (
         <Field.Root>
-          <Field.Label>Your answer</Field.Label>
+          <Field.Label>{t("Your answer")}</Field.Label>
           <Textarea
             rows={5}
             value={answers[current.id]?.openText ?? ""}
@@ -142,15 +144,15 @@ export function QuizPage() {
 
       <Stack direction="row" gap={3}>
         <Button variant="outline" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
-          Back
+          {t("Back")}
         </Button>
         {step < questions.length - 1 ? (
           <Button colorPalette="blue" disabled={!canProceed()} onClick={() => setStep((s) => s + 1)}>
-            Next
+            {t("Next")}
           </Button>
         ) : (
           <Button colorPalette="green" loading={loading} disabled={!canProceed()} onClick={() => void handleSubmit()}>
-            Submit quiz
+            {t("Submit quiz")}
           </Button>
         )}
       </Stack>

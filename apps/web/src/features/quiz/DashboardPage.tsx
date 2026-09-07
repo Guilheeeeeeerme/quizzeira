@@ -12,6 +12,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import type { LevelDto, ProgressItemDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
+import { localizeApiError, useT } from "../../i18n";
 import { storeQuizSession } from "./QuizPage";
 
 const statusColor: Record<string, string> = {
@@ -23,6 +24,7 @@ const statusColor: Record<string, string> = {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const t = useT();
   const [levels, setLevels] = useState<LevelDto[]>([]);
   const [recent, setRecent] = useState<ProgressItemDto[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function DashboardPage() {
       storeQuizSession(data.attemptId, data.questions);
       navigate(`/quiz/${data.attemptId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start quiz");
+      setError(localizeApiError(err instanceof Error ? err.message : "Failed to start quiz", t));
     } finally {
       setLoading(null);
     }
@@ -60,9 +62,9 @@ export function DashboardPage() {
     <Stack gap={8}>
       <Box>
         <Heading size="lg" mb={2}>
-          Choose a level
+          {t("Choose a level")}
         </Heading>
-        <Text color="gray.600">Each quiz has 4 multiple-choice and 1 open question.</Text>
+        <Text color="gray.600">{t("Each quiz has 4 multiple-choice and 1 open question.")}</Text>
       </Box>
 
       {error && <Text color="red.500">{error}</Text>}
@@ -79,7 +81,7 @@ export function DashboardPage() {
                 onClick={() => void startQuiz(level.slug)}
                 loading={loading === level.slug}
               >
-                Start quiz
+                {t("Start quiz")}
               </Button>
             </Card.Body>
           </Card.Root>
@@ -89,7 +91,7 @@ export function DashboardPage() {
       {recent.length > 0 && (
         <Box>
           <Heading size="md" mb={4}>
-            Recent attempts
+            {t("Recent attempts")}
           </Heading>
           <Stack gap={3}>
             {recent.map((item) => (
@@ -105,6 +107,7 @@ export function DashboardPage() {
 }
 
 function FlexRow({ item, onOpen }: { item: ProgressItemDto; onOpen: () => void }) {
+  const t = useT();
   return (
     <Stack direction={{ base: "column", sm: "row" }} justify="space-between" align={{ sm: "center" }} gap={2}>
       <Box>
@@ -112,12 +115,12 @@ function FlexRow({ item, onOpen }: { item: ProgressItemDto; onOpen: () => void }
         <Badge colorPalette={statusColor[item.status] ?? "gray"}>{item.status}</Badge>
         {item.score !== null && (
           <Text fontSize="sm" color="gray.600" mt={1}>
-            Score: {item.score}/{item.maxScore}
+            {t("Score")}: {item.score}/{item.maxScore}
           </Text>
         )}
       </Box>
       <Button size="sm" variant="outline" onClick={onOpen}>
-        View
+        {t("View")}
       </Button>
     </Stack>
   );

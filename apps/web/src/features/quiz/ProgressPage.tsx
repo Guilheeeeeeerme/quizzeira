@@ -12,6 +12,7 @@ import {
 import { Link as RouterLink } from "react-router-dom";
 import type { ProgressItemDto, ProgressSummaryDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
+import { useLocale, useT } from "../../i18n";
 
 const statusColor: Record<string, string> = {
   IN_PROGRESS: "gray",
@@ -21,6 +22,8 @@ const statusColor: Record<string, string> = {
 };
 
 export function ProgressPage() {
+  const { locale } = useLocale();
+  const t = useT();
   const [items, setItems] = useState<ProgressItemDto[]>([]);
   const [summary, setSummary] = useState<ProgressSummaryDto[]>([]);
 
@@ -37,20 +40,20 @@ export function ProgressPage() {
 
   return (
     <Stack gap={8}>
-      <Heading size="lg">Your progress</Heading>
+      <Heading size="lg">{t("Your progress")}</Heading>
 
       <Box>
         <Heading size="md" mb={4}>
-          Summary by level
+          {t("Summary by level")}
         </Heading>
         <Stack gap={3}>
           {summary.map((s) => (
             <Card.Root key={s.levelSlug} p={4}>
               <Text fontWeight="medium">{s.levelLabel}</Text>
               <Text fontSize="sm" color="gray.600">
-                Attempts: {s.attemptCount}
-                {s.bestScore !== null && ` · Best: ${s.bestScore}/5`}
-                {s.lastScore !== null && ` · Last: ${s.lastScore}/5`}
+                {t("Attempts:")} {s.attemptCount}
+                {s.bestScore !== null && ` · ${t("Best:")} ${s.bestScore}/5`}
+                {s.lastScore !== null && ` · ${t("Last:")} ${s.lastScore}/5`}
               </Text>
             </Card.Root>
           ))}
@@ -59,15 +62,15 @@ export function ProgressPage() {
 
       <Box>
         <Heading size="md" mb={4}>
-          All attempts
+          {t("All attempts")}
         </Heading>
         <Table.Root size="sm">
           <Table.Header>
             <Table.Row>
-              <Table.ColumnHeader>Level</Table.ColumnHeader>
-              <Table.ColumnHeader>Status</Table.ColumnHeader>
-              <Table.ColumnHeader>Score</Table.ColumnHeader>
-              <Table.ColumnHeader>Submitted</Table.ColumnHeader>
+              <Table.ColumnHeader>{t("Level")}</Table.ColumnHeader>
+              <Table.ColumnHeader>{t("Status")}</Table.ColumnHeader>
+              <Table.ColumnHeader>{t("Score")}</Table.ColumnHeader>
+              <Table.ColumnHeader>{t("Submitted")}</Table.ColumnHeader>
               <Table.ColumnHeader></Table.ColumnHeader>
             </Table.Row>
           </Table.Header>
@@ -82,18 +85,18 @@ export function ProgressPage() {
                   {item.score !== null ? `${item.score}/${item.maxScore}` : "—"}
                 </Table.Cell>
                 <Table.Cell>
-                  {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "—"}
+                  {item.submittedAt ? new Date(item.submittedAt).toLocaleString(locale) : "—"}
                 </Table.Cell>
                 <Table.Cell>
                   <Button asChild size="xs" variant="outline">
-                    <RouterLink to={`/results/${item.attemptId}`}>View</RouterLink>
+                    <RouterLink to={`/results/${item.attemptId}`}>{t("View")}</RouterLink>
                   </Button>
                 </Table.Cell>
               </Table.Row>
             ))}
           </Table.Body>
         </Table.Root>
-        {items.length === 0 && <Text color="gray.600">No attempts yet.</Text>}
+        {items.length === 0 && <Text color="gray.600">{t("No attempts yet.")}</Text>}
       </Box>
     </Stack>
   );

@@ -11,10 +11,12 @@ import {
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../shell/AuthContext";
 import { ApiError } from "../../lib/api";
+import { localizeApiError, useT } from "../../i18n";
 
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -29,7 +31,7 @@ export function RegisterPage() {
       await register(email, password, displayName || undefined);
       navigate("/");
     } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Registration failed");
+      setError(localizeApiError(err instanceof ApiError ? err.message : "Registration failed", t));
     } finally {
       setLoading(false);
     }
@@ -38,28 +40,28 @@ export function RegisterPage() {
   return (
     <Box maxW="md" mx="auto" mt={16} p={8} bg="white" rounded="lg" shadow="md">
       <Heading size="lg" mb={6}>
-        Create account
+        {t("Create account")}
       </Heading>
       <form onSubmit={handleSubmit}>
         <Stack gap={4}>
           <Field.Root>
-            <Field.Label>Display name</Field.Label>
+            <Field.Label>{t("Display name")}</Field.Label>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </Field.Root>
           <Field.Root>
-            <Field.Label>Email</Field.Label>
+            <Field.Label>{t("Email")}</Field.Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </Field.Root>
           <Field.Root>
-            <Field.Label>Password</Field.Label>
+            <Field.Label>{t("Password")}</Field.Label>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
           </Field.Root>
           {error && <Text color="red.500">{error}</Text>}
           <Button type="submit" colorPalette="blue" loading={loading}>
-            Register
+            {t("Register")}
           </Button>
           <Text fontSize="sm">
-            Have an account? <RouterLink to="/login">Sign in</RouterLink>
+            {t("Have an account?")} <RouterLink to="/login">{t("Sign in")}</RouterLink>
           </Text>
         </Stack>
       </form>
