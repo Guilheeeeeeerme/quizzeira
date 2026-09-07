@@ -10,38 +10,45 @@ export function extractJson<T>(text: string): T {
   return JSON.parse(trimmed.slice(start, end + 1)) as T;
 }
 
+export interface ProviderCompleteInput {
+  system: string;
+  user: string;
+  model: string;
+  temperature?: number;
+  grounding?: boolean;
+}
+
+export interface LlmProvider {
+  name: "gemini" | "openai";
+  available(): boolean;
+  defaultModel(): string;
+  complete(input: ProviderCompleteInput): Promise<string>;
+}
+
 type GeminiPart = { text?: string };
 type GeminiResponse = {
   candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
   error?: { message?: string };
 };
 
-export async function generateJson<T>(
-  system: string,
-  user: string,
-  opts?: { googleSearch?: boolean; temperature?: number },
-): Promise<T> {
-  if (!workerEnv.geminiApiKey) {
-    throw new Error("GEMINI_API_KEY not set");
-  }
-
+async function geminiRequest(input: ProviderCompleteInput): Promise<string> {
   const generationConfig: Record<string, unknown> = {
-    temperature: opts?.temperature ?? 0.2,
+    temperature: input.temperature ?? 0.2,
   };
-  if (!opts?.googleSearch) {
+  if (!input.grounding) {
     generationConfig.responseMimeType = "application/json";
   }
 
   const payload: Record<string, unknown> = {
-    systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: "user", parts: [{ text: user }] }],
+    systemInstruction: { parts: [{ text: input.system }] },
+    contents: [{ role: "user", parts: [{ text: input.user }] }],
     generationConfig,
   };
-  if (opts?.googleSearch) {
+  if (input.grounding) {
     payload.tools = [{ googleSearch: {} }];
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${workerEnv.geminiModel}:generateContent`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${input.model}:generateContent`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -53,9 +60,9 @@ export async function generateJson<T>(
   const data = (await res.json()) as GeminiResponse;
   if (!res.ok) {
     const message = data.error?.message ?? "request failed";
-    if (opts?.googleSearch && res.status === 429) {
+    if (input.grounding && res.status === 429) {
       console.warn("[gemini] search grounding quota hit, retrying without search");
-      return generateJson<T>(system, user, { ...opts, googleSearch: false });
+      return geminiRequest({ ...input, grounding: false });
     }
     throw new Error(`Gemini ${res.status}: ${message}`);
   }
@@ -65,5 +72,19 @@ export async function generateJson<T>(
       .join("")
       .trim() ?? "";
   if (!text) throw new Error("Empty Gemini response");
-  return extractJson<T>(text);
+  return text;
 }
+
+export async function geminiComplete(input: ProviderCompleteInput): Promise<string> {
+  if (!workerEnv.geminiApiKey) {
+    throw new Error("GEMINI_API_KEY not set");
+  }
+  return geminiRequest(input);
+}
+
+export const geminiProvider: LlmProvider = {
+  name: "gemini",
+  available: () => Boolean(workerEnv.geminiApiKey),
+  defaultModel: () => workerEnv.geminiModel,
+  complete: geminiComplete,
+};

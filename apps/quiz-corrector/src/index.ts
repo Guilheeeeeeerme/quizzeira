@@ -2,6 +2,8 @@ import type { AttemptCorrectionInput, PendingReviewAttempt } from "@quizzeira/sh
 import {
   dmzPost,
   generateJson,
+  hasLlmProvider,
+  llmErrorCode,
   loadPrompt,
   runLoop,
   workerEnv,
@@ -10,8 +12,8 @@ import {
 const NAME = "quiz-corrector";
 
 async function tick(): Promise<void> {
-  if (!workerEnv.geminiApiKey) {
-    console.warn(`[${NAME}] GEMINI_API_KEY not set, skipping`);
+  if (!hasLlmProvider()) {
+    console.warn(`[${NAME}] no LLM provider key configured, skipping`);
     return;
   }
 
@@ -44,7 +46,9 @@ async function tick(): Promise<void> {
       2,
     );
 
-    const result = await generateJson<AttemptCorrectionInput>(system, user);
+    const result = await generateJson<AttemptCorrectionInput>(system, user, {
+      requiredKeys: ["answers", "generalComment"],
+    });
     if (!Array.isArray(result.answers) || typeof result.generalComment !== "string") {
       throw new Error("Invalid correction payload from model");
     }
@@ -58,7 +62,7 @@ async function tick(): Promise<void> {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[${NAME}] correction failed: ${message}`);
+    console.error(`[${NAME}] correction failed: code=${llmErrorCode(err) ?? "unknown"} message=${message}`);
     await dmzPost(`/internal/reviews/${attempt.attemptId}/release`).catch((releaseErr) => {
       const releaseMessage =
         releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
@@ -67,7 +71,5 @@ async function tick(): Promise<void> {
   }
 }
 
-console.log(
-  `[${NAME}] starting model=${workerEnv.geminiModel} intervalMs=${workerEnv.intervalMs}`,
-);
+console.log(`[${NAME}] starting intervalMs=${workerEnv.intervalMs}`);
 void runLoop(NAME, workerEnv.intervalMs, tick);
