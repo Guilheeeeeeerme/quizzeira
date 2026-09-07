@@ -1,5 +1,5 @@
 {
-  "name": "@quiz-app/question-updater",
+  "name": "@quizzeira/question-updater",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -8,8 +8,8 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@quiz-app/shared": "*",
-    "@quiz-app/worker-kit": "*",
+    "@quizzeira/shared": "*",
+    "@quizzeira/worker-kit": "*",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {

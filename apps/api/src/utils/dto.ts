@@ -1,5 +1,5 @@
 import type { Question } from "@prisma/client";
-import type { QuizQuestionDto } from "@quiz-app/shared";
+import type { QuizQuestionDto } from "@quizzeira/shared";
 
 export function toQuizQuestionDto(question: Question): QuizQuestionDto {
   const dto: QuizQuestionDto = {

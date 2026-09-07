@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { AttemptCorrectionInput, QuestionUpdateInput } from "@quiz-app/shared";
+import type { AttemptCorrectionInput, QuestionUpdateInput } from "@quizzeira/shared";
 import { authenticateInternal } from "../plugins/internal-auth";
 import {
   getPrompt,

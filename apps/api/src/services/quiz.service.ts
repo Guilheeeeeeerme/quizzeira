@@ -1,7 +1,7 @@
 import { AttemptStatus, QuestionType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { formatUserResponse, shuffle, toQuizQuestionDto } from "../utils/dto";
-import type { QuizResultsDto, SubmitAnswer } from "@quiz-app/shared";
+import type { QuizResultsDto, SubmitAnswer } from "@quizzeira/shared";
 
 const MCQ_COUNT = 4;
 const OPEN_COUNT = 1;

@@ -7,7 +7,7 @@ import {
   startQuiz,
   submitQuiz,
 } from "../services/quiz.service";
-import type { SubmitAnswer } from "@quiz-app/shared";
+import type { SubmitAnswer } from "@quizzeira/shared";
 import { prisma } from "../lib/prisma";
 
 export async function quizRoutes(app: FastifyInstance) {

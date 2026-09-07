@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { UserDto } from "@quiz-app/shared";
+import type { UserDto } from "@quizzeira/shared";
 import { api, ApiError } from "../lib/api";
 
 interface AuthContextValue {

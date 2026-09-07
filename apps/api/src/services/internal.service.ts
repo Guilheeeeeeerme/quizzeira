@@ -6,7 +6,7 @@ import type {
   QuestionUpdateCandidate,
   QuestionUpdateInput,
   ReviewQuestionPayload,
-} from "@quiz-app/shared";
+} from "@quizzeira/shared";
 import { prisma } from "../lib/prisma";
 
 const STALE_MS = 10 * 60 * 1000;

@@ -1,5 +1,5 @@
 {
-  "name": "@quiz-app/web",
+  "name": "@quizzeira/web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
   "dependencies": {
     "@chakra-ui/react": "^3.4.0",
     "@emotion/react": "^11.14.0",
-    "@quiz-app/shared": "*",
+    "@quizzeira/shared": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.1"

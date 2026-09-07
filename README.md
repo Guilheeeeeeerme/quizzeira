@@ -1,4 +1,4 @@
-# AI Development Quiz App
+# Quizzeira
 
 Educational quiz platform for AI software development topics — agent design, prompt engineering, workflow automation, and more.
 
@@ -81,10 +81,10 @@ npm install
 cp .env.sample .env
 # Set DATABASE_URL and REDIS_URL to localhost
 
-npm run build -w @quiz-app/shared
-npm run db:generate -w @quiz-app/api
-npm run db:migrate:dev -w @quiz-app/api   # or: npx prisma db push
-npm run db:seed -w @quiz-app/api
+npm run build -w @quizzeira/shared
+npm run db:generate -w @quizzeira/api
+npm run db:migrate:dev -w @quizzeira/api   # or: npx prisma db push
+npm run db:seed -w @quizzeira/api
 
 npm run dev:api   # :3000
 npm run dev:web   # :5173

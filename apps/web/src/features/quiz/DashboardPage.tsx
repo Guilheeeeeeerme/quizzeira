@@ -10,7 +10,7 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
-import type { LevelDto, ProgressItemDto } from "@quiz-app/shared";
+import type { LevelDto, ProgressItemDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { storeQuizSession } from "./QuizPage";
 
@@ -43,7 +43,7 @@ export function DashboardPage() {
     setError("");
     setLoading(levelSlug);
     try {
-      const data = await api<{ attemptId: string; questions: import("@quiz-app/shared").QuizQuestionDto[] }>("/quiz/start", {
+      const data = await api<{ attemptId: string; questions: import("@quizzeira/shared").QuizQuestionDto[] }>("/quiz/start", {
         method: "POST",
         body: JSON.stringify({ levelSlug }),
       });

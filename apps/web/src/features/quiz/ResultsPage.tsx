@@ -10,7 +10,7 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { Link as RouterLink, useParams } from "react-router-dom";
-import type { AttemptStatus, QuizResultsDto } from "@quiz-app/shared";
+import type { AttemptStatus, QuizResultsDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 
 const statusMessages: Record<AttemptStatus, string> = {

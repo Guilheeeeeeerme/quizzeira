@@ -11,7 +11,7 @@ RUN npm install
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
-RUN npm run build -w @quiz-app/shared && npm run db:generate -w @quiz-app/api
+RUN npm run build -w @quizzeira/shared && npm run db:generate -w @quizzeira/api
 
 WORKDIR /app/apps/api
 

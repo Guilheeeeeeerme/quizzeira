@@ -10,7 +10,7 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { Link as RouterLink } from "react-router-dom";
-import type { ProgressItemDto, ProgressSummaryDto } from "@quiz-app/shared";
+import type { ProgressItemDto, ProgressSummaryDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 
 const statusColor: Record<string, string> = {

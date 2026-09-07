@@ -18,7 +18,7 @@ export const env = {
   cookieDomain: process.env.COOKIE_DOMAIN ?? "localhost",
   databaseUrl: requireEnv(
     "DATABASE_URL",
-    "mysql://quizapp:quizapp@localhost:3306/quizapp",
+    "mysql://quizzeira:quizzeira@localhost:3306/quizzeira",
   ),
   redisUrl: requireEnv("REDIS_URL", "redis://localhost:6379"),
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 5),

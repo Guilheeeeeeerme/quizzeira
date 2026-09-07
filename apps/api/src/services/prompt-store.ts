@@ -1,4 +1,4 @@
-import type { PromptKey, PromptRecord } from "@quiz-app/shared";
+import type { PromptKey, PromptRecord } from "@quizzeira/shared";
 import { DEFAULT_PROMPTS } from "../lib/default-prompts";
 import { redis } from "../lib/redis";
 

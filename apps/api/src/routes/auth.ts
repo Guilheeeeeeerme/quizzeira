@@ -10,7 +10,7 @@ import {
 } from "../plugins/cookie";
 import { authenticate, parseTtlSeconds } from "../plugins/auth";
 import { env } from "../lib/env";
-import type { UserDto } from "@quiz-app/shared";
+import type { UserDto } from "@quizzeira/shared";
 
 function toUserDto(user: { id: string; email: string; displayName: string | null }): UserDto {
   return { id: user.id, email: user.email, displayName: user.displayName };

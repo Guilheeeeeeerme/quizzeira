@@ -1,4 +1,4 @@
-import type { PromptKey } from "@quiz-app/shared";
+import type { PromptKey } from "@quizzeira/shared";
 
 export const DEFAULT_PROMPTS: Record<PromptKey, string> = {
   "quiz-correction": `You are a fair, accurate grader for an AI/agent-engineering quiz.

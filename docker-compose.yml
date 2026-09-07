@@ -4,9 +4,9 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-quizapp}
-      MYSQL_USER: ${MYSQL_USER:-quizapp}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-quizapp}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quizzeira}
+      MYSQL_USER: ${MYSQL_USER:-quizzeira}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-quizzeira}
     ports:
       - "3306:3306"
     volumes:
@@ -40,7 +40,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: mysql://${MYSQL_USER:-quizapp}:${MYSQL_PASSWORD:-quizapp}@mysql:3306/${MYSQL_DATABASE:-quizapp}
+      DATABASE_URL: mysql://${MYSQL_USER:-quizzeira}:${MYSQL_PASSWORD:-quizzeira}@mysql:3306/${MYSQL_DATABASE:-quizzeira}
       REDIS_URL: redis://redis:6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
     ports:

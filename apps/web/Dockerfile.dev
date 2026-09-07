@@ -11,7 +11,7 @@ RUN npm install
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 
-RUN npm run build -w @quiz-app/shared
+RUN npm run build -w @quizzeira/shared
 
 WORKDIR /app/apps/web
 

@@ -1,5 +1,5 @@
 {
-  "name": "@quiz-app/worker-kit",
+  "name": "@quizzeira/worker-kit",
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",
@@ -9,7 +9,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@quiz-app/shared": "*",
+    "@quizzeira/shared": "*",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {

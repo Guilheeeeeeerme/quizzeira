@@ -13,7 +13,7 @@ COPY packages/shared ./packages/shared
 COPY packages/worker-kit ./packages/worker-kit
 COPY apps/quiz-corrector ./apps/quiz-corrector
 
-RUN npm run build -w @quiz-app/shared
+RUN npm run build -w @quizzeira/shared
 
 WORKDIR /app/apps/quiz-corrector
 

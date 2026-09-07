@@ -1,4 +1,4 @@
-import type { LevelSlug, QuestionUpdateCandidate, QuestionUpdateInput } from "@quiz-app/shared";
+import type { LevelSlug, QuestionUpdateCandidate, QuestionUpdateInput } from "@quizzeira/shared";
 import {
   dmzGet,
   dmzPatch,
@@ -6,7 +6,7 @@ import {
   loadPrompt,
   runLoop,
   workerEnv,
-} from "@quiz-app/worker-kit";
+} from "@quizzeira/worker-kit";
 
 const NAME = "question-updater";
 const LEVELS: LevelSlug[] = [

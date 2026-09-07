@@ -1,11 +1,11 @@
-import type { AttemptCorrectionInput, PendingReviewAttempt } from "@quiz-app/shared";
+import type { AttemptCorrectionInput, PendingReviewAttempt } from "@quizzeira/shared";
 import {
   dmzPost,
   generateJson,
   loadPrompt,
   runLoop,
   workerEnv,
-} from "@quiz-app/worker-kit";
+} from "@quizzeira/worker-kit";
 
 const NAME = "quiz-corrector";
 

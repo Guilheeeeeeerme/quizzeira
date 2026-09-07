@@ -1,4 +1,4 @@
-import type { PromptKey, PromptRecord } from "@quiz-app/shared";
+import type { PromptKey, PromptRecord } from "@quizzeira/shared";
 import { dmzGet } from "./dmz";
 
 export async function loadPrompt(key: PromptKey): Promise<string> {

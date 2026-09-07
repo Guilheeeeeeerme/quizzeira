@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { AttemptStatus } from "@prisma/client";
 import { authenticate } from "../plugins/auth";
 import { prisma } from "../lib/prisma";
-import type { LevelSlug } from "@quiz-app/shared";
+import type { LevelSlug } from "@quizzeira/shared";
 
 export async function progressRoutes(app: FastifyInstance) {
   app.get("/progress", { preHandler: authenticate }, async (request, reply) => {

@@ -11,7 +11,7 @@ import {
   Field,
 } from "@chakra-ui/react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { QuizQuestionDto, SubmitAnswer } from "@quiz-app/shared";
+import type { QuizQuestionDto, SubmitAnswer } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 
 export function storeQuizSession(attemptId: string, questions: QuizQuestionDto[]) {
