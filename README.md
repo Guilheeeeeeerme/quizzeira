@@ -1,15 +1,55 @@
 # Quizzeira
 
-Educational quiz platform for AI software development topics — agent design, prompt engineering, workflow automation, and more.
+Educational quiz platform for AI software-development topics — agent design, prompt engineering, workflow automation and more — with AI-powered answer grading and continuous question upkeep.
 
-## Stack
+## Live
 
-- **Frontend:** React, Vite, Chakra UI v3
-- **Backend:** Fastify, Prisma, MySQL 8
-- **Cache / rate limit:** Redis (`@fastify/rate-limit`, default 5 req/s)
-- **Auth:** JWT in httpOnly cookies (SSO-ready for future MFEs)
+| Application | URL |
+| --- | --- |
+| Web | https://app.quizzeira.ferredemo.dev |
+| API | https://api.quizzeira.ferredemo.dev |
 
-## Quick start
+## Features
+
+- **Five difficulty levels** — Beginner to Pro, each with multiple-choice and open-question pools.
+- **Asynchronous AI grading** — submitted attempts are queued as `PENDING`, picked up by the `quiz-corrector` worker, and returned `CORRECTED` with a score, general comment and per-question feedback.
+- **Question upkeep** — the `question-updater` worker periodically modernizes outdated questions and re-levels them across the difficulty ladder using structured LLM output.
+- **Answer-key isolation** — the UI never receives `correctIndex` or `referenceAnswer`; grading happens entirely in the worker layer.
+- **Hardened API** — JWT access/refresh tokens in httpOnly cookies, Redis-backed rate limiting, internal endpoints isolated behind the API boundary.
+
+## Architecture
+
+```
+Web (Vite + Chakra UI)
+    │  httpOnly JWT cookies
+    ▼
+Fastify API (Prisma → MySQL 8)
+    ├── Redis            → rate limiting + job coordination
+    ├── quiz-corrector   → claims pending attempts → Gemini grading
+    └── question-updater → modernizes / re-levels question pools
+```
+
+Workers share a `worker-kit` package that standardizes LLM loops, structured JSON generation, prompt loading and internal API calls — new workers are a few files, not a new framework.
+
+### Quiz flow
+
+1. Register / sign in.
+2. Pick a level and answer **4 MCQ + 1 open** question.
+3. Submit → attempt status `PENDING` (no grading at submit time).
+4. The corrector worker moves it through `IN_CORRECTION` → `CORRECTED`.
+5. The results page polls until `CORRECTED` and renders score + feedback.
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| API | Fastify, Prisma, MySQL 8 |
+| Cache / limits | Redis (`@fastify/rate-limit`) |
+| Workers | Node workers on a shared `worker-kit` (Gemini structured output) |
+| Frontend | React, Vite, Chakra UI v3 |
+| Auth | JWT access/refresh in httpOnly cookies (SSO-ready) |
+
+## Local development
 
 ```bash
 cp .env.sample .env
@@ -17,97 +57,25 @@ docker compose up --build
 ```
 
 | Service | URL |
-|---------|-----|
-| Web     | http://localhost:5173 |
-| API     | http://localhost:3000 |
-| MySQL   | localhost:3306 |
-| Redis   | localhost:6379 |
+| --- | --- |
+| Web | http://localhost:5173 |
+| API | http://localhost:3000 |
+| MySQL | localhost:3306 |
+| Redis | localhost:6379 |
 
-On first boot the API runs `prisma db push` and seeds 5 difficulty levels with MCQ + open question pools.
+On first boot the API runs migrations and seeds five difficulty levels with MCQ and open question pools.
 
-## Environment
-
-Copy [`.env.sample`](.env.sample) to `.env`. Key variables:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `WEB_ORIGIN` | `http://localhost:5173` | CORS allowed origin |
-| `API_ORIGIN` | `http://localhost:3000` | API base URL |
-| `VITE_API_ORIGIN` | `http://localhost:3000` | Frontend API client |
-| `RATE_LIMIT_MAX` | `5` | Max requests per window |
-| `RATE_LIMIT_WINDOW_MS` | `1000` | Rate limit window (ms) |
-| `JWT_ACCESS_SECRET` | — | Access token signing key |
-| `JWT_REFRESH_SECRET` | — | Refresh token signing key |
-
-## Quiz flow
-
-1. Register / sign in
-2. Pick a level (Beginner → Pro)
-3. Answer **4 MCQ + 1 open** question
-4. Submit → status `PENDING` (no grading at submit time)
-5. **Automatic correction:** the `quiz-corrector` worker picks up pending attempts → `IN_CORRECTION` → `CORRECTED`
-6. Results page polls until `CORRECTED` (score, general comment, per-question feedback)
-
-The UI **never** receives answer keys (`correctIndex`, `referenceAnswer`).
-
-## API overview
-
-### Auth
-- `POST /auth/register` — `{ email, password, displayName? }`
-- `POST /auth/login` — `{ email, password }`
-- `POST /auth/logout`
-- `GET /auth/me`
-
-### Quiz
-- `GET /levels`
-- `POST /quiz/start` — `{ levelSlug }`
-- `POST /quiz/:attemptId/submit` — `{ answers: [{ questionId, selectedIndex?, openText? }] }`
-- `GET /quiz/:attemptId/results`
-- `POST /quiz/:attemptId/correct` — dev only (403 in production)
-
-### Progress
-- `GET /progress`
-- `GET /progress/summary`
-
-### Health
-- `GET /health` — excluded from rate limiting
-
-## Local development (without Docker)
-
-Requires MySQL and Redis running locally.
-
-```bash
-npm install
-cp .env.sample .env
-# Set DATABASE_URL and REDIS_URL to localhost
-
-npm run build -w @quizzeira/shared
-npm run db:generate -w @quizzeira/api
-npm run db:migrate:dev -w @quizzeira/api   # or: npx prisma db push
-npm run db:seed -w @quizzeira/api
-
-npm run dev:api   # :3000
-npm run dev:web   # :5173
-```
-
-## Monorepo layout
+## Repository layout
 
 ```
-apps/api/          Fastify API + Prisma
-apps/web/          React frontend (shell + features/quiz)
-packages/shared/   Shared TypeScript DTOs
+apps/api               Fastify API — auth, levels, attempts, reviews
+apps/quiz-corrector    AI grading worker (claims pending attempts)
+apps/question-updater  Question modernization / re-leveling worker
+apps/web               React + Chakra UI client
+packages/shared        Shared types and contracts
+packages/worker-kit    Reusable worker runtime (LLM loops, prompts, internal API)
 ```
 
-## MFE migration (future)
+## Deployment
 
-1. Extract `apps/web/src/features/quiz` → federated remote
-2. Keep auth cookies on shared domain (`.localhost`)
-3. Backend API unchanged
-
-## Production
-
-Production builds, domains and Hostinger deployment are managed in the private [infra repository](https://github.com/Guilheeeeeeerme/infra). This repository retains local development configuration only. Its GitHub workflow notifies infra when deployment is enabled.
-
-## License
-
-Private — MVP scaffold.
+Production images, DNS, TLS and rollout are owned by a separate private infrastructure repository. Pushes to `main` request a deployment from that repository, which builds reproducible release bundles (application SHA + infrastructure SHA) and rolls them out with health-checked Compose deployments.
