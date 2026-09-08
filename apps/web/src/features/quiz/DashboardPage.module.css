@@ -1,0 +1,60 @@
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.levelCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 148px;
+}
+
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.attemptRow {
+  transition: background 120ms ease-out;
+}
+
+.attemptInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.attemptMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.attemptTitle {
+  font-weight: 500;
+}
+
+.attemptBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2-75);
+}
+
+@media (max-width: 640px) {
+  .attemptInner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attemptRow {
+    transition: none;
+  }
+}

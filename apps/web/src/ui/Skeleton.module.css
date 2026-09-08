@@ -1,0 +1,52 @@
+.root {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--surface-hover) 0%,
+    var(--surface-active) 50%,
+    var(--surface-hover) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-out infinite;
+}
+
+.sm {
+  border-radius: var(--radius-sm);
+}
+
+.md {
+  border-radius: var(--radius-md);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    animation: none;
+  }
+}

@@ -1,0 +1,42 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visual {
+  display: block;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.sm .visual {
+  width: 14px;
+  height: 14px;
+}
+
+.md .visual {
+  width: 20px;
+  height: 20px;
+}
+
+.lg .visual {
+  width: 28px;
+  height: 28px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visual {
+    animation: none;
+    border-color: var(--accent);
+    opacity: 0.7;
+  }
+}

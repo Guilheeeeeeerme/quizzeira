@@ -1,0 +1,29 @@
+.root {
+  display: inline-flex;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+}
+
+.item {
+  min-height: 24px;
+  padding: 0 var(--space-2-75);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.item:hover {
+  color: var(--text-primary);
+}
+
+.selected {
+  background: var(--surface-active);
+  color: var(--text-primary);
+}

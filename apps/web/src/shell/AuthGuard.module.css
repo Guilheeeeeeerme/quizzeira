@@ -1,0 +1,6 @@
+.boot {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: var(--surface-base);
+}

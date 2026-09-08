@@ -1,17 +1,10 @@
 import { useState } from "react";
-import {
-  Box,
-  Button,
-  Heading,
-  Input,
-  Stack,
-  Text,
-  Field,
-} from "@chakra-ui/react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../shell/AuthContext";
+import { AuthLayout } from "../../shell/AuthLayout";
 import { ApiError } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
+import { Button, Field, InlineLink, Input, Stack, Text } from "../../ui";
 
 export function RegisterPage() {
   const { register } = useAuth();
@@ -38,33 +31,53 @@ export function RegisterPage() {
   }
 
   return (
-    <Box maxW="md" mx="auto" mt={16} p={8} bg="white" rounded="lg" shadow="md">
-      <Heading size="lg" mb={6}>
-        {t("Create account")}
-      </Heading>
+    <AuthLayout title={t("Create account")} subtitle={t("Start with a level that matches your pace.")}>
       <form onSubmit={handleSubmit}>
         <Stack gap={4}>
-          <Field.Root>
-            <Field.Label>{t("Display name")}</Field.Label>
-            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-          </Field.Root>
-          <Field.Root>
-            <Field.Label>{t("Email")}</Field.Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </Field.Root>
-          <Field.Root>
-            <Field.Label>{t("Password")}</Field.Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-          </Field.Root>
-          {error && <Text color="red.500">{error}</Text>}
-          <Button type="submit" colorPalette="blue" loading={loading}>
+          <Field label={t("Display name")} htmlFor="register-name">
+            <Input
+              id="register-name"
+              autoComplete="nickname"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </Field>
+          <Field label={t("Email")} htmlFor="register-email">
+            <Input
+              id="register-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              invalid={Boolean(error)}
+            />
+          </Field>
+          <Field label={t("Password")} htmlFor="register-password" hint={t("At least 6 characters")}>
+            <Input
+              id="register-password"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              invalid={Boolean(error)}
+            />
+          </Field>
+          {error ? (
+            <Text tone="danger" size="caption" role="alert">
+              {error}
+            </Text>
+          ) : null}
+          <Button type="submit" fullWidth loading={loading}>
             {t("Register")}
           </Button>
-          <Text fontSize="sm">
-            {t("Have an account?")} <RouterLink to="/login">{t("Sign in")}</RouterLink>
+          <Text size="caption" tone="secondary">
+            {t("Have an account?")} <InlineLink to="/login">{t("Sign in")}</InlineLink>
           </Text>
         </Stack>
       </form>
-    </Box>
+    </AuthLayout>
   );
 }

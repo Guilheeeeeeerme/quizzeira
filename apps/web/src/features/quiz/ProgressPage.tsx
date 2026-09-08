@@ -1,103 +1,151 @@
 import { useEffect, useState } from "react";
-import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Heading,
-  Stack,
-  Table,
-  Text,
-} from "@chakra-ui/react";
-import { Link as RouterLink } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import type { ProgressItemDto, ProgressSummaryDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
-import { useLocale, useT } from "../../i18n";
-
-const statusColor: Record<string, string> = {
-  IN_PROGRESS: "gray",
-  PENDING: "yellow",
-  IN_CORRECTION: "orange",
-  CORRECTED: "green",
-};
+import { localizeApiError, useLocale, useT } from "../../i18n";
+import {
+  Button,
+  EmptyState,
+  Grid,
+  Heading,
+  PageSkeleton,
+  Stack,
+  StatusBadge,
+  Surface,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  Text,
+} from "../../ui";
+import styles from "./ProgressPage.module.css";
 
 export function ProgressPage() {
   const { locale } = useLocale();
   const t = useT();
+  const navigate = useNavigate();
   const [items, setItems] = useState<ProgressItemDto[]>([]);
   const [summary, setSummary] = useState<ProgressSummaryDto[]>([]);
+  const [booting, setBooting] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     void (async () => {
-      const [progress, summaryRes] = await Promise.all([
-        api<{ items: ProgressItemDto[] }>("/progress"),
-        api<{ summary: ProgressSummaryDto[] }>("/progress/summary"),
-      ]);
-      setItems(progress.items);
-      setSummary(summaryRes.summary);
+      try {
+        const [progress, summaryRes] = await Promise.all([
+          api<{ items: ProgressItemDto[] }>("/progress"),
+          api<{ summary: ProgressSummaryDto[] }>("/progress/summary"),
+        ]);
+        setItems(progress.items);
+        setSummary(summaryRes.summary);
+      } catch (err) {
+        setError(localizeApiError(err instanceof Error ? err.message : "Failed to load", t));
+      } finally {
+        setBooting(false);
+      }
     })();
-  }, []);
+  }, [t]);
+
+  if (booting) return <PageSkeleton />;
 
   return (
     <Stack gap={8}>
-      <Heading size="lg">{t("Your progress")}</Heading>
+      <header className={styles.header}>
+        <Heading level={1} size="page">
+          {t("Your progress")}
+        </Heading>
+        <Text tone="secondary" size="bodySm">
+          {t("Track attempts and scores across every level.")}
+        </Text>
+      </header>
 
-      <Box>
-        <Heading size="md" mb={4}>
+      {error ? (
+        <Text tone="danger" size="caption" role="alert">
+          {error}
+        </Text>
+      ) : null}
+
+      <section className={styles.section}>
+        <Heading level={2} size="section">
           {t("Summary by level")}
         </Heading>
-        <Stack gap={3}>
-          {summary.map((s) => (
-            <Card.Root key={s.levelSlug} p={4}>
-              <Text fontWeight="medium">{s.levelLabel}</Text>
-              <Text fontSize="sm" color="gray.600">
-                {t("Attempts:")} {s.attemptCount}
-                {s.bestScore !== null && ` · ${t("Best:")} ${s.bestScore}/5`}
-                {s.lastScore !== null && ` · ${t("Last:")} ${s.lastScore}/5`}
-              </Text>
-            </Card.Root>
-          ))}
-        </Stack>
-      </Box>
+        {summary.length === 0 ? (
+          <EmptyState title={t("No attempts yet.")} />
+        ) : (
+          <Grid columns={3} gap={3}>
+            {summary.map((s) => (
+              <Surface key={s.levelSlug}>
+                <Stack gap={2}>
+                  <Text size="bodySm" className={styles.summaryTitle}>
+                    {s.levelLabel}
+                  </Text>
+                  <Text size="caption" tone="secondary" className="qz-tabular">
+                    {t("Attempts:")} {s.attemptCount}
+                    {s.bestScore !== null ? ` · ${t("Best:")} ${s.bestScore}/5` : ""}
+                    {s.lastScore !== null ? ` · ${t("Last:")} ${s.lastScore}/5` : ""}
+                  </Text>
+                </Stack>
+              </Surface>
+            ))}
+          </Grid>
+        )}
+      </section>
 
-      <Box>
-        <Heading size="md" mb={4}>
+      <section className={styles.section}>
+        <Heading level={2} size="section">
           {t("All attempts")}
         </Heading>
-        <Table.Root size="sm">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeader>{t("Level")}</Table.ColumnHeader>
-              <Table.ColumnHeader>{t("Status")}</Table.ColumnHeader>
-              <Table.ColumnHeader>{t("Score")}</Table.ColumnHeader>
-              <Table.ColumnHeader>{t("Submitted")}</Table.ColumnHeader>
-              <Table.ColumnHeader></Table.ColumnHeader>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {items.map((item) => (
-              <Table.Row key={item.attemptId}>
-                <Table.Cell>{item.levelLabel}</Table.Cell>
-                <Table.Cell>
-                  <Badge colorPalette={statusColor[item.status] ?? "gray"}>{item.status}</Badge>
-                </Table.Cell>
-                <Table.Cell>
-                  {item.score !== null ? `${item.score}/${item.maxScore}` : "—"}
-                </Table.Cell>
-                <Table.Cell>
-                  {item.submittedAt ? new Date(item.submittedAt).toLocaleString(locale) : "—"}
-                </Table.Cell>
-                <Table.Cell>
-                  <Button asChild size="xs" variant="outline">
-                    <RouterLink to={`/results/${item.attemptId}`}>{t("View")}</RouterLink>
-                  </Button>
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-        {items.length === 0 && <Text color="gray.600">{t("No attempts yet.")}</Text>}
-      </Box>
+        {items.length === 0 ? (
+          <EmptyState
+            title={t("No attempts yet.")}
+            description={t("Start a quiz from the dashboard to see history here.")}
+            action={
+              <Button size="sm" variant="secondary" onClick={() => navigate("/")}>
+                {t("Back to dashboard")}
+              </Button>
+            }
+          />
+        ) : (
+          <Table>
+            <THead>
+              <TR>
+                <TH>{t("Level")}</TH>
+                <TH>{t("Status")}</TH>
+                <TH>{t("Score")}</TH>
+                <TH>{t("Submitted")}</TH>
+                <TH />
+              </TR>
+            </THead>
+            <TBody>
+              {items.map((item) => (
+                <TR key={item.attemptId}>
+                  <TD>{item.levelLabel}</TD>
+                  <TD>
+                    <StatusBadge status={item.status} />
+                  </TD>
+                  <TD numeric>
+                    {item.score !== null ? `${item.score}/${item.maxScore}` : "—"}
+                  </TD>
+                  <TD>
+                    {item.submittedAt ? new Date(item.submittedAt).toLocaleString(locale) : "—"}
+                  </TD>
+                  <TD>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => navigate(`/results/${item.attemptId}`)}
+                    >
+                      {t("View")}
+                    </Button>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </section>
     </Stack>
   );
 }

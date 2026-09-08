@@ -1,0 +1,17 @@
+.root {
+  width: 100%;
+}
+
+.track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--surface-active);
+}
+
+.range {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  background: var(--accent);
+}
