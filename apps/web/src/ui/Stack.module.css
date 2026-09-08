@@ -1,0 +1,43 @@
+.root {
+  display: flex;
+  min-width: 0;
+}
+
+.column {
+  flex-direction: column;
+}
+
+.row {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.grid {
+  display: grid;
+  min-width: 0;
+}
+
+.cols1 {
+  grid-template-columns: 1fr;
+}
+
+.cols2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cols3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .cols3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .cols2,
+  .cols3 {
+    grid-template-columns: 1fr;
+  }
+}

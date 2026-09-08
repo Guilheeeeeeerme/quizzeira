@@ -1,17 +1,10 @@
 import { useState } from "react";
-import {
-  Box,
-  Button,
-  Heading,
-  Input,
-  Stack,
-  Text,
-  Field,
-} from "@chakra-ui/react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../shell/AuthContext";
+import { AuthLayout } from "../../shell/AuthLayout";
 import { ApiError } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
+import { Button, Field, InlineLink, Input, Stack, Text } from "../../ui";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -37,29 +30,44 @@ export function LoginPage() {
   }
 
   return (
-    <Box maxW="md" mx="auto" mt={16} p={8} bg="white" rounded="lg" shadow="md">
-      <Heading size="lg" mb={6}>
-        {t("Sign in")}
-      </Heading>
+    <AuthLayout title={t("Sign in")} subtitle={t("Continue your AI development quizzes.")}>
       <form onSubmit={handleSubmit}>
         <Stack gap={4}>
-          <Field.Root>
-            <Field.Label>{t("Email")}</Field.Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </Field.Root>
-          <Field.Root>
-            <Field.Label>{t("Password")}</Field.Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </Field.Root>
-          {error && <Text color="red.500">{error}</Text>}
-          <Button type="submit" colorPalette="blue" loading={loading}>
+          <Field label={t("Email")} htmlFor="login-email">
+            <Input
+              id="login-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              invalid={Boolean(error)}
+            />
+          </Field>
+          <Field label={t("Password")} htmlFor="login-password">
+            <Input
+              id="login-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              invalid={Boolean(error)}
+            />
+          </Field>
+          {error ? (
+            <Text tone="danger" size="caption" role="alert">
+              {error}
+            </Text>
+          ) : null}
+          <Button type="submit" fullWidth loading={loading}>
             {t("Sign in")}
           </Button>
-          <Text fontSize="sm">
-            {t("No account?")} <RouterLink to="/register">{t("Register")}</RouterLink>
+          <Text size="caption" tone="secondary">
+            {t("No account?")} <InlineLink to="/register">{t("Register")}</InlineLink>
           </Text>
         </Stack>
       </form>
-    </Box>
+    </AuthLayout>
   );
 }

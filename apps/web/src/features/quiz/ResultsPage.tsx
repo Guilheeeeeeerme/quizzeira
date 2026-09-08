@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Heading,
-  Spinner,
-  Stack,
-  Text,
-} from "@chakra-ui/react";
-import { Link as RouterLink, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import type { AttemptStatus, QuizResultsDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
+import {
+  Button,
+  Heading,
+  Spinner,
+  Stack,
+  StatusBadge,
+  Surface,
+  Text,
+} from "../../ui";
+import styles from "./ResultsPage.module.css";
 
 const statusMessages: Record<AttemptStatus, string> = {
   IN_PROGRESS: "Quiz in progress.",
@@ -23,6 +23,7 @@ const statusMessages: Record<AttemptStatus, string> = {
 
 export function ResultsPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
+  const navigate = useNavigate();
   const t = useT();
   const [results, setResults] = useState<QuizResultsDto | null>(null);
   const [error, setError] = useState("");
@@ -34,7 +35,9 @@ export function ResultsPage() {
   }, [attemptId]);
 
   useEffect(() => {
-    void load().catch((err) => setError(localizeApiError(err instanceof Error ? err.message : "Failed to load", t)));
+    void load().catch((err) =>
+      setError(localizeApiError(err instanceof Error ? err.message : "Failed to load", t)),
+    );
   }, [load, t]);
 
   useEffect(() => {
@@ -46,79 +49,93 @@ export function ResultsPage() {
   }, [results, load]);
 
   if (error) {
-    return <Text color="red.500">{error}</Text>;
+    return (
+      <Text tone="danger" size="bodySm" role="alert">
+        {error}
+      </Text>
+    );
   }
 
   if (!results) {
     return (
-      <Stack align="center" py={12}>
-        <Spinner size="lg" />
-      </Stack>
+      <div className={styles.loading}>
+        <Spinner size="lg" label={t("Loading results")} />
+      </div>
     );
   }
 
   const isCorrected = results.status === "CORRECTED";
 
   return (
-    <Stack gap={6} maxW="2xl">
-      <Box>
-        <Heading size="lg" mb={2}>
-          {t("Quiz results")}
-        </Heading>
-        <Badge colorPalette={isCorrected ? "green" : "yellow"}>{results.status}</Badge>
-        <Text mt={2} color="gray.600">
+    <Stack gap={6} className={styles.root}>
+      <header className={styles.header}>
+        <div className={styles.titleRow}>
+          <Heading level={1} size="page">
+            {t("Quiz results")}
+          </Heading>
+          <StatusBadge status={results.status} />
+        </div>
+        <Text tone="secondary" size="bodySm">
           {t(statusMessages[results.status])}
         </Text>
-      </Box>
+      </header>
 
-      {!isCorrected && (
-        <Card.Root p={5}>
+      {!isCorrected ? (
+        <Surface className={styles.pending}>
           <Stack gap={3} align="center">
-            <Text textAlign="center">
+            <Text size="bodySm" tone="secondary" className={styles.pendingText}>
               {t(
                 "Your answers were saved. Correction runs automatically — this page will refresh with your score and feedback when it's ready.",
               )}
             </Text>
-            <Spinner size="sm" />
+            <Spinner size="sm" label={t("Waiting for correction")} />
           </Stack>
-        </Card.Root>
-      )}
+        </Surface>
+      ) : null}
 
-      {isCorrected && (
+      {isCorrected ? (
         <>
-          <Card.Root p={5}>
-            <Heading size="md" mb={2}>
-              {t("Score")}: {results.score}/{results.maxScore}
-            </Heading>
-            {results.generalComment && <Text>{results.generalComment}</Text>}
-          </Card.Root>
+          <Surface>
+            <Stack gap={3}>
+              <Heading level={2} size="section">
+                <span className="qz-tabular">
+                  {t("Score")}: {results.score}/{results.maxScore}
+                </span>
+              </Heading>
+              {results.generalComment ? <Text size="bodySm">{results.generalComment}</Text> : null}
+            </Stack>
+          </Surface>
 
-          <Stack gap={4}>
+          <Stack gap={3}>
             {results.answers.map((answer, i) => (
-              <Card.Root key={answer.questionId} p={4}>
-                <Text fontWeight="medium" mb={2}>
-                  {t("Q{index}.", { index: i + 1 })} {answer.prompt}
-                </Text>
-                <Text fontSize="sm" color="gray.600" mb={2}>
-                  {t("Your answer:")} {answer.userResponse}
-                </Text>
-                <Text fontSize="sm">
-                  {t("Grade:")} {answer.grade ?? "—"}/1
-                </Text>
-                {answer.comment && (
-                  <Text mt={2} fontSize="sm">
-                    {answer.comment}
+              <Surface key={answer.questionId}>
+                <Stack gap={2}>
+                  <Text size="bodySm" className={styles.questionTitle}>
+                    {t("Q{index}.", { index: i + 1 })} {answer.prompt}
                   </Text>
-                )}
-              </Card.Root>
+                  <Text size="caption" tone="secondary">
+                    {t("Your answer:")} {answer.userResponse}
+                  </Text>
+                  <Text size="caption" className="qz-tabular">
+                    {t("Grade:")} {answer.grade ?? "—"}/1
+                  </Text>
+                  {answer.comment ? (
+                    <Text size="caption" tone="secondary">
+                      {answer.comment}
+                    </Text>
+                  ) : null}
+                </Stack>
+              </Surface>
             ))}
           </Stack>
         </>
-      )}
+      ) : null}
 
-      <Button variant="outline" alignSelf="start" asChild>
-        <RouterLink to="/">{t("Back to dashboard")}</RouterLink>
-      </Button>
+      <div>
+        <Button variant="secondary" onClick={() => navigate("/")}>
+          {t("Back to dashboard")}
+        </Button>
+      </div>
     </Stack>
   );
 }

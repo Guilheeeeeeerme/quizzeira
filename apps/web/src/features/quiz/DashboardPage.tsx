@@ -1,51 +1,56 @@
 import { useEffect, useState } from "react";
-import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Grid,
-  Heading,
-  Stack,
-  Text,
-} from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
 import type { LevelDto, ProgressItemDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
+import {
+  Button,
+  EmptyState,
+  Grid,
+  Heading,
+  PageSkeleton,
+  Stack,
+  StatusBadge,
+  Surface,
+  Text,
+} from "../../ui";
 import { storeQuizSession } from "./QuizPage";
-
-const statusColor: Record<string, string> = {
-  IN_PROGRESS: "gray",
-  PENDING: "yellow",
-  IN_CORRECTION: "orange",
-  CORRECTED: "green",
-};
+import styles from "./DashboardPage.module.css";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const t = useT();
   const [levels, setLevels] = useState<LevelDto[]>([]);
   const [recent, setRecent] = useState<ProgressItemDto[]>([]);
+  const [booting, setBooting] = useState(true);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     void (async () => {
-      const [levelsRes, progressRes] = await Promise.all([
-        api<{ levels: LevelDto[] }>("/levels"),
-        api<{ items: ProgressItemDto[] }>("/progress"),
-      ]);
-      setLevels(levelsRes.levels);
-      setRecent(progressRes.items.slice(0, 5));
+      try {
+        const [levelsRes, progressRes] = await Promise.all([
+          api<{ levels: LevelDto[] }>("/levels"),
+          api<{ items: ProgressItemDto[] }>("/progress"),
+        ]);
+        setLevels(levelsRes.levels);
+        setRecent(progressRes.items.slice(0, 5));
+      } catch (err) {
+        setError(localizeApiError(err instanceof Error ? err.message : "Failed to load", t));
+      } finally {
+        setBooting(false);
+      }
     })();
-  }, []);
+  }, [t]);
 
   async function startQuiz(levelSlug: string) {
     setError("");
     setLoading(levelSlug);
     try {
-      const data = await api<{ attemptId: string; questions: import("@quizzeira/shared").QuizQuestionDto[] }>("/quiz/start", {
+      const data = await api<{
+        attemptId: string;
+        questions: import("@quizzeira/shared").QuizQuestionDto[];
+      }>("/quiz/start", {
         method: "POST",
         body: JSON.stringify({ levelSlug }),
       });
@@ -58,70 +63,91 @@ export function DashboardPage() {
     }
   }
 
+  if (booting) return <PageSkeleton />;
+
   return (
     <Stack gap={8}>
-      <Box>
-        <Heading size="lg" mb={2}>
+      <header className={styles.header}>
+        <Heading level={1} size="page">
           {t("Choose a level")}
         </Heading>
-        <Text color="gray.600">{t("Each quiz has 4 multiple-choice and 1 open question.")}</Text>
-      </Box>
+        <Text tone="secondary" size="bodySm">
+          {t("Each quiz has 4 multiple-choice and 1 open question.")}
+        </Text>
+      </header>
 
-      {error && <Text color="red.500">{error}</Text>}
+      {error ? (
+        <Text tone="danger" size="caption" role="alert">
+          {error}
+        </Text>
+      ) : null}
 
-      <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={4}>
-        {levels.map((level) => (
-          <Card.Root key={level.slug} p={5}>
-            <Card.Body>
-              <Heading size="md" mb={2}>
-                {level.label}
-              </Heading>
-              <Button
-                colorPalette="blue"
-                onClick={() => void startQuiz(level.slug)}
-                loading={loading === level.slug}
-              >
-                {t("Start quiz")}
-              </Button>
-            </Card.Body>
-          </Card.Root>
-        ))}
-      </Grid>
+      {levels.length === 0 ? (
+        <EmptyState title={t("No levels available.")} />
+      ) : (
+        <Grid columns={3} gap={4}>
+          {levels.map((level) => (
+            <Surface key={level.slug} className={styles.levelCard}>
+              <Stack gap={4}>
+                <Heading level={2} size="card">
+                  {level.label}
+                </Heading>
+                <Text size="caption" tone="tertiary">
+                  {t("4 MCQ · 1 open")}
+                </Text>
+                <Button
+                  onClick={() => void startQuiz(level.slug)}
+                  loading={loading === level.slug}
+                  fullWidth
+                >
+                  {t("Start quiz")}
+                </Button>
+              </Stack>
+            </Surface>
+          ))}
+        </Grid>
+      )}
 
-      {recent.length > 0 && (
-        <Box>
-          <Heading size="md" mb={4}>
-            {t("Recent attempts")}
-          </Heading>
-          <Stack gap={3}>
+      <section className={styles.recent}>
+        <Heading level={2} size="section">
+          {t("Recent attempts")}
+        </Heading>
+        {recent.length === 0 ? (
+          <EmptyState
+            title={t("No attempts yet.")}
+            description={t("Pick a level above to start your first quiz.")}
+          />
+        ) : (
+          <Stack gap={2}>
             {recent.map((item) => (
-              <Card.Root key={item.attemptId} p={4}>
-                <FlexRow item={item} onOpen={() => navigate(`/results/${item.attemptId}`)} />
-              </Card.Root>
+              <Surface key={item.attemptId} className={styles.attemptRow} padded={false}>
+                <div className={styles.attemptInner}>
+                  <div className={styles.attemptMeta}>
+                    <Text size="bodySm" className={styles.attemptTitle}>
+                      {item.levelLabel}
+                    </Text>
+                    <div className={styles.attemptBadges}>
+                      <StatusBadge status={item.status} />
+                      {item.score !== null ? (
+                        <Text size="caption" tone="secondary" className="qz-tabular">
+                          {t("Score")}: {item.score}/{item.maxScore}
+                        </Text>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => navigate(`/results/${item.attemptId}`)}
+                  >
+                    {t("View")}
+                  </Button>
+                </div>
+              </Surface>
             ))}
           </Stack>
-        </Box>
-      )}
-    </Stack>
-  );
-}
-
-function FlexRow({ item, onOpen }: { item: ProgressItemDto; onOpen: () => void }) {
-  const t = useT();
-  return (
-    <Stack direction={{ base: "column", sm: "row" }} justify="space-between" align={{ sm: "center" }} gap={2}>
-      <Box>
-        <Text fontWeight="medium">{item.levelLabel}</Text>
-        <Badge colorPalette={statusColor[item.status] ?? "gray"}>{item.status}</Badge>
-        {item.score !== null && (
-          <Text fontSize="sm" color="gray.600" mt={1}>
-            {t("Score")}: {item.score}/{item.maxScore}
-          </Text>
         )}
-      </Box>
-      <Button size="sm" variant="outline" onClick={onOpen}>
-        {t("View")}
-      </Button>
+      </section>
     </Stack>
   );
 }

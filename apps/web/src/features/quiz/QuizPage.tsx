@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
-import {
-  Box,
-  Button,
-  Heading,
-  Progress,
-  RadioGroup,
-  Stack,
-  Text,
-  Textarea,
-  Field,
-} from "@chakra-ui/react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { QuizQuestionDto, SubmitAnswer } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
+import {
+  Button,
+  Field,
+  Heading,
+  Progress,
+  RadioGroup,
+  RadioItem,
+  Spinner,
+  Stack,
+  Text,
+  Textarea,
+} from "../../ui";
+import styles from "./QuizPage.module.css";
 
 export function storeQuizSession(attemptId: string, questions: QuizQuestionDto[]) {
   sessionStorage.setItem(`quiz:${attemptId}`, JSON.stringify({ questions }));
@@ -94,68 +96,82 @@ export function QuizPage() {
   }
 
   if (!current) {
-    return <Text>{t("Loading quiz...")}</Text>;
+    return (
+      <div className={styles.loading}>
+        <Spinner label={t("Loading quiz...")} />
+        <Text tone="secondary" size="caption">
+          {t("Loading quiz...")}
+        </Text>
+      </div>
+    );
   }
 
   return (
-    <Stack gap={6} maxW="2xl">
-      <Box>
-        <Text fontSize="sm" color="gray.600" mb={2}>
+    <Stack gap={6} className={styles.root}>
+      <div className={styles.progressBlock}>
+        <Text size="caption" tone="secondary" className="qz-tabular">
           {t("Question {current} of {total}", { current: step + 1, total: questions.length })}
         </Text>
-        <Progress.Root value={progress} max={100}>
-          <Progress.Track>
-            <Progress.Range />
-          </Progress.Track>
-        </Progress.Root>
-      </Box>
+        <Progress
+          value={progress}
+          label={t("Question {current} of {total}", { current: step + 1, total: questions.length })}
+        />
+      </div>
 
-      <Heading size="md">{current.prompt}</Heading>
+      <Heading level={1} size="section">
+        {current.prompt}
+      </Heading>
 
-      {current.type === "MULTIPLE_CHOICE" && current.options && (
-        <RadioGroup.Root
-          value={String(answers[current.id]?.selectedIndex ?? "")}
-          onValueChange={(d) => setMcqAnswer(Number(d.value))}
+      {current.type === "MULTIPLE_CHOICE" && current.options ? (
+        <RadioGroup
+          name={`q-${current.id}`}
+          label={t("Answer choices")}
+          value={
+            answers[current.id]?.selectedIndex === undefined
+              ? ""
+              : String(answers[current.id]?.selectedIndex)
+          }
+          onChange={(value) => setMcqAnswer(Number(value))}
         >
-          <Stack gap={3}>
-            {current.options.map((option, index) => (
-              <RadioGroup.Item key={index} value={String(index)}>
-                <RadioGroup.ItemHiddenInput />
-                <RadioGroup.ItemIndicator />
-                <RadioGroup.ItemText>{option}</RadioGroup.ItemText>
-              </RadioGroup.Item>
-            ))}
-          </Stack>
-        </RadioGroup.Root>
-      )}
+          {current.options.map((option, index) => (
+            <RadioItem key={index} value={String(index)}>
+              {option}
+            </RadioItem>
+          ))}
+        </RadioGroup>
+      ) : null}
 
-      {current.type === "OPEN" && (
-        <Field.Root>
-          <Field.Label>{t("Your answer")}</Field.Label>
+      {current.type === "OPEN" ? (
+        <Field label={t("Your answer")} htmlFor="open-answer">
           <Textarea
-            rows={5}
+            id="open-answer"
+            rows={6}
             value={answers[current.id]?.openText ?? ""}
             onChange={(e) => setOpenAnswer(e.target.value)}
           />
-        </Field.Root>
-      )}
+        </Field>
+      ) : null}
 
-      {error && <Text color="red.500">{error}</Text>}
+      {error ? (
+        <Text tone="danger" size="caption" role="alert">
+          {error}
+        </Text>
+      ) : null}
 
-      <Stack direction="row" gap={3}>
-        <Button variant="outline" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+      <div className={styles.actions}>
+        <Button variant="secondary" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
           {t("Back")}
         </Button>
         {step < questions.length - 1 ? (
-          <Button colorPalette="blue" disabled={!canProceed()} onClick={() => setStep((s) => s + 1)}>
+          <Button disabled={!canProceed()} onClick={() => setStep((s) => s + 1)}>
             {t("Next")}
           </Button>
         ) : (
-          <Button colorPalette="green" loading={loading} disabled={!canProceed()} onClick={() => void handleSubmit()}>
+          <Button loading={loading} disabled={!canProceed()} onClick={() => void handleSubmit()}>
             {t("Submit quiz")}
           </Button>
         )}
-      </Stack>
+      </div>
     </Stack>
   );
 }

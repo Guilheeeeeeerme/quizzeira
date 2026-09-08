@@ -1,0 +1,20 @@
+.root {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.raised {
+  background: var(--surface-raised);
+}
+
+.overlay {
+  background: var(--surface-overlay);
+}
+
+.base {
+  background: var(--surface-base);
+}
+
+.padded {
+  padding: var(--space-5);
+}
