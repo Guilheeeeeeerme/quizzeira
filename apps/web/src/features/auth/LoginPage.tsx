@@ -5,15 +5,30 @@ import { AuthLayout } from "../../shell/AuthLayout";
 import { ApiError } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
 import { Button, Field, InlineLink, Input, Stack, Text } from "../../ui";
+import styles from "./LoginPage.module.css";
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginDemo } = useAuth();
   const navigate = useNavigate();
   const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  async function handleDemo() {
+    setError("");
+    setDemoLoading(true);
+    try {
+      await loginDemo();
+      navigate("/");
+    } catch (err: unknown) {
+      setError(localizeApiError(err instanceof ApiError ? err.message : "Demo sign-in failed", t));
+    } finally {
+      setDemoLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,6 +78,15 @@ export function LoginPage() {
           <Button type="submit" fullWidth loading={loading}>
             {t("Sign in")}
           </Button>
+          <div role="separator" aria-orientation="horizontal" className={styles.demoDivider}>
+            <span>{t("or")}</span>
+          </div>
+          <Button type="button" variant="secondary" fullWidth loading={demoLoading} onClick={handleDemo}>
+            {t("Try the demo")}
+          </Button>
+          <Text size="caption" tone="secondary">
+            {t("Instant guest access to sample quizzes — no signup required.")}
+          </Text>
           <Text size="caption" tone="secondary">
             {t("No account?")} <InlineLink to="/register">{t("Register")}</InlineLink>
           </Text>

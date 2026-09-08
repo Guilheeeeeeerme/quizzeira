@@ -10,6 +10,7 @@ import {
 } from "../plugins/cookie";
 import { authenticate, parseTtlSeconds } from "../plugins/auth";
 import { env } from "../lib/env";
+import { randomUUID } from "node:crypto";
 import type { UserDto } from "@quizzeira/shared";
 
 function toUserDto(user: { id: string; email: string; displayName: string | null }): UserDto {
@@ -60,6 +61,32 @@ export async function authRoutes(app: FastifyInstance) {
     const payload = { sub: user.id, email: user.email };
     reply.setCookie(ACCESS_COOKIE, signAccessToken(payload), cookieOptions(parseTtlSeconds(env.jwtAccessTtl, 900)));
     reply.setCookie(REFRESH_COOKIE, signRefreshToken(payload), cookieOptions(parseTtlSeconds(env.jwtRefreshTtl, 604800)));
+
+    return { user: toUserDto(user) };
+  });
+
+  app.post("/auth/demo", async (_request, reply) => {
+    const email = "guest@quizzeira-demo.local";
+    let user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      user = await prisma.user
+        .create({
+          data: {
+            email,
+            passwordHash: await bcrypt.hash(randomUUID(), 10),
+            displayName: "Demo Guest",
+          },
+        })
+        .catch(() => prisma.user.findUnique({ where: { email } }));
+    }
+    if (!user) {
+      return reply.code(500).send({ error: "Demo user unavailable" });
+    }
+
+    const payload = { sub: user.id, email: user.email };
+    reply.setCookie(ACCESS_COOKIE, signAccessToken(payload), cookieOptions(parseTtlSeconds(env.jwtAccessTtl, 900)));
+    // Demo refresh window is short on purpose: guests get a bounded session.
+    reply.setCookie(REFRESH_COOKIE, signRefreshToken(payload), cookieOptions(parseTtlSeconds("1h", 3600)));
 
     return { user: toUserDto(user) };
   });

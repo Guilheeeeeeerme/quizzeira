@@ -1,0 +1,17 @@
+.demoDivider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  color: var(--text-secondary);
+  /* caption-size, secondary tone, centered "or" between hairlines */
+  font-size: var(--fs-caption, 0.8125rem);
+}
+
+.demoDivider::before,
+.demoDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-default);
+}
