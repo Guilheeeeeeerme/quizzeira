@@ -63,7 +63,7 @@ docker compose up --build
 | MySQL | localhost:3306 |
 | Redis | localhost:6379 |
 
-On first boot the API runs migrations and seeds five difficulty levels with MCQ and open question pools.
+On first boot the API runs migrations and seeds five difficulty levels with MCQ and open question pools, plus local users `root@quizzeira.local` and `admin@quizzeira.local` (`Password123!`).
 
 ## Repository layout
 
