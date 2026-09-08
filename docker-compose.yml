@@ -141,6 +141,7 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
@@ -181,6 +182,7 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_UPDATER:-dev-updater-key}
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
@@ -222,6 +224,7 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_GENERATOR:-dev-generator-key}
       WORKER_INTERVAL_MS: ${QUESTION_GENERATOR_INTERVAL_MS:-15000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
