@@ -48,7 +48,7 @@ async function geminiRequest(input: ProviderCompleteInput): Promise<string> {
     payload.tools = [{ googleSearch: {} }];
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${input.model}:generateContent`;
+  const url = `${workerEnv.geminiBaseUrl}/v1beta/models/${input.model}:generateContent`;
   const res = await fetch(url, {
     method: "POST",
     headers: {

@@ -1,4 +1,4 @@
-export { workerEnv, DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_BASE_URL } from "./env";
+export { workerEnv, DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_BASE_URL, DEFAULT_OPENAI_BASE_URL } from "./env";
 export { dmzFetch, dmzGet, dmzPost, dmzPut, dmzPatch } from "./dmz";
 export {
   generateJson,
