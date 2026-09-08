@@ -51,6 +51,8 @@ Workers share a `worker-kit` package that standardizes LLM loops, structured JSO
 
 ## Local development
 
+This repository is development-oriented: `docker-compose.yml` runs a full local stack with dedicated MySQL, Redis, and MinIO for isolated DX. Production does not use this Compose file.
+
 ```bash
 cp .env.sample .env
 docker compose up --build
@@ -60,8 +62,8 @@ docker compose up --build
 | --- | --- |
 | Web | http://localhost:5173 |
 | API | http://localhost:3000 |
-| MySQL | localhost:3306 |
-| Redis | localhost:6379 |
+| MySQL | Compose network only (`mysql:3306`) |
+| Redis | Compose network only (`redis:6379`) |
 
 On first boot the API runs migrations and seeds five difficulty levels with MCQ and open question pools, plus local users `root@quizzeira.local` and `admin@quizzeira.local` (`Password123!`).
 
@@ -98,4 +100,4 @@ Provider notes:
 
 ## Deployment
 
-Production images, DNS, TLS and rollout are owned by a separate private infrastructure repository. Pushes to `main` request a deployment from that repository, which builds reproducible release bundles (application SHA + infrastructure SHA) and rolls them out with health-checked Compose deployments.
+Production images, shared Redis/MinIO (plus Quizzeira-only MySQL), DNS, TLS, and rollout are owned by the private `infra` repository. This app only notifies infra on push to `main` (`.github/workflows/infra.yml`) when repository variable `INFRA_ENABLED=true` and secret `INFRA_DISPATCH_TOKEN` are set. Infra builds reproducible release bundles (application SHA + infrastructure SHA) and rolls them out with health-checked Compose deployments. Redis DB index `/2` is a production isolation detail on the shared Redis; local Compose keeps its own Redis.
