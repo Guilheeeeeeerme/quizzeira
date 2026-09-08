@@ -83,6 +83,17 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: "Demo user unavailable" });
     }
 
+    // Keep the demo sandbox fresh: guest-created attempts and topics expire
+    // after 24h, so sample material never accumulates on the shared demo
+    // account (same lifecycle principle as the promptdesk demo users).
+    const staleCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await prisma.quizAttempt.deleteMany({
+      where: { userId: user.id, startedAt: { lt: staleCutoff } },
+    });
+    await prisma.topic.deleteMany({
+      where: { userId: user.id, createdAt: { lt: staleCutoff } },
+    });
+
     const payload = { sub: user.id, email: user.email };
     reply.setCookie(ACCESS_COOKIE, signAccessToken(payload), cookieOptions(parseTtlSeconds(env.jwtAccessTtl, 900)));
     // Demo refresh window is short on purpose: guests get a bounded session.
