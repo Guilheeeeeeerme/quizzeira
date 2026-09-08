@@ -57,7 +57,7 @@ export function ProgressPage() {
           {t("Your progress")}
         </Heading>
         <Text tone="secondary" size="bodySm">
-          {t("Track attempts and scores across every level.")}
+          {t("Track attempts and scores across your topics.")}
         </Text>
       </header>
 
@@ -83,8 +83,8 @@ export function ProgressPage() {
                   </Text>
                   <Text size="caption" tone="secondary" className="qz-tabular">
                     {t("Attempts:")} {s.attemptCount}
-                    {s.bestScore !== null ? ` · ${t("Best:")} ${s.bestScore}/5` : ""}
-                    {s.lastScore !== null ? ` · ${t("Last:")} ${s.lastScore}/5` : ""}
+                    {s.bestScore !== null ? ` · ${t("Best:")} ${s.bestScore}` : ""}
+                    {s.lastScore !== null ? ` · ${t("Last:")} ${s.lastScore}` : ""}
                   </Text>
                 </Stack>
               </Surface>
@@ -100,10 +100,10 @@ export function ProgressPage() {
         {items.length === 0 ? (
           <EmptyState
             title={t("No attempts yet.")}
-            description={t("Start a quiz from the dashboard to see history here.")}
+            description={t("Start a study pill from Topics to see history here.")}
             action={
               <Button size="sm" variant="secondary" onClick={() => navigate("/")}>
-                {t("Back to dashboard")}
+                {t("Topics")}
               </Button>
             }
           />
@@ -111,7 +111,7 @@ export function ProgressPage() {
           <Table>
             <THead>
               <TR>
-                <TH>{t("Level")}</TH>
+                <TH>{t("Topic")}</TH>
                 <TH>{t("Status")}</TH>
                 <TH>{t("Score")}</TH>
                 <TH>{t("Submitted")}</TH>
@@ -121,7 +121,7 @@ export function ProgressPage() {
             <TBody>
               {items.map((item) => (
                 <TR key={item.attemptId}>
-                  <TD>{item.levelLabel}</TD>
+                  <TD>{item.topicTitle ?? item.levelLabel}</TD>
                   <TD>
                     <StatusBadge status={item.status} />
                   </TD>
@@ -129,7 +129,9 @@ export function ProgressPage() {
                     {item.score !== null ? `${item.score}/${item.maxScore}` : "—"}
                   </TD>
                   <TD>
-                    {item.submittedAt ? new Date(item.submittedAt).toLocaleString(locale) : "—"}
+                    {item.submittedAt
+                      ? new Date(item.submittedAt).toLocaleString(locale)
+                      : "—"}
                   </TD>
                   <TD>
                     <Button

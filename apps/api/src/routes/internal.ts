@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { AttemptCorrectionInput, QuestionUpdateInput } from "@quizzeira/shared";
+import type {
+  AttemptCorrectionInput,
+  GenerationCompleteInput,
+  QuestionUpdateInput,
+} from "@quizzeira/shared";
 import { authenticateInternal } from "../plugins/internal-auth";
 import {
   getPrompt,
@@ -14,6 +18,12 @@ import {
   releaseAttempt,
   updateQuestion,
 } from "../services/internal.service";
+import {
+  claimNextGeneratingAttempt,
+  completePillGeneration,
+  releaseGeneratingAttempt,
+} from "../services/pill.service";
+import { purgeStaleTopics } from "../services/topic.service";
 
 function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
   const error = err as { statusCode?: number; message?: string };
@@ -84,6 +94,39 @@ export async function internalRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  app.post("/pills/claim", async () => {
+    const attempt = await claimNextGeneratingAttempt();
+    return { attempt };
+  });
+
+  app.post<{ Params: { attemptId: string } }>(
+    "/pills/:attemptId/release",
+    async (request, reply) => {
+      try {
+        return await releaseGeneratingAttempt(request.params.attemptId);
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { attemptId: string }; Body: GenerationCompleteInput }>(
+    "/pills/:attemptId/complete",
+    async (request, reply) => {
+      const questions = request.body?.questions;
+      if (!Array.isArray(questions)) {
+        return reply.code(400).send({ error: "questions required" });
+      }
+      try {
+        return await completePillGeneration(request.params.attemptId, { questions });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.post("/topics/purge-stale", async () => purgeStaleTopics());
 
   app.get("/questions/next-for-update", async () => {
     const question = await nextQuestionForUpdate();

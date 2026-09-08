@@ -9,17 +9,30 @@ export class ApiError extends Error {
   }
 }
 
+function localeHeader(): Record<string, string> {
+  try {
+    const stored = localStorage.getItem("quizzeira.locale");
+    if (stored === "pt-BR" || stored === "en") {
+      return { "Accept-Language": stored, "X-Locale": stored };
+    }
+  } catch {}
+  return { "Accept-Language": "en", "X-Locale": "en" };
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...localeHeader(),
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
   const response = await fetch(`${base}${path}`, {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
+    headers,
   });
 
   const data = await response.json().catch(() => ({}));
@@ -28,5 +41,23 @@ export async function api<T>(
     throw new ApiError(data.error ?? "Request failed", response.status);
   }
 
+  return data as T;
+}
+
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append("file", file);
+
+  const response = await fetch(`${base}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: localeHeader(),
+    body,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new ApiError(data.error ?? "Request failed", response.status);
+  }
   return data as T;
 }

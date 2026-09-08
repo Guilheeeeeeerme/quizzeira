@@ -28,6 +28,27 @@ services:
     networks:
       - private
 
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-quizzeira}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-quizzeira-secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+      - dmz
+
   api:
     build:
       context: .
@@ -40,6 +61,12 @@ services:
       DATABASE_URL: mysql://${MYSQL_USER:-quizzeira}:${MYSQL_PASSWORD:-quizzeira}@mysql:3306/${MYSQL_DATABASE:-quizzeira}
       REDIS_URL: redis://redis:6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-quizzeira}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-quizzeira-secret}
+      S3_BUCKET: ${S3_BUCKET:-quizzeira}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
     ports:
       - "3000:3000"
     volumes:
@@ -51,6 +78,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     command: sh /app/apps/api/docker-entrypoint.sh
     healthcheck:
@@ -161,8 +190,43 @@ services:
     networks:
       - dmz
 
+  question-generator:
+    build:
+      context: .
+      dockerfile: apps/question-generator/Dockerfile.dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-15000}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,openai}
+      MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
+      MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
+      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
+      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      WORKER_WINDOWS: ${WORKER_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+    volumes:
+      - ./apps/question-generator:/app/apps/question-generator
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/question-generator/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - dmz
+
 volumes:
   mysql_data:
+  minio_data:
 
 networks:
   dmz:

@@ -6,6 +6,7 @@ export const PROMPT_KEYS = [
   "quiz-correction",
   "question-modernization",
   "difficulty-releveling",
+  "question-generation",
 ] as const satisfies readonly PromptKey[];
 
 const HISTORY_LIMIT = 20;

@@ -72,7 +72,7 @@ export function AuthLayout({
 
       <div className={styles.panel}>
         <div className={styles.brandBlock}>
-          <p className={styles.brand}>{t("AI Dev Quiz")}</p>
+          <p className={styles.brand}>{t("Quizzeira")}</p>
           <Heading level={1} size="display" className={styles.title}>
             {title}
           </Heading>

@@ -15,6 +15,7 @@ import {
 import styles from "./ResultsPage.module.css";
 
 const statusMessages: Record<AttemptStatus, string> = {
+  GENERATING: "Preparing your study pill",
   IN_PROGRESS: "Quiz in progress.",
   PENDING: "Submitted — your quiz is queued for automatic correction.",
   IN_CORRECTION: "Your quiz is being corrected automatically.",
@@ -122,6 +123,16 @@ export function ResultsPage() {
                   {answer.comment ? (
                     <Text size="caption" tone="secondary">
                       {answer.comment}
+                    </Text>
+                  ) : null}
+                  {answer.correctAnswerSummary ? (
+                    <Text size="caption">
+                      {t("Correct answer:")} {answer.correctAnswerSummary}
+                    </Text>
+                  ) : null}
+                  {answer.explanation ? (
+                    <Text size="bodySm" tone="secondary">
+                      {t("Explanation:")} {answer.explanation}
                     </Text>
                   ) : null}
                 </Stack>

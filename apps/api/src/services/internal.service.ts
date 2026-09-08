@@ -45,6 +45,7 @@ async function loadAttemptForReview(attemptId: string): Promise<PendingReviewAtt
     where: { id: attemptId },
     include: {
       level: true,
+      topic: true,
       answers: { include: { question: true } },
       questions: { include: { question: true }, orderBy: { sortOrder: "asc" } },
     },
@@ -55,8 +56,9 @@ async function loadAttemptForReview(attemptId: string): Promise<PendingReviewAtt
   const answerByQuestion = new Map(attempt.answers.map((a) => [a.questionId, a]));
   return {
     attemptId: attempt.id,
-    levelSlug: attempt.level.slug as LevelSlug,
-    levelLabel: attempt.level.label,
+    levelSlug: (attempt.level?.slug as LevelSlug | undefined) ?? "topic",
+    levelLabel: attempt.level?.label ?? attempt.topic?.title ?? "Topic",
+    locale: attempt.locale === "pt-BR" ? "pt-BR" : "en",
     questions: attempt.questions.map(({ question }) => {
       const answer = answerByQuestion.get(question.id);
       return toReviewPayload(question, {
@@ -139,6 +141,8 @@ export async function completeAttemptCorrection(
     let grade = proposed.grade >= 1 ? 1 : 0;
     let isCorrect = Boolean(proposed.isCorrect) && grade === 1;
     let comment = String(proposed.comment ?? "").slice(0, 2000);
+    let explanation = String(proposed.explanation ?? "").slice(0, 4000) || null;
+    let correctAnswerSummary = String(proposed.correctAnswerSummary ?? "").slice(0, 2000) || null;
 
     if (question.type === QuestionType.MULTIPLE_CHOICE) {
       isCorrect = answer.selectedIndex === question.correctIndex;
@@ -148,12 +152,26 @@ export async function completeAttemptCorrection(
           ? (question.explanation ?? "Correct answer.")
           : (question.explanation ?? "Review this topic and try again.");
       }
+      if (!explanation) explanation = question.explanation;
+      if (!correctAnswerSummary && Array.isArray(question.options) && question.correctIndex != null) {
+        const options = question.options as string[];
+        correctAnswerSummary = options[question.correctIndex] ?? null;
+      }
+    } else if (!correctAnswerSummary) {
+      correctAnswerSummary = question.referenceAnswer;
     }
 
     totalScore += grade;
     await prisma.quizAnswer.update({
       where: { id: answer.id },
-      data: { grade, comment, isCorrect, correctedAt: new Date() },
+      data: {
+        grade,
+        comment,
+        explanation,
+        correctAnswerSummary,
+        isCorrect,
+        correctedAt: new Date(),
+      },
     });
   }
 
@@ -190,11 +208,11 @@ async function questionPerformance(questionId: string) {
 
 export async function nextQuestionForUpdate(): Promise<QuestionUpdateCandidate | null> {
   const question = await prisma.question.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, levelId: { not: null } },
     include: { level: true },
     orderBy: [{ lastReviewedAt: "asc" }, { id: "asc" }],
   });
-  if (!question) return null;
+  if (!question?.level) return null;
 
   const levels = await prisma.difficultyLevel.findMany({
     orderBy: { sortOrder: "asc" },
@@ -278,7 +296,7 @@ export async function updateQuestion(id: string, input: QuestionUpdateInput) {
     correctIndex: updated.correctIndex,
     referenceAnswer: updated.referenceAnswer,
     explanation: updated.explanation,
-    levelSlug: updated.level.slug,
+    levelSlug: updated.level?.slug ?? "beginner",
     lastReviewedAt: updated.lastReviewedAt?.toISOString() ?? null,
   };
 }

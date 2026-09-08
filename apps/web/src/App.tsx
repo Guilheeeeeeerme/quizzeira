@@ -3,7 +3,9 @@ import { AuthProvider } from "./shell/AuthContext";
 import { AuthGuard, GuestGuard } from "./shell/AuthGuard";
 import { LoginPage } from "./features/auth/LoginPage";
 import { RegisterPage } from "./features/auth/RegisterPage";
-import { DashboardPage } from "./features/quiz/DashboardPage";
+import { TopicsPage } from "./features/topics/TopicsPage";
+import { TopicEditorPage } from "./features/topics/TopicEditorPage";
+import { StudyFocusPage } from "./features/topics/StudyFocusPage";
 import { QuizPage } from "./features/quiz/QuizPage";
 import { ResultsPage } from "./features/quiz/ResultsPage";
 import { ProgressPage } from "./features/quiz/ProgressPage";
@@ -18,7 +20,10 @@ export function App() {
             <Route path="/register" element={<RegisterPage />} />
           </Route>
           <Route element={<AuthGuard />}>
-            <Route path="/" element={<DashboardPage />} />
+            <Route path="/" element={<TopicsPage />} />
+            <Route path="/topics/new" element={<TopicEditorPage />} />
+            <Route path="/topics/:topicId" element={<TopicEditorPage />} />
+            <Route path="/topics/:topicId/study" element={<StudyFocusPage />} />
             <Route path="/quiz/:attemptId" element={<QuizPage />} />
             <Route path="/results/:attemptId" element={<ResultsPage />} />
             <Route path="/progress" element={<ProgressPage />} />

@@ -13,10 +13,24 @@ enum QuestionType {
 }
 
 enum AttemptStatus {
+  GENERATING
   IN_PROGRESS
   PENDING
   IN_CORRECTION
   CORRECTED
+}
+
+enum AttachmentKind {
+  TEXT
+  PDF
+  IMAGE
+}
+
+enum LinkFetchStatus {
+  PENDING
+  OK
+  FAILED
+  SKIPPED
 }
 
 model User {
@@ -26,6 +40,7 @@ model User {
   displayName  String?
   createdAt    DateTime      @default(now())
   attempts     QuizAttempt[]
+  topics       Topic[]
 }
 
 model DifficultyLevel {
@@ -37,38 +52,101 @@ model DifficultyLevel {
   attempts  QuizAttempt[]
 }
 
+model Topic {
+  id              String            @id @default(cuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  guidelines      String            @db.Text
+  presetSlug      String?
+  preferredLocale String?
+  lastUsedAt      DateTime          @default(now())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  attachments     TopicAttachment[]
+  links           TopicLink[]
+  questions       Question[]
+  attempts        QuizAttempt[]
+
+  @@index([userId])
+  @@index([lastUsedAt])
+}
+
+model TopicAttachment {
+  id            String         @id @default(cuid())
+  topicId       String
+  topic         Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  kind          AttachmentKind
+  filename      String
+  storageKey    String
+  mimeType      String
+  extractedText String?        @db.LongText
+  byteSize      Int
+  createdAt     DateTime       @default(now())
+
+  @@index([topicId])
+}
+
+model TopicLink {
+  id          String          @id @default(cuid())
+  topicId     String
+  topic       Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  url         String          @db.Text
+  label       String?
+  fetchedText String?         @db.LongText
+  fetchStatus LinkFetchStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([topicId])
+}
+
 model Question {
-  id              String          @id @default(cuid())
-  levelId         Int
-  level           DifficultyLevel @relation(fields: [levelId], references: [id])
-  type            QuestionType
-  prompt          String          @db.Text
-  options         Json?
-  correctIndex    Int?
-  referenceAnswer String?         @db.Text
-  explanation     String?         @db.Text
-  isActive        Boolean         @default(true)
-  lastReviewedAt  DateTime?
-  answers         QuizAnswer[]
+  id               String            @id @default(cuid())
+  levelId          Int?
+  level            DifficultyLevel?  @relation(fields: [levelId], references: [id])
+  topicId          String?
+  topic            Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  sourceAttemptId  String?
+  type             QuestionType
+  prompt           String            @db.Text
+  options          Json?
+  correctIndex     Int?
+  referenceAnswer  String?           @db.Text
+  explanation      String?           @db.Text
+  isActive         Boolean           @default(true)
+  lastReviewedAt   DateTime?
+  answers          QuizAnswer[]
   attemptQuestions AttemptQuestion[]
+
+  @@index([topicId])
+  @@index([levelId])
 }
 
 model QuizAttempt {
-  id                   String            @id @default(cuid())
-  userId               String
-  user                 User              @relation(fields: [userId], references: [id])
-  levelId              Int
-  level                DifficultyLevel   @relation(fields: [levelId], references: [id])
-  score                Int?
-  maxScore             Int               @default(5)
-  generalComment       String?           @db.Text
-  status               AttemptStatus     @default(IN_PROGRESS)
-  startedAt            DateTime          @default(now())
-  submittedAt          DateTime?
-  correctedAt          DateTime?
-  correctionStartedAt  DateTime?
-  answers              QuizAnswer[]
-  questions            AttemptQuestion[]
+  id                  String            @id @default(cuid())
+  userId              String
+  user                User              @relation(fields: [userId], references: [id])
+  levelId             Int?
+  level               DifficultyLevel?  @relation(fields: [levelId], references: [id])
+  topicId             String?
+  topic               Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  locale              String            @default("en")
+  focusText           String?           @db.Text
+  score               Int?
+  maxScore            Int               @default(5)
+  generalComment      String?           @db.Text
+  status              AttemptStatus     @default(IN_PROGRESS)
+  startedAt           DateTime          @default(now())
+  submittedAt         DateTime?
+  correctedAt         DateTime?
+  correctionStartedAt DateTime?
+  generationStartedAt DateTime?
+  answers             QuizAnswer[]
+  questions           AttemptQuestion[]
+
+  @@index([topicId])
+  @@index([status])
 }
 
 model AttemptQuestion {
@@ -92,6 +170,8 @@ model QuizAnswer {
   openText      String?     @db.Text
   grade         Int?
   comment       String?     @db.Text
+  explanation   String?     @db.Text
+  correctAnswerSummary String? @db.Text
   isCorrect     Boolean?
   correctedAt   DateTime?
 

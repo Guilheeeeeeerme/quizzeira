@@ -71,8 +71,13 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Grade:": "Nota:",
     "Back to dashboard": "Voltar ao painel",
     "Your progress": "Seu progresso",
+    "Track attempts and scores across your topics.":
+      "Acompanhe tentativas e pontuações nos seus tópicos.",
     "Track attempts and scores across every level.":
       "Acompanhe tentativas e pontuações em todos os níveis.",
+    "Start a study pill from Topics to see history here.":
+      "Inicie uma pill em Tópicos para ver o histórico aqui.",
+    "Topic": "Tópico",
     "Summary by level": "Resumo por nível",
     "Attempts:": "Tentativas:",
     "Best:": "Melhor:",
@@ -91,6 +96,69 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Invalid credentials": "Credenciais inválidas",
     "Unauthorized": "Não autorizado",
     "Request failed": "Falha na requisição",
+    "Quizzeira": "Quizzeira",
+    "Topics": "Tópicos",
+    "Your topics": "Seus tópicos",
+    "Create study topics, attach materials, and take short daily pills.":
+      "Crie tópicos de estudo, anexe materiais e faça pills curtas diárias.",
+    "Topics unused for 30 days are deleted automatically.":
+      "Tópicos sem uso por 30 dias são apagados automaticamente.",
+    "New topic": "Novo tópico",
+    "No topics yet.": "Nenhum tópico ainda.",
+    "{n} files": "{n} arquivos",
+    "{n} links": "{n} links",
+    "Study now": "Estudar agora",
+    "Edit": "Editar",
+    "Edit topic": "Editar tópico",
+    "Pick a preset to seed guidelines, then customize.":
+      "Escolha um preset para preencher as diretrizes e personalize.",
+    "Preset": "Preset",
+    "Title": "Título",
+    "Guidelines": "Diretrizes",
+    "Editable — preset is only a starting point.":
+      "Editável — o preset é só um ponto de partida.",
+    "Save": "Salvar",
+    "Links": "Links",
+    "Add careers pages, job posts, or study resources. We fetch public pages when possible.":
+      "Adicione páginas de carreiras, vagas ou materiais. Buscamos páginas públicas quando possível.",
+    "Add link": "Adicionar link",
+    "Remove": "Remover",
+    "Attachments": "Anexos",
+    "Upload file": "Enviar arquivo",
+    "Delete topic": "Excluir tópico",
+    "Delete topic?": "Excluir tópico?",
+    "This removes the topic, materials, and related study pills.":
+      "Isso remove o tópico, materiais e pills relacionadas.",
+    "What do you want to focus on today?": "No que você quer focar hoje?",
+    "Optional — skip to let the AI use your topic guidelines":
+      "Opcional — pule para a IA usar as diretrizes do tópico",
+    "Today's focus": "Foco de hoje",
+    "e.g. History and Geography mock aligned to the notice":
+      "ex.: simulado de História e Geografia alinhado ao edital",
+    "Examples": "Exemplos",
+    "Start studying": "Começar a estudar",
+    "Skip and start": "Pular e começar",
+    "Preparing your study pill": "Preparando sua pill de estudo",
+    "The AI is choosing question types and length for a short session.":
+      "A IA está escolhendo tipos e quantidade de questões para uma sessão curta.",
+    "Topic not found": "Tópico não encontrado",
+    "Correct answer:": "Resposta correta:",
+    "Explanation:": "Explicação:",
+    "Generating": "Gerando",
+    "In progress": "Em andamento",
+    "Pending": "Pendente",
+    "In correction": "Em correção",
+    "Corrected": "Corrigido",
+    "Timed out waiting for pill": "Tempo esgotado ao gerar a pill",
+    "Pill generation failed": "Falha ao gerar a pill",
+    "title and guidelines required": "título e diretrizes obrigatórios",
+    "Invalid presetSlug": "Preset inválido",
+    "Invalid URL": "URL inválida",
+    "URL must be http(s)": "A URL deve ser http(s)",
+    "Empty file": "Arquivo vazio",
+    "File too large (max 20MB)": "Arquivo muito grande (máx. 20MB)",
+    "file required": "arquivo obrigatório",
+    "url required": "url obrigatória",
   },
 };
 

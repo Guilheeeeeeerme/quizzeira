@@ -79,8 +79,15 @@ export async function submitQuiz(
     }
     const question = attempt.questions.find((q) => q.questionId === answer.questionId)!.question;
     if (question.type === QuestionType.MULTIPLE_CHOICE) {
-      if (answer.selectedIndex === undefined || answer.selectedIndex < 0 || answer.selectedIndex > 3) {
-        throw Object.assign(new Error("MCQ requires selectedIndex 0-3"), { statusCode: 400 });
+      const optionCount = Array.isArray(question.options)
+        ? (question.options as unknown[]).length
+        : 4;
+      if (
+        answer.selectedIndex === undefined ||
+        answer.selectedIndex < 0 ||
+        answer.selectedIndex >= Math.max(optionCount, 1)
+      ) {
+        throw Object.assign(new Error("MCQ requires a valid selectedIndex"), { statusCode: 400 });
       }
     } else if (!answer.openText?.trim()) {
       throw Object.assign(new Error("Open question requires openText"), { statusCode: 400 });
@@ -140,6 +147,8 @@ export async function getQuizResults(userId: string, attemptId: string): Promise
       ),
       grade: isCorrected ? (answer?.grade ?? null) : null,
       comment: isCorrected ? (answer?.comment ?? null) : null,
+      explanation: isCorrected ? (answer?.explanation ?? null) : null,
+      correctAnswerSummary: isCorrected ? (answer?.correctAnswerSummary ?? null) : null,
     };
   });
 
