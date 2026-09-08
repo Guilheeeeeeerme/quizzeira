@@ -353,7 +353,9 @@ export async function internalRoutes(app: FastifyInstance) {
 
   app.post("/crawler/catalog/seed", async () => {
     await ensureCatalogSeeded();
-    return { ok: true };
+    const { seedPastExamQuestionBank } = await import("../lib/question-bank-seed");
+    const bank = await seedPastExamQuestionBank("pt");
+    return { ok: true, bank };
   });
 
   app.get<{ Querystring: { status?: string } }>("/crawler/sources", async (request) => {

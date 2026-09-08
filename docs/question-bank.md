@@ -36,3 +36,5 @@ Then open http://localhost:5173 → **Open exams**.
 | `FIRECRAWL_API_KEY` | empty | Live past-exam enrich (optional) |
 
 Primary past-exam hub seed: [PCI Concursos — Provas](https://www.pciconcursos.com.br/provas/) (`pciconcursos.com.br`).
+
+Bundled starter bank: Transpetro PSP Terra Superior **2023.2 Administração** (38 MCQs from `administracao.pdf` + `gabarito.pdf`) seeded into `transpetro-cesgranrio` / `transpetro` on catalog seed.

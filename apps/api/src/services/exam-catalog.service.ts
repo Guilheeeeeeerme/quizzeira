@@ -164,6 +164,10 @@ export async function ensureCatalogSeeded(): Promise<void> {
     await upsertPlaceholder(p);
     have.add(p.examSlug);
   }
+  const { seedPastExamQuestionBank } = await import("../lib/question-bank-seed");
+  await seedPastExamQuestionBank("pt").catch((err) => {
+    console.warn("[exam-catalog] past-exam bank seed failed", err);
+  });
 }
 
 export async function listExamCatalog(): Promise<ExamCatalogItemDto[]> {
