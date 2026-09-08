@@ -1,0 +1,45 @@
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.sm {
+  gap: var(--space-2);
+}
+
+.figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.link {
+  display: block;
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-overlay);
+}
+
+.image {
+  display: block;
+  max-width: min(100%, 36rem);
+  max-height: 20rem;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.sm .image {
+  max-width: min(100%, 16rem);
+  max-height: 10rem;
+}
+
+.caption {
+  font-size: var(--text-12);
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}

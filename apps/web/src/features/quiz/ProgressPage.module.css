@@ -9,7 +9,3 @@
   flex-direction: column;
   gap: var(--space-4);
 }
-
-.summaryTitle {
-  font-weight: 500;
-}

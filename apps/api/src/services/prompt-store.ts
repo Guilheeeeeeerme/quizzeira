@@ -7,6 +7,7 @@ export const PROMPT_KEYS = [
   "question-modernization",
   "difficulty-releveling",
   "question-generation",
+  "topic-inference",
 ] as const satisfies readonly PromptKey[];
 
 const HISTORY_LIMIT = 20;
@@ -122,7 +123,15 @@ async function seedPrompt(key: PromptKey): Promise<PromptRecord> {
 
 export async function seedPrompts(): Promise<void> {
   for (const key of PROMPT_KEYS) {
-    const exists = await redis.exists(currentKey(key));
-    if (!exists) await seedPrompt(key);
+    const raw = await redis.get(currentKey(key));
+    if (!raw) {
+      await seedPrompt(key);
+      continue;
+    }
+    const existing = JSON.parse(raw) as PromptRecord;
+    // Refresh virgin seed bodies when defaults change; leave operator-edited prompts alone.
+    if (existing.note === "seed" && existing.body !== DEFAULT_PROMPTS[key]) {
+      await putPrompt(key, DEFAULT_PROMPTS[key], "seed");
+    }
   }
 }

@@ -10,9 +10,11 @@ import { authRoutes } from "./routes/auth";
 import { quizRoutes } from "./routes/quiz";
 import { progressRoutes } from "./routes/progress";
 import { topicRoutes } from "./routes/topics";
+import { examRoutes } from "./routes/exams";
 import { internalRoutes } from "./routes/internal";
 import { adminRoutes } from "./routes/admin";
 import { seedPrompts } from "./services/prompt-store";
+import { ensureCatalogSeeded } from "./services/exam-catalog.service";
 
 async function bootstrap() {
   if (env.isProduction && env.internalApiKey === "dev-internal-key") {
@@ -38,10 +40,14 @@ async function bootstrap() {
   await app.register(quizRoutes);
   await app.register(progressRoutes);
   await app.register(topicRoutes);
+  await app.register(examRoutes);
   await app.register(adminRoutes);
   await app.register(internalRoutes, { prefix: "/internal" });
 
   await seedPrompts();
+  await ensureCatalogSeeded().catch((err) => {
+    app.log.warn({ err }, "exam catalog seed skipped");
+  });
 
   app.addHook("onClose", async () => {
     await redis.quit();

@@ -12,11 +12,12 @@ export class ApiError extends Error {
 function localeHeader(): Record<string, string> {
   try {
     const stored = localStorage.getItem("quizzeira.locale");
-    if (stored === "pt-BR" || stored === "en") {
-      return { "Accept-Language": stored, "X-Locale": stored };
+    if (stored === "pt" || stored === "pt-BR" || stored === "en") {
+      const locale = stored === "en" ? "en" : "pt";
+      return { "Accept-Language": locale, "X-Locale": locale };
     }
   } catch {}
-  return { "Accept-Language": "en", "X-Locale": "en" };
+  return { "Accept-Language": "pt", "X-Locale": "pt" };
 }
 
 export async function api<T>(

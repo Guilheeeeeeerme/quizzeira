@@ -10,9 +10,12 @@ import type {
 } from "@quizzeira/shared";
 import { isTopicPresetSlug } from "@quizzeira/shared";
 import { prisma } from "../lib/prisma";
-import { fetchUrlText, excerptText } from "../lib/fetch-url";
-import { attachmentKindFromMime, extractAttachmentText } from "../lib/extract-text";
-import { putObject, deleteObject } from "../lib/storage";
+import { fetchUrlText } from "../lib/fetch-url";
+import {
+  attachmentKindFromMime,
+  extractAndStoreAttachmentText,
+} from "../lib/extract-text";
+import { putObject, deleteObject, getObjectBuffer } from "../lib/storage";
 
 export const TOPIC_TTL_DAYS = 30;
 
@@ -205,6 +208,10 @@ export async function updateTopic(
       ...(input.guidelines !== undefined ? { guidelines: input.guidelines.trim() } : {}),
       ...(input.presetSlug !== undefined ? { presetSlug: input.presetSlug } : {}),
       ...(input.preferredLocale !== undefined ? { preferredLocale: input.preferredLocale } : {}),
+      // Guidelines/preset shape the study plan — force re-inference next generation.
+      ...((input.guidelines !== undefined || input.presetSlug !== undefined) && {
+        inferredSyllabus: null,
+      }),
       lastUsedAt: new Date(),
     },
     include: {
@@ -254,7 +261,10 @@ export async function addTopicLink(
       fetchStatus: fetched.ok ? LinkFetchStatus.OK : LinkFetchStatus.FAILED,
     },
   });
-  await touchTopicLastUsed(topicId);
+  await prisma.topic.update({
+    where: { id: topicId },
+    data: { lastUsedAt: new Date(), inferredSyllabus: null },
+  });
 
   return getTopic(userId, topicId);
 }
@@ -269,6 +279,10 @@ export async function deleteTopicLink(
   if (result.count === 0) {
     throw Object.assign(new Error("Link not found"), { statusCode: 404 });
   }
+  await prisma.topic.update({
+    where: { id: topicId },
+    data: { lastUsedAt: new Date(), inferredSyllabus: null },
+  });
   return getTopic(userId, topicId);
 }
 
@@ -288,7 +302,11 @@ export async function addTopicAttachment(
   const kind = attachmentKindFromMime(file.mimeType, file.filename);
   const storageKey = `topics/${topicId}/${randomUUID()}-${file.filename.replace(/[^\w.\-]+/g, "_")}`;
   await putObject(storageKey, file.buffer, file.mimeType || "application/octet-stream");
-  const extractedText = await extractAttachmentText(kind, file.buffer, file.mimeType);
+  const extractedText = await extractAndStoreAttachmentText(
+    kind,
+    file.buffer,
+    file.mimeType,
+  );
 
   await prisma.topicAttachment.create({
     data: {
@@ -297,12 +315,41 @@ export async function addTopicAttachment(
       filename: file.filename,
       storageKey,
       mimeType: file.mimeType || "application/octet-stream",
-      extractedText: excerptText(extractedText, 40_000),
+      extractedText,
       byteSize: file.buffer.length,
     },
   });
-  await touchTopicLastUsed(topicId);
+  await prisma.topic.update({
+    where: { id: topicId },
+    data: { lastUsedAt: new Date(), inferredSyllabus: null },
+  });
 
+  return getTopic(userId, topicId);
+}
+
+/** Re-run PDF/text extraction with current study-context rules; clears inferredSyllabus. */
+export async function refreshTopicAttachmentExtractions(
+  userId: string,
+  topicId: string,
+): Promise<TopicDto> {
+  await loadTopic(userId, topicId);
+  const attachments = await prisma.topicAttachment.findMany({ where: { topicId } });
+  for (const attachment of attachments) {
+    const buffer = await getObjectBuffer(attachment.storageKey);
+    const extractedText = await extractAndStoreAttachmentText(
+      attachment.kind,
+      buffer,
+      attachment.mimeType,
+    );
+    await prisma.topicAttachment.update({
+      where: { id: attachment.id },
+      data: { extractedText },
+    });
+  }
+  await prisma.topic.update({
+    where: { id: topicId },
+    data: { lastUsedAt: new Date(), inferredSyllabus: null },
+  });
   return getTopic(userId, topicId);
 }
 
@@ -318,5 +365,9 @@ export async function deleteTopicAttachment(
   if (result.count === 0) {
     throw Object.assign(new Error("Attachment not found"), { statusCode: 404 });
   }
+  await prisma.topic.update({
+    where: { id: topicId },
+    data: { lastUsedAt: new Date(), inferredSyllabus: null },
+  });
   return getTopic(userId, topicId);
 }

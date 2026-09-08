@@ -31,7 +31,7 @@ export function RegisterPage() {
   }
 
   return (
-    <AuthLayout title={t("Create account")} subtitle={t("Start with a level that matches your pace.")}>
+    <AuthLayout title={t("Create account")} subtitle={t("Pick an open exam and start a study pill.")}>
       <form onSubmit={handleSubmit}>
         <Stack gap={4}>
           <Field label={t("Display name")} htmlFor="register-name">

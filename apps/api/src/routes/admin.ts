@@ -12,6 +12,15 @@ import {
   listPromptProposals,
   rejectPromptProposal,
 } from "../services/prompt-store";
+import { crawlerForceRunKey } from "@quizzeira/shared";
+import { redis } from "../lib/redis";
+import { questionBankOverview } from "../services/question-bank.service";
+import {
+  getCrawlerObservability,
+  listCrawlerSources,
+  proposeCrawlerSource,
+  upsertCrawlerSource,
+} from "../services/crawler-registry.store";
 
 function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
   const error = err as { statusCode?: number; message?: string };
@@ -80,5 +89,45 @@ export async function adminRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  app.get<{ Querystring: { examSlug?: string } }>(
+    "/admin/question-bank/stats",
+    async (request) => questionBankOverview(request.query.examSlug),
+  );
+
+  app.get("/admin/crawler/status", async () => getCrawlerObservability());
+
+  app.get("/admin/crawler/sources", async () => {
+    const items = await listCrawlerSources();
+    return { items };
+  });
+
+  app.post<{
+    Body: { url?: string; name?: string; notes?: string; activate?: boolean };
+  }>("/admin/crawler/sources/propose", async (request, reply) => {
+    if (!request.body?.url?.trim()) {
+      return reply.code(400).send({ error: "url required" });
+    }
+    const result = await proposeCrawlerSource({
+      url: request.body.url.trim(),
+      name: request.body.name,
+      notes: request.body.notes,
+    });
+    if (result.proposed && result.source && request.body.activate) {
+      const source = await upsertCrawlerSource({
+        ...result.source,
+        status: "active",
+        trust: "medium",
+      });
+      return { proposed: true, source };
+    }
+    return result;
+  });
+
+  /** Soft trigger: set a Redis flag the crawler checks each tick. */
+  app.post("/admin/crawler/run-now", async () => {
+    await redis.set(crawlerForceRunKey(), "1", "EX", 3600);
+    return { queued: true };
+  });
 }
 

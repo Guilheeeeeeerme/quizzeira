@@ -4,15 +4,17 @@ import { authenticate } from "../plugins/auth";
 import {
   addTopicAttachment,
   addTopicLink,
-  createTopic,
   deleteTopic,
   deleteTopicAttachment,
   deleteTopicLink,
   getTopic,
   listTopics,
+  refreshTopicAttachmentExtractions,
   updateTopic,
 } from "../services/topic.service";
 import { getPillAttempt, startPill } from "../services/pill.service";
+import { guardedCreateTopic } from "./exams";
+import { assertOpenExamOnlyPreset } from "../services/exam-catalog.service";
 
 function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
   const error = err as { statusCode?: number; message?: string };
@@ -30,7 +32,7 @@ export async function topicRoutes(app: FastifyInstance) {
   app.post<{ Body: CreateTopicInput }>("/topics", async (request, reply) => {
     if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
     try {
-      return await createTopic(request.userId, request.body ?? ({} as CreateTopicInput));
+      return await guardedCreateTopic(request.userId, request.body ?? ({} as CreateTopicInput));
     } catch (err) {
       return httpError(err, reply);
     }
@@ -50,6 +52,9 @@ export async function topicRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
       try {
+        if (request.body?.presetSlug !== undefined) {
+          assertOpenExamOnlyPreset(request.body.presetSlug);
+        }
         return await updateTopic(request.userId, request.params.topicId, request.body ?? {});
       } catch (err) {
         return httpError(err, reply);
@@ -116,6 +121,21 @@ export async function topicRoutes(app: FastifyInstance) {
     },
   );
 
+  app.post<{ Params: { topicId: string } }>(
+    "/topics/:topicId/attachments/refresh",
+    async (request, reply) => {
+      if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
+      try {
+        return await refreshTopicAttachmentExtractions(
+          request.userId,
+          request.params.topicId,
+        );
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
   app.delete<{ Params: { topicId: string; attachmentId: string } }>(
     "/topics/:topicId/attachments/:attachmentId",
     async (request, reply) => {
@@ -134,7 +154,7 @@ export async function topicRoutes(app: FastifyInstance) {
 
   app.post<{
     Params: { topicId: string };
-    Body: { focusText?: string; locale?: "en" | "pt-BR" };
+    Body: { focusText?: string; durationMinutes?: number | null; locale?: "en" | "pt" | "pt-BR" };
   }>("/topics/:topicId/pills/start", async (request, reply) => {
     if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
     try {

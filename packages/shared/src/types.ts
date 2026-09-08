@@ -14,10 +14,19 @@ export type AttemptStatus =
   | "IN_CORRECTION"
   | "CORRECTED";
 
-export type LocaleCode = "en" | "pt-BR";
+export type LocaleCode = "en" | "pt";
+
+/** Normalize Accept-Language / stored values; default and fallback is Portuguese. */
+export function normalizeLocale(value: string | null | undefined): LocaleCode {
+  if (!value) return "pt";
+  const raw = value.trim().toLowerCase();
+  if (raw === "en" || raw.startsWith("en-")) return "en";
+  if (raw === "pt" || raw === "pt-br" || raw.startsWith("pt")) return "pt";
+  return "pt";
+}
 
 export type TopicPresetSlug =
-  | "concurso"
+  | "open_exam"
   | "vestibular"
   | "certificacao"
   | "entrevista"
@@ -48,11 +57,20 @@ export interface LevelDto {
   sortOrder: number;
 }
 
+export interface QuestionMediaRef {
+  url: string;
+  alt?: string;
+}
+
 export interface QuizQuestionDto {
   id: string;
   type: QuestionType;
   prompt: string;
   options?: string[];
+  /** Figures that belong with the stem (URLs absolute or app-served). */
+  promptMedia?: QuestionMediaRef[];
+  /** Parallel to options: images for each choice (null = text-only). */
+  optionMedia?: Array<QuestionMediaRef[] | null>;
 }
 
 export interface SubmitAnswer {
@@ -117,7 +135,53 @@ export type PromptKey =
   | "quiz-correction"
   | "question-modernization"
   | "difficulty-releveling"
-  | "question-generation";
+  | "question-generation"
+  | "topic-inference";
+
+export const SESSION_DURATION_MINUTES = [15, 20, 30, 45, 60, 90] as const;
+export type SessionDurationMinutes = (typeof SESSION_DURATION_MINUTES)[number];
+
+export function isSessionDurationMinutes(value: unknown): value is SessionDurationMinutes {
+  return (
+    typeof value === "number" &&
+    (SESSION_DURATION_MINUTES as readonly number[]).includes(value)
+  );
+}
+
+/** Question count bounds for a session. Null/undefined duration = short pill. */
+export function questionBudgetForDuration(durationMinutes?: number | null): {
+  minQuestions: number;
+  maxQuestions: number;
+  mode: "pill" | "timed";
+} {
+  if (durationMinutes == null) {
+    return { minQuestions: 3, maxQuestions: 6, mode: "pill" };
+  }
+  switch (durationMinutes) {
+    case 15:
+      return { minQuestions: 4, maxQuestions: 8, mode: "timed" };
+    case 20:
+      return { minQuestions: 5, maxQuestions: 10, mode: "timed" };
+    case 30:
+      return { minQuestions: 8, maxQuestions: 12, mode: "timed" };
+    case 45:
+      return { minQuestions: 10, maxQuestions: 16, mode: "timed" };
+    case 60:
+      return { minQuestions: 12, maxQuestions: 20, mode: "timed" };
+    case 90:
+      return { minQuestions: 15, maxQuestions: 25, mode: "timed" };
+    default:
+      return { minQuestions: 3, maxQuestions: 6, mode: "pill" };
+  }
+}
+
+export interface InferredSyllabus {
+  subjects: string[];
+  styleNotes: string;
+  difficultyNotes: string;
+  seniority: string | null;
+  materialRoles: string[];
+}
 
 export interface PromptRecord {
   key: PromptKey;
@@ -272,6 +336,8 @@ export interface UpdateTopicInput {
 
 export interface StartPillInput {
   focusText?: string | null;
+  /** Optional session length; omit for default short pill. */
+  durationMinutes?: SessionDurationMinutes | null;
   locale?: LocaleCode;
 }
 
@@ -297,6 +363,8 @@ export interface GeneratedQuestionInput {
   correctIndex: number | null;
   referenceAnswer: string | null;
   explanation: string | null;
+  promptMedia?: QuestionMediaRef[] | null;
+  optionMedia?: Array<QuestionMediaRef[] | null> | null;
 }
 
 export interface GenerationCompleteInput {
@@ -310,6 +378,8 @@ export interface PendingGenerationAttempt {
   guidelines: string;
   presetSlug: string | null;
   focusText: string | null;
+  durationMinutes: number | null;
+  inferredSyllabus: InferredSyllabus | null;
   locale: LocaleCode;
   hasLinks: boolean;
   materials: {
@@ -322,6 +392,11 @@ export interface PendingGenerationAttempt {
     focusText: string | null;
     correctedAt: string | null;
   }>;
+  constraints: {
+    minQuestions: number;
+    maxQuestions: number;
+    mode: "pill" | "timed";
+  };
 }
 
 export interface TopicPresetDefinition {
@@ -329,4 +404,27 @@ export interface TopicPresetDefinition {
   label: Record<LocaleCode, string>;
   guidelinesTemplate: Record<LocaleCode, string>;
   focusExamples: Record<LocaleCode, string[]>;
+}
+
+/** Catalog row for open exams tracked by crawler / bank (product home). */
+export interface ExamCatalogItemDto {
+  id: string;
+  examSlug: string;
+  title: string;
+  org: string | null;
+  banca: string | null;
+  emphasis: string[];
+  editalUrl: string | null;
+  listingUrl: string | null;
+  status: "open" | "unknown";
+  bankQuestionCount: number;
+  bankReady: boolean;
+  sourceDomain: string | null;
+  placeholder?: boolean;
+}
+
+export interface ExamPrepareResponse {
+  topicId: string;
+  exam: ExamCatalogItemDto;
+  created: boolean;
 }

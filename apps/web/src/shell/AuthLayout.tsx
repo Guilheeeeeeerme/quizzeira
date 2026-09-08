@@ -7,7 +7,7 @@ import styles from "./AuthLayout.module.css";
 
 const localeLabels: Record<Locale, string> = {
   en: "EN",
-  "pt-BR": "PT",
+  pt: "PT",
 };
 
 function MoonIcon() {

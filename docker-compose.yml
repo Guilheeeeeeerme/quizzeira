@@ -20,6 +20,9 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -143,6 +146,7 @@ services:
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       WORKER_WINDOWS: ${WORKER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
     volumes:
       - ./apps/quiz-corrector:/app/apps/quiz-corrector
       - ./packages/shared:/app/packages/shared
@@ -152,8 +156,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - dmz
+      - private
 
   question-updater:
     build:
@@ -178,6 +185,7 @@ services:
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       WORKER_WINDOWS: ${WORKER_WINDOWS:-07:00,19:00}
       WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
     volumes:
       - ./apps/question-updater:/app/apps/question-updater
       - ./packages/shared:/app/packages/shared
@@ -187,20 +195,24 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - dmz
+      - private
 
   question-generator:
     build:
       context: .
       dockerfile: apps/question-generator/Dockerfile.dev
+      network: host
     restart: unless-stopped
     env_file:
       - .env
     environment:
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
-      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-15000}
+      WORKER_INTERVAL_MS: ${QUESTION_GENERATOR_INTERVAL_MS:-15000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
@@ -212,6 +224,7 @@ services:
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       WORKER_WINDOWS: ${WORKER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
     volumes:
       - ./apps/question-generator:/app/apps/question-generator
       - ./packages/shared:/app/packages/shared
@@ -221,12 +234,53 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - dmz
+      - private
+
+  exam-crawler:
+    build:
+      context: .
+      dockerfile: apps/exam-crawler/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      # 2×/hour; pipeline skips unchanged listings via fingerprints.
+      WORKER_INTERVAL_MS: ${EXAM_CRAWLER_INTERVAL_MS:-1800000}
+      WORKER_WINDOWS: ${EXAM_CRAWLER_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
+      EXAM_CRAWLER_ENABLED: ${EXAM_CRAWLER_ENABLED:-true}
+      # Local/MVP default: fixture HTML so catalog fills without live site flakiness.
+      EXAM_CRAWLER_FIXTURE_MODE: ${EXAM_CRAWLER_FIXTURE_MODE:-true}
+      EXAM_CRAWLER_MAX_SOURCES: ${EXAM_CRAWLER_MAX_SOURCES:-4}
+      EXAM_CRAWLER_MAX_OPEN_PER_SOURCE: ${EXAM_CRAWLER_MAX_OPEN_PER_SOURCE:-8}
+      EXAM_CRAWLER_MAX_SEARCHES: ${EXAM_CRAWLER_MAX_SEARCHES:-2}
+    volumes:
+      - ./apps/exam-crawler:/app/apps/exam-crawler
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/exam-crawler/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dmz
+      - private
 
 volumes:
   mysql_data:
   minio_data:
+  redis_data:
 
 networks:
   dmz:

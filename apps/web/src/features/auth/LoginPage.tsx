@@ -45,7 +45,7 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout title={t("Sign in")} subtitle={t("Continue your AI development quizzes.")}>
+    <AuthLayout title={t("Sign in")} subtitle={t("Continue studying open public exams.")}>
       <form onSubmit={handleSubmit}>
         <Stack gap={4}>
           <Field label={t("Email")} htmlFor="login-email">

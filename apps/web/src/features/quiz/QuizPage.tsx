@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { QuizQuestionDto, SubmitAnswer } from "@quizzeira/shared";
+import { choiceLetter, normalizeQuestionPresentation } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
 import {
   Button,
   Field,
-  Heading,
   Progress,
   RadioGroup,
   RadioItem,
@@ -15,6 +15,8 @@ import {
   Text,
   Textarea,
 } from "../../ui";
+import { QuestionMedia } from "./QuestionMedia";
+import { QuestionStem } from "./QuestionStem";
 import styles from "./QuizPage.module.css";
 
 export function storeQuizSession(attemptId: string, questions: QuizQuestionDto[]) {
@@ -25,6 +27,22 @@ function loadQuizSession(attemptId: string): QuizQuestionDto[] | null {
   const stored = sessionStorage.getItem(`quiz:${attemptId}`);
   if (!stored) return null;
   return (JSON.parse(stored) as { questions: QuizQuestionDto[] }).questions;
+}
+
+function presentQuestion(q: QuizQuestionDto): QuizQuestionDto {
+  const normalized = normalizeQuestionPresentation({
+    prompt: q.prompt,
+    options: q.options ?? null,
+    promptMedia: q.promptMedia,
+    optionMedia: q.optionMedia,
+  });
+  return {
+    ...q,
+    prompt: normalized.prompt,
+    options: normalized.options ?? undefined,
+    promptMedia: normalized.promptMedia.length ? normalized.promptMedia : undefined,
+    optionMedia: normalized.optionMedia?.some(Boolean) ? normalized.optionMedia : undefined,
+  };
 }
 
 export function QuizPage() {
@@ -44,7 +62,7 @@ export function QuizPage() {
     }
     const loaded = loadQuizSession(attemptId);
     if (loaded?.length) {
-      setQuestions(loaded);
+      setQuestions(loaded.map(presentQuestion));
       return;
     }
     void (async () => {
@@ -54,8 +72,9 @@ export function QuizPage() {
           questions: QuizQuestionDto[];
         }>(`/pills/${attemptId}`);
         if (pill.questions?.length) {
-          storeQuizSession(attemptId, pill.questions);
-          setQuestions(pill.questions);
+          const presented = pill.questions.map(presentQuestion);
+          storeQuizSession(attemptId, presented);
+          setQuestions(presented);
           return;
         }
       } catch {
@@ -67,6 +86,10 @@ export function QuizPage() {
 
   const current = questions[step];
   const progress = questions.length ? ((step + 1) / questions.length) * 100 : 0;
+  const presented = useMemo(
+    () => (current ? presentQuestion(current) : null),
+    [current],
+  );
 
   function setMcqAnswer(selectedIndex: number) {
     if (!current) return;
@@ -110,7 +133,7 @@ export function QuizPage() {
     }
   }
 
-  if (!current) {
+  if (!presented || !current) {
     return (
       <div className={styles.loading}>
         <Spinner label={t("Loading quiz...")} />
@@ -133,13 +156,14 @@ export function QuizPage() {
         />
       </div>
 
-      <Heading level={1} size="section">
-        {current.prompt}
-      </Heading>
+      <div className={styles.stemBlock}>
+        <QuestionStem text={presented.prompt} />
+        <QuestionMedia items={presented.promptMedia} />
+      </div>
 
-      {current.type === "MULTIPLE_CHOICE" && current.options ? (
+      {presented.type === "MULTIPLE_CHOICE" && presented.options ? (
         <RadioGroup
-          name={`q-${current.id}`}
+          name={`q-${presented.id}`}
           label={t("Answer choices")}
           value={
             answers[current.id]?.selectedIndex === undefined
@@ -148,15 +172,23 @@ export function QuizPage() {
           }
           onChange={(value) => setMcqAnswer(Number(value))}
         >
-          {current.options.map((option, index) => (
+          {presented.options.map((option, index) => (
             <RadioItem key={index} value={String(index)}>
-              {option}
+              <span className={styles.optionRow}>
+                <span className={styles.optionLetter} aria-hidden>
+                  {choiceLetter(index)}
+                </span>
+                <span className={styles.optionBody}>
+                  {option ? <span className={styles.optionText}>{option}</span> : null}
+                  <QuestionMedia items={presented.optionMedia?.[index]} size="sm" />
+                </span>
+              </span>
             </RadioItem>
           ))}
         </RadioGroup>
       ) : null}
 
-      {current.type === "OPEN" ? (
+      {presented.type === "OPEN" ? (
         <Field label={t("Your answer")} htmlFor="open-answer">
           <Textarea
             id="open-answer"
