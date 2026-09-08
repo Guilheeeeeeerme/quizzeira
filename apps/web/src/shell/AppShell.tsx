@@ -68,11 +68,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <TextLink to="/" className={styles.brand}>
-            {t("AI Dev Quiz")}
+            {t("Quizzeira")}
           </TextLink>
 
           <nav className={styles.nav} aria-label="Primary">
-            <TextLink to="/">{t("Dashboard")}</TextLink>
+            <TextLink to="/">{t("Topics")}</TextLink>
             <TextLink to="/progress">{t("Progress")}</TextLink>
           </nav>
 

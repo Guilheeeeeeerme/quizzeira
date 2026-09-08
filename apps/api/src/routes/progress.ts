@@ -10,15 +10,17 @@ export async function progressRoutes(app: FastifyInstance) {
 
     const attempts = await prisma.quizAttempt.findMany({
       where: { userId: request.userId },
-      include: { level: true },
+      include: { level: true, topic: true },
       orderBy: { startedAt: "desc" },
     });
 
     return {
       items: attempts.map((a) => ({
         attemptId: a.id,
-        levelSlug: a.level.slug as LevelSlug,
-        levelLabel: a.level.label,
+        levelSlug: (a.level?.slug as LevelSlug | undefined) ?? "topic",
+        levelLabel: a.level?.label ?? a.topic?.title ?? "Topic",
+        topicId: a.topicId,
+        topicTitle: a.topic?.title ?? null,
         status: a.status,
         score: a.status === AttemptStatus.CORRECTED ? a.score : null,
         maxScore: a.maxScore,
@@ -40,7 +42,9 @@ export async function progressRoutes(app: FastifyInstance) {
 
     const summary = levels.map((level) => {
       const levelAttempts = attempts.filter((a) => a.levelId === level.id);
-      const corrected = levelAttempts.filter((a) => a.status === AttemptStatus.CORRECTED && a.score !== null);
+      const corrected = levelAttempts.filter(
+        (a) => a.status === AttemptStatus.CORRECTED && a.score !== null,
+      );
       const scores = corrected.map((a) => a.score!);
       return {
         levelSlug: level.slug as LevelSlug,

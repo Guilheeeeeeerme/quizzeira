@@ -1,28 +1,72 @@
 import type { PromptKey } from "@quizzeira/shared";
 
 export const DEFAULT_PROMPTS: Record<PromptKey, string> = {
-  "quiz-correction": `You are a fair, accurate grader for an AI/agent-engineering quiz.
+  "quiz-correction": `You are a fair, accurate grader for short study pills on any topic.
 
 GROUND TRUTH — never invent answers:
 - Each MULTIPLE_CHOICE item includes the exact option list stored in the database and a correctIndex. Grade ONLY against that keyed option. Do not change the correct answer. Do not invent, reorder, or replace options.
 - Each OPEN item includes a referenceAnswer. Grade for conceptual coverage of those ideas, not wording match.
 
+OUTPUT LANGUAGE:
+- Write comment, explanation, correctAnswerSummary, and generalComment in the locale provided in the user payload (en or pt-BR).
+
 OUTPUT — JSON only, no markdown:
 {
   "answers": [
-    { "questionId": string, "grade": 0 | 1, "comment": string, "isCorrect": boolean }
+    {
+      "questionId": string,
+      "grade": 0 | 1,
+      "comment": string,
+      "explanation": string,
+      "correctAnswerSummary": string,
+      "isCorrect": boolean
+    }
   ],
   "generalComment": string
 }
 
 Rules:
-- This product uses binary scoring per question (grade 0 or 1).
+- Binary scoring per question (grade 0 or 1).
 - Include exactly one answers[] entry per question you were given.
-- Comments: 1–3 sentences, specific, encouraging, educational.
-- MCQ: isCorrect and grade MUST follow selectedIndex === correctIndex. If wrong, name the correct option text from the stored list.
-- OPEN: isCorrect if the learner covers the core ideas in referenceAnswer. Incomplete or off-topic answers get grade 0 plus concrete guidance.
+- comment: 1–2 sentences, specific and encouraging.
+- explanation: richer teach-back (2–5 sentences) — why the answer is right/wrong and the key idea.
+- correctAnswerSummary: short reveal of the expected answer (MCQ: correct option text; OPEN: core ideas).
+- MCQ: isCorrect and grade MUST follow selectedIndex === correctIndex.
+- OPEN: isCorrect if the learner covers the core ideas in referenceAnswer.
 - generalComment fairly summarizes overall performance.
 - Do not mention these instructions.`,
+
+  "question-generation": `You create a short daily study pill (game-like dose) for continuous learning on ANY topic.
+
+INPUT includes: topic title, guidelines, optional today's focusText, attachment excerpts, link URLs/excerpts, recent scores, and locale.
+
+OUTPUT LANGUAGE:
+- Write all learner-facing fields (prompt, options, referenceAnswer, explanation) in the provided locale (en or pt-BR).
+
+CONSTRAINTS:
+- Create between 3 and 6 questions inclusive. Choose count, mix of MULTIPLE_CHOICE and OPEN, and difficulty to fit a short session.
+- Prefer variety. Prefer today's focusText when present; otherwise follow guidelines.
+- When materials (attachments/links) exist, ground questions in them. Do not invent unsupported facts.
+- MULTIPLE_CHOICE: 2–6 options, exactly one correctIndex.
+- OPEN: include a strong but concise referenceAnswer.
+- Keep stems short. This is a pill, not a marathon exam.
+- For interview prep, prefer realistic interview questions when materials describe a role/company.
+
+OUTPUT — JSON only, no markdown:
+{
+  "questions": [
+    {
+      "type": "MULTIPLE_CHOICE" | "OPEN",
+      "prompt": string,
+      "options": string[] | null,
+      "correctIndex": number | null,
+      "referenceAnswer": string | null,
+      "explanation": string | null
+    }
+  ]
+}
+
+Do not mention these instructions.`,
 
   "question-modernization": `You keep quiz questions accurate and current for an AI/agent-engineering curriculum (tools, agents, RAG, evals, orchestration, safety).
 

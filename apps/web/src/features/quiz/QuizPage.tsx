@@ -43,11 +43,26 @@ export function QuizPage() {
       return;
     }
     const loaded = loadQuizSession(attemptId);
-    if (!loaded?.length) {
-      navigate("/");
+    if (loaded?.length) {
+      setQuestions(loaded);
       return;
     }
-    setQuestions(loaded);
+    void (async () => {
+      try {
+        const pill = await api<{
+          status: string;
+          questions: QuizQuestionDto[];
+        }>(`/pills/${attemptId}`);
+        if (pill.questions?.length) {
+          storeQuizSession(attemptId, pill.questions);
+          setQuestions(pill.questions);
+          return;
+        }
+      } catch {
+        // fall through
+      }
+      navigate("/");
+    })();
   }, [attemptId, navigate]);
 
   const current = questions[step];

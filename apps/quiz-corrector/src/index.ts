@@ -30,6 +30,7 @@ async function tick(): Promise<void> {
     const user = JSON.stringify(
       {
         attemptId: attempt.attemptId,
+        locale: attempt.locale,
         levelSlug: attempt.levelSlug,
         questions: attempt.questions.map((q) => ({
           questionId: q.questionId,

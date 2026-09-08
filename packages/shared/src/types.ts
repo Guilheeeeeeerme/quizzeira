@@ -8,10 +8,27 @@ export type LevelSlug =
 export type QuestionType = "MULTIPLE_CHOICE" | "OPEN";
 
 export type AttemptStatus =
+  | "GENERATING"
   | "IN_PROGRESS"
   | "PENDING"
   | "IN_CORRECTION"
   | "CORRECTED";
+
+export type LocaleCode = "en" | "pt-BR";
+
+export type TopicPresetSlug =
+  | "concurso"
+  | "vestibular"
+  | "certificacao"
+  | "entrevista"
+  | "idioma"
+  | "faculdade"
+  | "trabalho"
+  | "livre";
+
+export type AttachmentKind = "TEXT" | "PDF" | "IMAGE";
+
+export type LinkFetchStatus = "PENDING" | "OK" | "FAILED" | "SKIPPED";
 
 export interface UserDto {
   id: string;
@@ -56,6 +73,8 @@ export interface QuizResultsAnswerDto {
   userResponse: string;
   grade: number | null;
   comment: string | null;
+  explanation: string | null;
+  correctAnswerSummary: string | null;
 }
 
 export interface QuizResultsDto {
@@ -69,8 +88,10 @@ export interface QuizResultsDto {
 
 export interface ProgressItemDto {
   attemptId: string;
-  levelSlug: LevelSlug;
+  levelSlug: LevelSlug | "topic";
   levelLabel: string;
+  topicId: string | null;
+  topicTitle: string | null;
   status: AttemptStatus;
   score: number | null;
   maxScore: number;
@@ -90,7 +111,8 @@ export interface ProgressSummaryDto {
 export type PromptKey =
   | "quiz-correction"
   | "question-modernization"
-  | "difficulty-releveling";
+  | "difficulty-releveling"
+  | "question-generation";
 
 export interface PromptRecord {
   key: PromptKey;
@@ -114,8 +136,9 @@ export interface ReviewQuestionPayload {
 
 export interface PendingReviewAttempt {
   attemptId: string;
-  levelSlug: LevelSlug;
+  levelSlug: LevelSlug | "topic";
   levelLabel: string;
+  locale: LocaleCode;
   questions: ReviewQuestionPayload[];
 }
 
@@ -123,6 +146,8 @@ export interface AnswerCorrection {
   questionId: string;
   grade: number;
   comment: string;
+  explanation?: string;
+  correctAnswerSummary?: string;
   isCorrect: boolean;
 }
 
@@ -162,4 +187,120 @@ export interface QuestionUpdateInput {
   explanation?: string | null;
   levelSlug?: LevelSlug;
   isActive?: boolean;
+}
+
+export interface TopicAttachmentDto {
+  id: string;
+  kind: AttachmentKind;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+  hasExtractedText: boolean;
+  createdAt: string;
+}
+
+export interface TopicLinkDto {
+  id: string;
+  url: string;
+  label: string | null;
+  fetchStatus: LinkFetchStatus;
+  hasFetchedText: boolean;
+  createdAt: string;
+}
+
+export interface TopicDto {
+  id: string;
+  title: string;
+  guidelines: string;
+  presetSlug: TopicPresetSlug | null;
+  preferredLocale: LocaleCode | null;
+  createdAt: string;
+  updatedAt: string;
+  attachments: TopicAttachmentDto[];
+  links: TopicLinkDto[];
+}
+
+export interface TopicListItemDto {
+  id: string;
+  title: string;
+  presetSlug: TopicPresetSlug | null;
+  preferredLocale: LocaleCode | null;
+  attachmentCount: number;
+  linkCount: number;
+  updatedAt: string;
+}
+
+export interface CreateTopicInput {
+  title: string;
+  guidelines: string;
+  presetSlug?: TopicPresetSlug | null;
+  preferredLocale?: LocaleCode | null;
+}
+
+export interface UpdateTopicInput {
+  title?: string;
+  guidelines?: string;
+  presetSlug?: TopicPresetSlug | null;
+  preferredLocale?: LocaleCode | null;
+}
+
+export interface StartPillInput {
+  focusText?: string | null;
+  locale?: LocaleCode;
+}
+
+export interface PillStartResponse {
+  attemptId: string;
+  status: AttemptStatus;
+}
+
+export interface PillAttemptDto {
+  attemptId: string;
+  status: AttemptStatus;
+  topicId: string;
+  topicTitle: string;
+  focusText: string | null;
+  locale: LocaleCode;
+  questions: QuizQuestionDto[];
+}
+
+export interface GeneratedQuestionInput {
+  type: QuestionType;
+  prompt: string;
+  options: string[] | null;
+  correctIndex: number | null;
+  referenceAnswer: string | null;
+  explanation: string | null;
+}
+
+export interface GenerationCompleteInput {
+  questions: GeneratedQuestionInput[];
+}
+
+export interface PendingGenerationAttempt {
+  attemptId: string;
+  topicId: string;
+  topicTitle: string;
+  guidelines: string;
+  presetSlug: string | null;
+  focusText: string | null;
+  locale: LocaleCode;
+  hasLinks: boolean;
+  materials: {
+    attachments: Array<{ filename: string; kind: AttachmentKind; excerpt: string | null }>;
+    links: Array<{ url: string; label: string | null; excerpt: string | null }>;
+  };
+  recentPerformance: Array<{
+    score: number | null;
+    maxScore: number;
+    focusText: string | null;
+    correctedAt: string | null;
+  }>;
+}
+
+export interface TopicPresetDefinition {
+  slug: TopicPresetSlug;
+  label: Record<LocaleCode, string>;
+  guidelinesTemplate: Record<LocaleCode, string>;
+  focusExamples: Record<LocaleCode, string[]>;
 }

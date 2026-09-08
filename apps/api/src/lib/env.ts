@@ -30,4 +30,10 @@ export const env = {
   port: Number(process.env.PORT ?? 3000),
   isProduction: process.env.NODE_ENV === "production",
   internalApiKey: requireEnv("INTERNAL_API_KEY", "dev-internal-key"),
+  s3Endpoint: requireEnv("S3_ENDPOINT", "http://minio:9000"),
+  s3Region: requireEnv("S3_REGION", "us-east-1"),
+  s3AccessKeyId: requireEnv("S3_ACCESS_KEY_ID", "quizzeira"),
+  s3SecretAccessKey: requireEnv("S3_SECRET_ACCESS_KEY", "quizzeira-secret"),
+  s3Bucket: requireEnv("S3_BUCKET", "quizzeira"),
+  s3ForcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "true") !== "false",
 };
