@@ -1,6 +1,10 @@
 import { PrismaClient, QuestionType } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+const DEV_ADMIN_EMAIL = "admin@quizzeira.local";
+const DEV_ADMIN_PASSWORD = "Password123!";
 
 const LEVELS = [
   { slug: "beginner", label: "Beginner", sortOrder: 1 },
@@ -589,6 +593,20 @@ async function main() {
         });
       }
     }
+  }
+
+  const existingAdmin = await prisma.user.findUnique({
+    where: { email: DEV_ADMIN_EMAIL },
+  });
+  if (!existingAdmin) {
+    await prisma.user.create({
+      data: {
+        email: DEV_ADMIN_EMAIL,
+        passwordHash: await bcrypt.hash(DEV_ADMIN_PASSWORD, 10),
+        displayName: "Admin",
+      },
+    });
+    console.log(`Seeded admin user ${DEV_ADMIN_EMAIL} / ${DEV_ADMIN_PASSWORD}`);
   }
 
   console.log("Seed completed.");

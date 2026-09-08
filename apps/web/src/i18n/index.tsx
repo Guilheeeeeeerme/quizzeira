@@ -70,8 +70,11 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Your answer:": "Sua resposta:",
     "Grade:": "Nota:",
     "Back to dashboard": "Voltar ao painel",
+    "Your progress": "Seu progresso",
     "Track attempts and scores across your topics.":
       "Acompanhe tentativas e pontuações nos seus tópicos.",
+    "Track attempts and scores across every level.":
+      "Acompanhe tentativas e pontuações em todos os níveis.",
     "Start a study pill from Topics to see history here.":
       "Inicie uma pill em Tópicos para ver o histórico aqui.",
     "Topic": "Tópico",
