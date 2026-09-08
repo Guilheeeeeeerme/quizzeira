@@ -223,3 +223,24 @@ export function screenUntrusted(payload: string): void {
     }
   }
 }
+
+/** Output-side subset (LLM10): block script/exfil/tracking payloads before persist. */
+const OUTPUT_POLICY_IDS = new Set(["script-exec", "data-exfil", "tracking"]);
+
+export function screenModelOutput(payload: string): void {
+  if (!payload) return;
+  for (const policy of registry().policies) {
+    if (!OUTPUT_POLICY_IDS.has(policy.id)) continue;
+    if (policy.action === "block" && policy.test(payload)) {
+      throw llmError("guardrail_block", `guardrail_block: ${policy.id}`);
+    }
+  }
+}
+
+export function screenModelStrings(...values: Array<string | null | undefined>): void {
+  for (const value of values) {
+    if (typeof value === "string" && value.length > 0) {
+      screenModelOutput(value);
+    }
+  }
+}

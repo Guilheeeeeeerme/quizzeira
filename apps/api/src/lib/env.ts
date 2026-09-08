@@ -30,6 +30,7 @@ export const env = {
   port: Number(process.env.PORT ?? 3000),
   isProduction: process.env.NODE_ENV === "production",
   internalApiKey: requireEnv("INTERNAL_API_KEY", "dev-internal-key"),
+  internalRateLimitMax: Number(process.env.INTERNAL_RATE_LIMIT_MAX ?? 120),
   s3Endpoint: requireEnv("S3_ENDPOINT", "http://minio:9000"),
   s3Region: requireEnv("S3_REGION", "us-east-1"),
   s3AccessKeyId: requireEnv("S3_ACCESS_KEY_ID", "quizzeira"),

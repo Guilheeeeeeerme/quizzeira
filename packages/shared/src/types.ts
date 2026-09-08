@@ -30,10 +30,15 @@ export type AttachmentKind = "TEXT" | "PDF" | "IMAGE";
 
 export type LinkFetchStatus = "PENDING" | "OK" | "FAILED" | "SKIPPED";
 
+export type UserRole = "USER" | "ADMIN";
+
+export type ProposalStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 export interface UserDto {
   id: string;
   email: string;
   displayName: string | null;
+  role: UserRole;
 }
 
 export interface LevelDto {
@@ -187,6 +192,27 @@ export interface QuestionUpdateInput {
   explanation?: string | null;
   levelSlug?: LevelSlug;
   isActive?: boolean;
+}
+
+export interface QuestionUpdateProposalDto {
+  id: string;
+  questionId: string;
+  proposedPatch: QuestionUpdateInput;
+  reason: string | null;
+  status: ProposalStatus;
+  createdAt: string;
+  reviewedAt: string | null;
+  questionPrompt: string;
+  questionType: QuestionType;
+  levelSlug: LevelSlug | "topic";
+}
+
+export interface PromptProposalDto {
+  key: PromptKey;
+  body: string;
+  note?: string;
+  proposedAt: string;
+  currentVersion: number;
 }
 
 export interface TopicAttachmentDto {

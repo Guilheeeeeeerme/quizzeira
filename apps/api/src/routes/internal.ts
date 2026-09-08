@@ -9,14 +9,14 @@ import {
   getPrompt,
   getPromptHistory,
   isPromptKey,
-  putPrompt,
+  proposePrompt,
 } from "../services/prompt-store";
 import {
   claimNextPendingAttempt,
   completeAttemptCorrection,
   nextQuestionForUpdate,
+  proposeQuestionUpdate,
   releaseAttempt,
-  updateQuestion,
 } from "../services/internal.service";
 import {
   claimNextGeneratingAttempt,
@@ -57,7 +57,8 @@ export async function internalRoutes(app: FastifyInstance) {
       }
       const body = request.body?.body?.trim();
       if (!body) return reply.code(400).send({ error: "body required" });
-      return putPrompt(request.params.key, body, request.body?.note);
+      // HITL: internal PUT stages a proposal; live apply is admin-only.
+      return proposePrompt(request.params.key, body, request.body?.note);
     },
   );
 
@@ -133,11 +134,12 @@ export async function internalRoutes(app: FastifyInstance) {
     return { question };
   });
 
-  app.patch<{ Params: { id: string }; Body: QuestionUpdateInput }>(
-    "/questions/:id",
+  app.post<{ Params: { id: string }; Body: QuestionUpdateInput & { reason?: string } }>(
+    "/questions/:id/proposals",
     async (request, reply) => {
       try {
-        return await updateQuestion(request.params.id, request.body ?? {});
+        const { reason, ...patch } = request.body ?? {};
+        return await proposeQuestionUpdate(request.params.id, patch, reason);
       } catch (err) {
         return httpError(err, reply);
       }

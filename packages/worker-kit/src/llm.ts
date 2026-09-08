@@ -4,6 +4,7 @@ import { extractJson, geminiProvider, type LlmProvider } from "./gemini";
 import { openaiProvider } from "./openai";
 import { fenceUntrusted, renderPrompt, screenUntrusted } from "./guardrails";
 import { rankFor } from "./model-rank";
+import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
 
 const PROVIDERS: Record<string, LlmProvider> = {
   gemini: geminiProvider,
@@ -45,10 +46,12 @@ function providerOrder(): LlmProvider[] {
 }
 
 const MINUTE_MS = 60_000;
+const RATE_TTL_SECONDS = 120;
+const BUDGET_TTL_SECONDS = 172_800;
 const minuteWindow = { key: 0, count: 0 };
 const dailyWindow = { key: "", count: 0 };
 
-export function consumeBudget(now: number = Date.now()): void {
+function consumeBudgetMemory(now: number): void {
   const minuteKey = Math.floor(now / MINUTE_MS) * MINUTE_MS;
   if (minuteWindow.key !== minuteKey) {
     minuteWindow.key = minuteKey;
@@ -69,11 +72,59 @@ export function consumeBudget(now: number = Date.now()): void {
   dailyWindow.count += 1;
 }
 
+async function consumeBudgetRedis(now: number): Promise<void> {
+  const redis = getWorkerRedis();
+  if (!redis) {
+    consumeBudgetMemory(now);
+    return;
+  }
+  try {
+    if (redis.status !== "ready") {
+      await redis.connect();
+    }
+    const minuteBucket = Math.floor(now / MINUTE_MS);
+    const rateKey = `llm:rate:${minuteBucket}`;
+    const rateCount = await redis.incr(rateKey);
+    if (rateCount === 1) {
+      await redis.expire(rateKey, RATE_TTL_SECONDS);
+    }
+    if (rateCount > workerEnv.llmRateLimitPerMinute) {
+      throw llmError("llm_budget_exceeded", "llm_budget_exceeded: per-minute LLM rate limit hit");
+    }
+
+    const dayKey = new Date(now).toISOString().slice(0, 10).replace(/-/g, "");
+    const budgetKey = `llm:budget:${dayKey}`;
+    const budgetCount = await redis.incr(budgetKey);
+    if (budgetCount === 1) {
+      await redis.expire(budgetKey, BUDGET_TTL_SECONDS);
+    }
+    if (budgetCount > workerEnv.llmDailyBudget) {
+      throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM budget hit");
+    }
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err) throw err;
+    throw llmError(
+      "llm_budget_exceeded",
+      "llm_budget_exceeded: redis budget check failed",
+    );
+  }
+}
+
+/** Shared Redis fixed-window budgets when REDIS_URL is set; otherwise in-process (tests). */
+export async function consumeBudget(now: number = Date.now()): Promise<void> {
+  if (workerEnv.redisUrl) {
+    await consumeBudgetRedis(now);
+    return;
+  }
+  consumeBudgetMemory(now);
+}
+
 export function resetBudgetForTests(): void {
   minuteWindow.key = 0;
   minuteWindow.count = 0;
   dailyWindow.key = "";
   dailyWindow.count = 0;
+  void resetWorkerRedisForTests();
 }
 
 export function hasLlmProvider(): boolean {
@@ -90,7 +141,7 @@ export async function generateJson<T>(
   if (providers.length === 0) {
     throw llmError("llm_unavailable", "llm_unavailable: no provider API key configured");
   }
-  consumeBudget();
+  await consumeBudget();
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
   const fencedUser = fenceUntrusted(user);
   const index = Math.max(0, opts.attempt ?? 0);

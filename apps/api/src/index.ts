@@ -11,9 +11,16 @@ import { quizRoutes } from "./routes/quiz";
 import { progressRoutes } from "./routes/progress";
 import { topicRoutes } from "./routes/topics";
 import { internalRoutes } from "./routes/internal";
+import { adminRoutes } from "./routes/admin";
 import { seedPrompts } from "./services/prompt-store";
 
 async function bootstrap() {
+  if (env.isProduction && env.internalApiKey === "dev-internal-key") {
+    throw new Error(
+      "Refusing to start: INTERNAL_API_KEY must not be the default in production",
+    );
+  }
+
   const app = Fastify({
     logger: true,
     trustProxy: true,
@@ -31,6 +38,7 @@ async function bootstrap() {
   await app.register(quizRoutes);
   await app.register(progressRoutes);
   await app.register(topicRoutes);
+  await app.register(adminRoutes);
   await app.register(internalRoutes, { prefix: "/internal" });
 
   await seedPrompts();

@@ -33,11 +33,23 @@ enum LinkFetchStatus {
   SKIPPED
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
   passwordHash String
   displayName  String?
+  role         UserRole      @default(USER)
   createdAt    DateTime      @default(now())
   attempts     QuizAttempt[]
   topics       Topic[]
@@ -102,25 +114,42 @@ model TopicLink {
 }
 
 model Question {
-  id               String            @id @default(cuid())
+  id               String                   @id @default(cuid())
   levelId          Int?
-  level            DifficultyLevel?  @relation(fields: [levelId], references: [id])
+  level            DifficultyLevel?         @relation(fields: [levelId], references: [id])
   topicId          String?
-  topic            Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topic            Topic?                   @relation(fields: [topicId], references: [id], onDelete: Cascade)
   sourceAttemptId  String?
   type             QuestionType
-  prompt           String            @db.Text
+  prompt           String                   @db.Text
   options          Json?
   correctIndex     Int?
-  referenceAnswer  String?           @db.Text
-  explanation      String?           @db.Text
-  isActive         Boolean           @default(true)
+  referenceAnswer  String?                  @db.Text
+  explanation      String?                  @db.Text
+  isActive         Boolean                  @default(true)
   lastReviewedAt   DateTime?
   answers          QuizAnswer[]
   attemptQuestions AttemptQuestion[]
+  updateProposals  QuestionUpdateProposal[]
 
   @@index([topicId])
   @@index([levelId])
+}
+
+model QuestionUpdateProposal {
+  id            String         @id @default(cuid())
+  questionId    String
+  question      Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  proposedPatch Json
+  reason        String?        @db.Text
+  status        ProposalStatus @default(PENDING)
+  createdAt     DateTime       @default(now())
+  reviewedAt    DateTime?
+  reviewedById  String?
+
+  @@index([status, createdAt])
+  @@index([questionId])
+  @@map("question_update_proposals")
 }
 
 model QuizAttempt {

@@ -1,7 +1,7 @@
 import type { LevelSlug, QuestionUpdateCandidate, QuestionUpdateInput } from "@quizzeira/shared";
 import {
   dmzGet,
-  dmzPatch,
+  dmzPost,
   generateJson,
   hasLlmProvider,
   llmErrorCode,
@@ -80,7 +80,7 @@ async function tick(): Promise<void> {
 
   try {
     const modernize = await generateJson<ModernizeResult>(modernizePrompt, payload, {
-      grounding: true,
+      grounding: workerEnv.questionUpdateGrounding,
       requiredKeys: ["shouldUpdate"],
     });
 
@@ -110,9 +110,15 @@ async function tick(): Promise<void> {
       update.levelSlug = nextLevel;
     }
 
-    await dmzPatch(`/internal/questions/${question.id}`, update);
+    const reason = [modernize.reason, relevel.reason].filter(Boolean).join(" | ") || null;
+
+    // Always HITL: never live-patch curriculum questions.
+    const proposal = await dmzPost<{ id: string | null; reviewedOnly: boolean }>(
+      `/internal/questions/${question.id}/proposals`,
+      { proposedPatch: update, reason },
+    );
     console.log(
-      `[${NAME}] reviewed ${question.id} updated=${Boolean(modernize.shouldUpdate)} level=${nextLevel} modernize=${modernize.reason ?? ""} relevel=${relevel.reason ?? ""}`,
+      `[${NAME}] reviewed ${question.id} proposal=${proposal.id ?? "none"} reviewedOnly=${proposal.reviewedOnly} updated=${Boolean(modernize.shouldUpdate)} level=${nextLevel} grounding=${workerEnv.questionUpdateGrounding}`,
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -122,5 +128,7 @@ async function tick(): Promise<void> {
   }
 }
 
-console.log(`[${NAME}] starting intervalMs=${workerEnv.intervalMs}`);
+console.log(
+  `[${NAME}] starting intervalMs=${workerEnv.intervalMs} grounding=${workerEnv.questionUpdateGrounding}`,
+);
 void runLoop(NAME, workerEnv.intervalMs, tick);
