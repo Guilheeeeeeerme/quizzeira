@@ -24,10 +24,14 @@ export async function api<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...localeHeader(),
     ...(options.headers as Record<string, string> | undefined),
   };
+  // Avoid Content-Type: application/json on body-less POSTs — Fastify returns 400
+  // when parsing an empty JSON body (breaks /auth/logout).
+  if (options.body !== undefined && headers["Content-Type"] === undefined) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const response = await fetch(`${base}${path}`, {
     ...options,

@@ -3,8 +3,11 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-const DEV_ADMIN_EMAIL = "admin@quizzeira.local";
-const DEV_ADMIN_PASSWORD = "Password123!";
+const DEV_PASSWORD = "Password123!";
+const DEV_USERS = [
+  { email: "root@quizzeira.local", displayName: "Root" },
+  { email: "admin@quizzeira.local", displayName: "Admin" },
+] as const;
 
 const LEVELS = [
   { slug: "beginner", label: "Beginner", sortOrder: 1 },
@@ -595,21 +598,29 @@ async function main() {
     }
   }
 
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: DEV_ADMIN_EMAIL },
-  });
-  if (!existingAdmin) {
-    await prisma.user.create({
-      data: {
-        email: DEV_ADMIN_EMAIL,
-        passwordHash: await bcrypt.hash(DEV_ADMIN_PASSWORD, 10),
-        displayName: "Admin",
-      },
-    });
-    console.log(`Seeded admin user ${DEV_ADMIN_EMAIL} / ${DEV_ADMIN_PASSWORD}`);
+  // Platform has no role enum; seed root + admin as test accounts for local auth/UI.
+  const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
+  for (const user of DEV_USERS) {
+    const existing = await prisma.user.findUnique({ where: { email: user.email } });
+    if (!existing) {
+      await prisma.user.create({
+        data: {
+          email: user.email,
+          passwordHash,
+          displayName: user.displayName,
+        },
+      });
+      console.log(`Seeded user ${user.email} / ${DEV_PASSWORD}`);
+    } else {
+      // Keep password in sync for local testing when re-seeding.
+      await prisma.user.update({
+        where: { email: user.email },
+        data: { passwordHash, displayName: user.displayName },
+      });
+    }
   }
 
-  console.log("Seed completed.");
+  console.log(`Seed completed (dev users password: ${DEV_PASSWORD}).`);
 }
 
 main()
