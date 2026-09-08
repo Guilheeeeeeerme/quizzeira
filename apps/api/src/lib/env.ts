@@ -37,4 +37,12 @@ export const env = {
   s3SecretAccessKey: requireEnv("S3_SECRET_ACCESS_KEY", "quizzeira-secret"),
   s3Bucket: requireEnv("S3_BUCKET", "quizzeira"),
   s3ForcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "true") !== "false",
+  /** Shared exam question bank TTL in Redis (days). */
+  questionBankTtlDays: Number(process.env.QUESTION_BANK_TTL_DAYS ?? 90),
+  /** Firecrawl API key for past-exam / prova search (optional). */
+  firecrawlApiKey: process.env.FIRECRAWL_API_KEY?.trim() || "",
+  /** Opt-in deep search before cold generation for open-exam pills. */
+  pastExamSearchEnabled: (process.env.PAST_EXAM_SEARCH_ENABLED ?? "true") !== "false",
+  /** Per-exam search cooldown (seconds). */
+  pastExamSearchCooldownSec: Number(process.env.PAST_EXAM_SEARCH_COOLDOWN_SEC ?? 3600),
 };

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { TopicDto, TopicPresetSlug } from "@quizzeira/shared";
-import { TOPIC_PRESETS } from "@quizzeira/shared";
+import type { TopicDto } from "@quizzeira/shared";
+import { getTopicPreset } from "@quizzeira/shared";
 import { api, apiUpload } from "../../lib/api";
 import { localizeApiError, useLocale, useT } from "../../i18n";
 import {
@@ -18,27 +18,36 @@ import {
 } from "../../ui";
 import styles from "./Topics.module.css";
 
+const OPEN_EXAM_PRESET = "open_exam" as const;
+
+/** Edit materials for an open-exam study config (create via Open exams catalog). */
 export function TopicEditorPage() {
   const { topicId } = useParams<{ topicId: string }>();
   const isNew = !topicId || topicId === "new";
   const navigate = useNavigate();
   const t = useT();
   const { locale } = useLocale();
+  const openExamPreset = getTopicPreset(OPEN_EXAM_PRESET);
 
   const [booting, setBooting] = useState(!isNew);
   const [topic, setTopic] = useState<TopicDto | null>(null);
   const [title, setTitle] = useState("");
   const [guidelines, setGuidelines] = useState("");
-  const [presetSlug, setPresetSlug] = useState<TopicPresetSlug | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const activeTemplate = useMemo(() => {
-    if (!presetSlug) return "";
-    return TOPIC_PRESETS.find((p) => p.slug === presetSlug)?.guidelinesTemplate[locale] ?? "";
-  }, [presetSlug, locale]);
+  const activeTemplate = useMemo(
+    () => openExamPreset?.guidelinesTemplate[locale] ?? "",
+    [openExamPreset, locale],
+  );
+
+  useEffect(() => {
+    if (!isNew) return;
+    // Manual create is obsolete — send people to the catalog.
+    navigate("/", { replace: true });
+  }, [isNew, navigate]);
 
   useEffect(() => {
     if (isNew) return;
@@ -48,7 +57,6 @@ export function TopicEditorPage() {
         setTopic(data);
         setTitle(data.title);
         setGuidelines(data.guidelines);
-        setPresetSlug(data.presetSlug);
       } catch (err) {
         setError(localizeApiError(err instanceof Error ? err.message : "Failed to load", t));
       } finally {
@@ -57,42 +65,21 @@ export function TopicEditorPage() {
     })();
   }, [isNew, topicId, t]);
 
-  function selectPreset(slug: TopicPresetSlug) {
-    const next = TOPIC_PRESETS.find((p) => p.slug === slug);
-    if (!next) return;
-    const template = next.guidelinesTemplate[locale];
-    const previous = presetSlug
-      ? TOPIC_PRESETS.find((p) => p.slug === presetSlug)?.guidelinesTemplate[locale]
-      : "";
-    if (!guidelines.trim() || guidelines === previous) {
-      setGuidelines(template);
-    }
-    setPresetSlug(slug);
-  }
-
   async function save() {
+    if (!topicId || isNew) return;
     setSaving(true);
     setError("");
     try {
-      if (isNew) {
-        const created = await api<TopicDto>("/topics", {
-          method: "POST",
-          body: JSON.stringify({
-            title,
-            guidelines,
-            presetSlug,
-            preferredLocale: locale,
-          }),
-        });
-        navigate(`/topics/${created.id}`, { replace: true });
-        setTopic(created);
-      } else if (topicId) {
-        const updated = await api<TopicDto>(`/topics/${topicId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ title, guidelines, presetSlug, preferredLocale: locale }),
-        });
-        setTopic(updated);
-      }
+      const updated = await api<TopicDto>(`/topics/${topicId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title,
+          guidelines,
+          presetSlug: OPEN_EXAM_PRESET,
+          preferredLocale: locale,
+        }),
+      });
+      setTopic(updated);
     } catch (err) {
       setError(localizeApiError(err instanceof Error ? err.message : "Request failed", t));
     } finally {
@@ -123,12 +110,15 @@ export function TopicEditorPage() {
     setTopic(updated);
   }
 
-  async function onUpload(file: File | null) {
-    if (!file || !topicId || isNew) return;
+  async function onUpload(files: FileList | null) {
+    if (!files?.length || !topicId || isNew) return;
     setError("");
     try {
-      const updated = await apiUpload<TopicDto>(`/topics/${topicId}/attachments`, file);
-      setTopic(updated);
+      let updated: TopicDto | null = null;
+      for (const file of Array.from(files)) {
+        updated = await apiUpload<TopicDto>(`/topics/${topicId}/attachments`, file);
+      }
+      if (updated) setTopic(updated);
     } catch (err) {
       setError(localizeApiError(err instanceof Error ? err.message : "Request failed", t));
     }
@@ -148,19 +138,19 @@ export function TopicEditorPage() {
     navigate("/");
   }
 
-  if (booting) return <PageSkeleton />;
+  if (isNew || booting) return <PageSkeleton />;
 
   return (
     <Stack gap={6}>
       <header className={styles.header}>
         <Heading level={1} size="page">
-          {isNew ? t("New topic") : t("Edit topic")}
+          {t("Edit study materials")}
         </Heading>
         <Text tone="secondary" size="bodySm">
-          {t("Pick a preset to seed guidelines, then customize.")}
+          {t("Prefer picking an open exam from the catalog. Materials stay context, not the quiz subject.")}
         </Text>
         <Text className={styles.ttlNote}>
-          {t("Topics unused for 30 days are deleted automatically.")}
+          {t("Studies unused for 30 days are deleted automatically.")}
         </Text>
       </header>
 
@@ -170,31 +160,13 @@ export function TopicEditorPage() {
         </Text>
       ) : null}
 
-      <Stack gap={3}>
-        <Text size="caption" tone="secondary">
-          {t("Preset")}
-        </Text>
-        <div className={styles.chipRow}>
-          {TOPIC_PRESETS.map((preset) => (
-            <button
-              key={preset.slug}
-              type="button"
-              className={`${styles.chip} ${presetSlug === preset.slug ? styles.chipActive : ""}`}
-              onClick={() => selectPreset(preset.slug)}
-            >
-              {preset.label[locale]}
-            </button>
-          ))}
-        </div>
-      </Stack>
-
       <Field label={t("Title")}>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
 
       <Field
         label={t("Guidelines")}
-        hint={activeTemplate ? t("Editable — preset is only a starting point.") : undefined}
+        hint={activeTemplate ? t("Editable — open exam guidelines are a starting point.") : undefined}
       >
         <Textarea
           rows={10}
@@ -207,7 +179,7 @@ export function TopicEditorPage() {
         <Button onClick={() => void save()} loading={saving} disabled={!title.trim() || !guidelines.trim()}>
           {t("Save")}
         </Button>
-        {!isNew ? (
+        {topicId ? (
           <Button variant="secondary" onClick={() => navigate(`/topics/${topicId}/study`)}>
             {t("Study now")}
           </Button>
@@ -217,7 +189,7 @@ export function TopicEditorPage() {
         </Button>
       </div>
 
-      {!isNew && topic ? (
+      {topic ? (
         <Stack gap={6}>
           <Stack gap={3}>
             <Heading level={2} size="section">
@@ -257,7 +229,11 @@ export function TopicEditorPage() {
             </Heading>
             <input
               type="file"
-              onChange={(e) => void onUpload(e.target.files?.[0] ?? null)}
+              multiple
+              onChange={(e) => {
+                void onUpload(e.target.files);
+                e.target.value = "";
+              }}
               aria-label={t("Upload file")}
             />
             <Stack gap={2}>

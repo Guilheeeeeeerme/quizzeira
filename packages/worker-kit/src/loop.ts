@@ -93,9 +93,10 @@ export async function runLoop(
   };
 
   await run();
+  // Keep the timer referenced so workers stay alive after the first tick
+  // (unref would let Node exit when no other handles remain).
   const timer = setInterval(() => {
     void run();
   }, intervalMs);
-  timer.unref?.();
   return () => clearInterval(timer);
 }

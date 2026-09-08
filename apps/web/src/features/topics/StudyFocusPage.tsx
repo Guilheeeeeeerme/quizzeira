@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import type { PillAttemptDto, PillStartResponse, TopicDto } from "@quizzeira/shared";
-import { TOPIC_PRESETS } from "@quizzeira/shared";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import type {
+  PillAttemptDto,
+  PillStartResponse,
+  SessionDurationMinutes,
+  TopicDto,
+} from "@quizzeira/shared";
+import { SESSION_DURATION_MINUTES, TOPIC_PRESETS } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useLocale, useT } from "../../i18n";
 import {
@@ -20,10 +25,13 @@ import styles from "./Topics.module.css";
 export function StudyFocusPage() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const examTitle = (location.state as { examTitle?: string } | null)?.examTitle ?? null;
   const t = useT();
   const { locale } = useLocale();
   const [topic, setTopic] = useState<TopicDto | null>(null);
   const [focusText, setFocusText] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState<SessionDurationMinutes | null>(null);
   const [booting, setBooting] = useState(true);
   const [starting, setStarting] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -65,6 +73,7 @@ export function StudyFocusPage() {
         method: "POST",
         body: JSON.stringify({
           focusText: withFocus ? focusText.trim() || null : null,
+          durationMinutes,
           locale,
         }),
       });
@@ -108,7 +117,9 @@ export function StudyFocusPage() {
       <Stack gap={4} align="center">
         <Spinner size="lg" label={t("Preparing your study pill")} />
         <Text tone="secondary" size="bodySm">
-          {t("The AI is choosing question types and length for a short session.")}
+          {durationMinutes
+            ? t("The AI is inferring subjects and building a timed session.")
+            : t("The AI is choosing question types and length for a short session.")}
         </Text>
       </Stack>
     );
@@ -121,7 +132,7 @@ export function StudyFocusPage() {
           {t("What do you want to focus on today?")}
         </Heading>
         <Text tone="secondary" size="bodySm">
-          {topic.title}
+          {examTitle || topic.title}
         </Text>
         <Text size="caption" tone="tertiary">
           {t("Optional — skip to let the AI use your topic guidelines")}
@@ -134,12 +145,37 @@ export function StudyFocusPage() {
         </Text>
       ) : null}
 
+      <Field label={t("Session length")}>
+        <Text size="caption" tone="tertiary">
+          {t("Default is a short pill. Pick a time to scale depth.")}
+        </Text>
+        <div className={styles.chipRow}>
+          <button
+            type="button"
+            className={`${styles.chip} ${durationMinutes === null ? styles.chipActive : ""}`}
+            onClick={() => setDurationMinutes(null)}
+          >
+            {t("Pill (default)")}
+          </button>
+          {SESSION_DURATION_MINUTES.map((mins) => (
+            <button
+              key={mins}
+              type="button"
+              className={`${styles.chip} ${durationMinutes === mins ? styles.chipActive : ""}`}
+              onClick={() => setDurationMinutes(mins)}
+            >
+              {t("{n} min", { n: mins })}
+            </button>
+          ))}
+        </div>
+      </Field>
+
       <Field label={t("Today's focus")}>
         <Textarea
           rows={4}
           value={focusText}
           onChange={(e) => setFocusText(e.target.value)}
-          placeholder={t("e.g. History and Geography mock aligned to the notice")}
+          placeholder={t("e.g. emphasize logical reasoning; avoid legislation today")}
         />
       </Field>
 
@@ -170,8 +206,8 @@ export function StudyFocusPage() {
         <Button variant="ghost" onClick={() => void start(false)} disabled={starting}>
           {t("Skip and start")}
         </Button>
-        <Button variant="secondary" onClick={() => navigate(`/topics/${topicId}`)}>
-          {t("Back")}
+        <Button variant="secondary" onClick={() => navigate("/")}>
+          {t("Back to open exams")}
         </Button>
       </div>
     </Stack>

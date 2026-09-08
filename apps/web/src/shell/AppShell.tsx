@@ -9,7 +9,7 @@ import styles from "./AppShell.module.css";
 
 const localeLabels: Record<Locale, string> = {
   en: "English",
-  "pt-BR": "Português (Brasil)",
+  pt: "Português",
 };
 
 function MoonIcon() {
@@ -116,7 +116,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className={styles.sidebar} aria-label={t("Primary")}>
         <div className={styles.sidebarBrand}>
           <p className={styles.sidebarBrandName}>{t("Quizzeira")}</p>
-          <h1 className={styles.sidebarSubtitle}>{t("AI Dev Quiz")}</h1>
+          <h1 className={styles.sidebarSubtitle}>{t("Exam study")}</h1>
         </div>
         <nav className={styles.sidebarNav}>
           <NavLink
@@ -126,7 +126,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               [styles.navItem, isActive ? styles.navItemActive : ""].filter(Boolean).join(" ")
             }
           >
-            {t("Topics")}
+            {t("Open exams")}
+          </NavLink>
+          <NavLink
+            to="/topics"
+            className={({ isActive }) =>
+              [styles.navItem, isActive ? styles.navItemActive : ""].filter(Boolean).join(" ")
+            }
+          >
+            {t("My studies")}
           </NavLink>
           <NavLink
             to="/progress"
@@ -136,16 +144,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {t("Progress")}
           </NavLink>
-          {user?.role === "ADMIN" ? (
-            <NavLink
-              to="/admin/proposals"
-              className={({ isActive }) =>
-                [styles.navItem, isActive ? styles.navItemActive : ""].filter(Boolean).join(" ")
-              }
-            >
-              {t("Proposals")}
-            </NavLink>
-          ) : null}
         </nav>
       </aside>
 
@@ -255,7 +253,16 @@ export function AppShell({ children }: { children: ReactNode }) {
               }
               onClick={() => setNavOpen(false)}
             >
-              {t("Topics")}
+              {t("Open exams")}
+            </NavLink>
+            <NavLink
+              to="/topics"
+              className={({ isActive }) =>
+                [styles.navItem, isActive ? styles.navItemActive : ""].filter(Boolean).join(" ")
+              }
+              onClick={() => setNavOpen(false)}
+            >
+              {t("My studies")}
             </NavLink>
             <NavLink
               to="/progress"

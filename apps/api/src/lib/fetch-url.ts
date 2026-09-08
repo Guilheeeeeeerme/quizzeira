@@ -164,3 +164,134 @@ export function excerptText(value: string | null | undefined, max = 6000): strin
   if (!value?.trim()) return null;
   return value.trim().slice(0, max);
 }
+
+/** Strong signals for real study content (Anexo / blueprint body). */
+const PRIMARY_SYLLABUS_MARKERS = [
+  /l[ií]ngua\s+portuguesa\s*:/i,
+  /conte[uú]dos?\s+program[aá]ticos?/i,
+  /programa\s+das?\s+provas?/i,
+  /job\s+description|responsibilities|requirements|must[- ]have/i,
+  /requisitos?\s+(obrigat[oó]rios?|desej[aá]veis?)/i,
+];
+
+/**
+ * Weak / TOC mentions — appear early in editais long before the real anexo.
+ * Only used when no primary marker exists.
+ */
+const SECONDARY_SYLLABUS_MARKERS = [
+  /conhecimentos?\s+(b[aá]sicos?|gerais|espec[ií]ficos?)/i,
+];
+
+const VACANCY_TABLE_MARKERS = [
+  /quadro\s+de\s+vagas/i,
+  /quadro\s+de\s+[eê]nfases/i,
+  /cadastro\s+de\s+reserva/i,
+  /\bAC\b.*\bPCD\b|\bPcD\b.*\bAC\b/i,
+];
+
+export const ATTACHMENT_STORE_MAX_CHARS = 80_000;
+export const GENERATION_EXCERPT_MAX_CHARS = 18_000;
+export const VACANCY_EXCERPT_MAX_CHARS = 1_200;
+
+function firstMatchIndex(text: string, patterns: RegExp[]): number {
+  let best = -1;
+  for (const re of patterns) {
+    const m = re.exec(text);
+    if (m && (best < 0 || m.index < best)) best = m.index;
+  }
+  return best;
+}
+
+/**
+ * Prefer the syllabus *body* over early TOC cross-references.
+ * e.g. "conteúdos programáticos" may appear in §8 before Anexo IV;
+ * "LÍNGUA PORTUGUESA:" marks the actual program.
+ */
+function findSyllabusAnchor(text: string): number {
+  const lingua = /l[ií]ngua\s+portuguesa\s*:/i.exec(text);
+  if (lingua) return lingua.index;
+
+  const primaryHits: number[] = [];
+  for (const re of PRIMARY_SYLLABUS_MARKERS) {
+    const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
+    for (const m of text.matchAll(global)) primaryHits.push(m.index);
+  }
+  if (primaryHits.length > 0) {
+    // Last primary hit is usually the anexo body, not the forward reference.
+    return Math.max(...primaryHits);
+  }
+  return firstMatchIndex(text, SECONDARY_SYLLABUS_MARKERS);
+}
+
+export function looksLikeVacancyTable(text: string | null | undefined): boolean {
+  if (!text?.trim()) return false;
+  const sample = text.slice(0, 4_000);
+  let hits = 0;
+  for (const re of VACANCY_TABLE_MARKERS) {
+    if (re.test(sample)) hits += 1;
+  }
+  return hits >= 2 || /QUADRO\s+1\s*[-–]?\s*VAGAS/i.test(sample);
+}
+
+/**
+ * Build study-context excerpt: prefer syllabus / JD skill sections over document head.
+ * Admin edital pages alone produce meta-questions; contents live deep in anexos.
+ */
+export function excerptStudyContext(
+  value: string | null | undefined,
+  max = GENERATION_EXCERPT_MAX_CHARS,
+): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  if (text.length <= max) return text;
+
+  const markerAt = findSyllabusAnchor(text);
+
+  if (markerAt < 0) {
+    const headBudget = Math.min(2_500, Math.floor(max * 0.15));
+    const mid = Math.max(0, Math.floor(text.length / 2) - Math.floor(max / 4));
+    const head = text.slice(0, headBudget);
+    const body = text.slice(mid, mid + (max - headBudget - 80));
+    return `${head}\n\n[…]\n\n${body}`;
+  }
+
+  // Keep admin head tiny once real syllabus body is found — logistics drown subject matter.
+  const headBudget = Math.min(800, Math.floor(max * 0.05));
+  const head = text.slice(0, headBudget);
+  const syllabusBudget = max - head.length - 80;
+  const syllabusStart = Math.max(0, markerAt - Math.min(200, Math.floor(syllabusBudget * 0.02)));
+  const syllabus = text.slice(syllabusStart, syllabusStart + syllabusBudget);
+  if (markerAt <= headBudget) {
+    return text.slice(0, max);
+  }
+  return `${head}\n\n[… syllabus / skills section …]\n\n${syllabus}`;
+}
+
+/**
+ * Persist attachment text for later generation: keep syllabus body, not only PDF head.
+ */
+export function excerptForAttachmentStore(
+  value: string | null | undefined,
+  max = ATTACHMENT_STORE_MAX_CHARS,
+): string | null {
+  return excerptStudyContext(value, max);
+}
+
+/**
+ * Shrink vacancy / ênfase tables so they cannot drown syllabus context.
+ */
+export function excerptMaterialForGeneration(
+  value: string | null | undefined,
+  opts: { filename?: string | null; max?: number } = {},
+): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  const name = opts.filename ?? "";
+  const vacancyNamed = /vagas|quadro/i.test(name);
+  if (vacancyNamed || looksLikeVacancyTable(text)) {
+    const cap = Math.min(opts.max ?? VACANCY_EXCERPT_MAX_CHARS, VACANCY_EXCERPT_MAX_CHARS);
+    const head = text.slice(0, cap);
+    return `${head}\n\n[… vacancy / ênfase table truncated — use only to know target cargo/ênfase; never quiz vacancy counts, polos, or modalities …]`;
+  }
+  return excerptStudyContext(text, opts.max ?? GENERATION_EXCERPT_MAX_CHARS);
+}

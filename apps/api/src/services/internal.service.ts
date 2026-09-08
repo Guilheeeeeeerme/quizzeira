@@ -58,7 +58,7 @@ async function loadAttemptForReview(attemptId: string): Promise<PendingReviewAtt
     attemptId: attempt.id,
     levelSlug: (attempt.level?.slug as LevelSlug | undefined) ?? "topic",
     levelLabel: attempt.level?.label ?? attempt.topic?.title ?? "Topic",
-    locale: attempt.locale === "pt-BR" ? "pt-BR" : "en",
+    locale: attempt.locale === "pt" || attempt.locale === "pt-BR" ? "pt" : "en",
     questions: attempt.questions.map(({ question }) => {
       const answer = answerByQuestion.get(question.id);
       return toReviewPayload(question, {

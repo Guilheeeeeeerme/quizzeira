@@ -144,7 +144,7 @@ export function ResultsPage() {
 
       <div>
         <Button variant="secondary" onClick={() => navigate("/")}>
-          {t("Back to dashboard")}
+          {t("Back to open exams")}
         </Button>
       </div>
     </Stack>

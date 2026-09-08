@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ProgressItemDto, ProgressSummaryDto } from "@quizzeira/shared";
+import type { ProgressItemDto } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useLocale, useT } from "../../i18n";
 import {
   Button,
   EmptyState,
-  Grid,
   Heading,
   PageSkeleton,
   Stack,
   StatusBadge,
-  Surface,
   Table,
   TBody,
   TD,
@@ -27,19 +25,14 @@ export function ProgressPage() {
   const t = useT();
   const navigate = useNavigate();
   const [items, setItems] = useState<ProgressItemDto[]>([]);
-  const [summary, setSummary] = useState<ProgressSummaryDto[]>([]);
   const [booting, setBooting] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     void (async () => {
       try {
-        const [progress, summaryRes] = await Promise.all([
-          api<{ items: ProgressItemDto[] }>("/progress"),
-          api<{ summary: ProgressSummaryDto[] }>("/progress/summary"),
-        ]);
+        const progress = await api<{ items: ProgressItemDto[] }>("/progress");
         setItems(progress.items);
-        setSummary(summaryRes.summary);
       } catch (err) {
         setError(localizeApiError(err instanceof Error ? err.message : "Failed to load", t));
       } finally {
@@ -69,41 +62,15 @@ export function ProgressPage() {
 
       <section className={styles.section}>
         <Heading level={2} size="section">
-          {t("Summary by level")}
-        </Heading>
-        {summary.length === 0 ? (
-          <EmptyState title={t("No attempts yet.")} />
-        ) : (
-          <Grid columns={3} gap={3}>
-            {summary.map((s) => (
-              <Surface key={s.levelSlug}>
-                <Stack gap={2}>
-                  <Text size="bodySm" className={styles.summaryTitle}>
-                    {s.levelLabel}
-                  </Text>
-                  <Text size="caption" tone="secondary" className="qz-tabular">
-                    {t("Attempts:")} {s.attemptCount}
-                    {s.bestScore !== null ? ` · ${t("Best:")} ${s.bestScore}` : ""}
-                    {s.lastScore !== null ? ` · ${t("Last:")} ${s.lastScore}` : ""}
-                  </Text>
-                </Stack>
-              </Surface>
-            ))}
-          </Grid>
-        )}
-      </section>
-
-      <section className={styles.section}>
-        <Heading level={2} size="section">
           {t("All attempts")}
         </Heading>
         {items.length === 0 ? (
           <EmptyState
             title={t("No attempts yet.")}
-            description={t("Start a study pill from Topics to see history here.")}
+            description={t("Start a study pill from an open exam to see history here.")}
             action={
               <Button size="sm" variant="secondary" onClick={() => navigate("/")}>
-                {t("Topics")}
+                {t("Open exams")}
               </Button>
             }
           />

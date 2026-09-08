@@ -65,20 +65,22 @@ model DifficultyLevel {
 }
 
 model Topic {
-  id              String            @id @default(cuid())
-  userId          String
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title           String
-  guidelines      String            @db.Text
-  presetSlug      String?
-  preferredLocale String?
-  lastUsedAt      DateTime          @default(now())
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  attachments     TopicAttachment[]
-  links           TopicLink[]
-  questions       Question[]
-  attempts        QuizAttempt[]
+  id               String            @id @default(cuid())
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  guidelines       String            @db.Text
+  presetSlug       String?
+  preferredLocale  String?
+  /// Stable study-subject plan inferred from preset + materials + guidelines (JSON text).
+  inferredSyllabus String?           @db.LongText
+  lastUsedAt       DateTime          @default(now())
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  attachments      TopicAttachment[]
+  links            TopicLink[]
+  questions        Question[]
+  attempts         QuizAttempt[]
 
   @@index([userId])
   @@index([lastUsedAt])
@@ -162,6 +164,8 @@ model QuizAttempt {
   topic               Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
   locale              String            @default("en")
   focusText           String?           @db.Text
+  /// Session length in minutes; null = default short pill.
+  durationMinutes     Int?
   score               Int?
   maxScore            Int               @default(5)
   generalComment      String?           @db.Text
