@@ -12,6 +12,7 @@
   "dependencies": {
     "@quizzeira/shared": "*",
     "dotenv": "^16.4.7",
+    "ioredis": "^5.4.2",
     "js-yaml": "^4.3.2"
   },
   "devDependencies": {

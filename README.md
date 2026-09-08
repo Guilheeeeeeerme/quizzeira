@@ -78,27 +78,22 @@ packages/worker-kit    Reusable worker runtime (LLM loops, prompts, internal API
 
 ## Guardrails & LLM spend
 
-Worker LLM calls are standardized behind `worker-kit` (`packages/worker-kit`): every call goes through `llm.generateJson`, which owns provider fallback, guardrails and spend budgets.
+See [docs/guardrails.md](docs/guardrails.md) for the OWASP GenAI Top 10 **2026** control map.
 
-OWASP Top 10 for LLM apps mapping:
+Worker LLM calls go through `worker-kit` (`packages/worker-kit`): `generateJson` owns provider fallback, fencing, and Redis-backed spend budgets when `REDIS_URL` is set.
 
-| OWASP risk | Mitigation |
+| OWASP risk (2026) | Mitigation |
 | --- | --- |
-| LLM01 Prompt injection | Every untrusted payload (quiz questions, user answers) is pre-screened against regex policies (`packages/worker-kit/guardrails/registry.yml`, `guardrail_block` errors, no LLM call and no spend on a block) and then wrapped in a `BEGIN_UNTRUSTED_QUIZ_DATA` / `END_UNTRUSTED_QUIZ_DATA` fence, with a system-prompt appendix stating the content is data, not instructions. |
-| LLM02 Sensitive disclosure | The same guardrail appendix forbids revealing system prompts, other prompts, secrets or credentials; spec views and prompts stay behind `/internal*` routes (API rate limiting applies, Redis-backed `@fastify/rate-limit`). |
-| LLM10 Unbounded consumption | In-process fixed-window rate limit (`LLM_RATE_LIMIT_PER_MINUTE`, default 20/min) plus a daily budget (`LLM_DAILY_BUDGET`, default 500/day, UTC reset). Budget is per worker process and resets on container restart; values are read from env so the API/infra deployment can provision them. |
+| LLM01 Prompt injection | Pre-screen + fence; link fetch SSRF-hardened; **never** combine Google Search grounding with attachment/link excerpts |
+| LLM03 Excessive agency | Curriculum and prompt changes require **admin HITL** (`/admin/proposals`) |
+| LLM06 Unbounded consumption | Redis shared `LLM_RATE_LIMIT_PER_MINUTE` / `LLM_DAILY_BUDGET`; `/internal` rate-limited |
 
-Provider and model selection:
+Provider notes:
 
-- `LLM_PROVIDER_ORDER` (default `gemini,openai`) defines the fallback order; unknown names are ignored and providers without an API key are skipped. With no key at all, workers log and skip ticks (`llm_unavailable`): quiz-corrector releases the claimed attempt, question-updater skips the question.
-- The `grounding: true` option (Google Search grounding) is honored only by the Gemini provider; the OpenAI provider ignores it.
-- Model per call: `opts.attempt` (0-based) picks `rank[attempt]` from the cheapest-model table (`model-rank.ts`, seeded with input USD/1M prices, enriched best-effort from each provider's `models.list` every `MODEL_RANK_REFRESH_MS`, default 12h, text-generation models only, `MODEL_RANK_TOP_N` per provider). Attempt 0 is the configured default model (cheapest available).
+- `QUESTION_UPDATE_GROUNDING=true` opts into Gemini Search for the updater only; proposals still go to HITL, not live bank.
+- Default updater grounding is **off**.
+- Docker compose should pass `REDIS_URL` to workers for shared budgets across replicas.
 
-Scheduling:
-
-- `WORKER_WINDOWS` ("HH:MM,HH:MM", with `WORKER_TZ`, default UTC) restrict ticks to a ±30 min window; outside windows ticks are cheap no-ops. Unset = continuous.
-- Docker compose runs question-updater 2x/day by default (`07:00,19:00`). quiz-corrector stays continuous by default (corrections stay near-real-time); set `WORKER_WINDOWS` to switch it to batch mode as a deliberate tradeoff.
-- API hardening is unchanged: global Fastify rate limit with `/health` and `/internal*` allowlisting; the API itself makes no LLM calls, so no LLM budget env is consumed there.
 
 ## Deployment
 

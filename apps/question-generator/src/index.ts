@@ -14,6 +14,14 @@ import {
 
 const NAME = "question-generator";
 
+function hasMaterialExcerpts(attempt: PendingGenerationAttempt): boolean {
+  const { attachments, links } = attempt.materials;
+  return (
+    attachments.some((a) => Boolean(a.excerpt?.trim())) ||
+    links.some((l) => Boolean(l.excerpt?.trim()))
+  );
+}
+
 async function tick(): Promise<void> {
   try {
     const purged = await dmzPost<{ deleted: number }>("/internal/topics/purge-stale");
@@ -56,9 +64,12 @@ async function tick(): Promise<void> {
       2,
     );
 
+    // Never combine Google Search grounding with untrusted attachment/link excerpts (LLM01/LLM07).
+    const grounding = attempt.hasLinks && !hasMaterialExcerpts(attempt);
+
     const result = await generateJson<GenerationCompleteInput>(system, user, {
       requiredKeys: ["questions"],
-      grounding: attempt.hasLinks,
+      grounding,
     });
     if (!Array.isArray(result.questions) || result.questions.length < 3) {
       throw new Error("Invalid generation payload from model");
@@ -69,7 +80,7 @@ async function tick(): Promise<void> {
       { questions: result.questions },
     );
     console.log(
-      `[${NAME}] generated ${completed.questionCount} questions for ${completed.attemptId}`,
+      `[${NAME}] generated ${completed.questionCount} questions for ${completed.attemptId} grounding=${grounding}`,
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

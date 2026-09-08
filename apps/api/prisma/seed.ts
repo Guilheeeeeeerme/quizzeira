@@ -598,9 +598,10 @@ async function main() {
     }
   }
 
-  // Platform has no role enum; seed root + admin as test accounts for local auth/UI.
+  // Platform seeds root as ADMIN for HITL proposal review; admin@ stays USER for UI tests.
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
   for (const user of DEV_USERS) {
+    const role = user.email.startsWith("root@") ? "ADMIN" : "USER";
     const existing = await prisma.user.findUnique({ where: { email: user.email } });
     if (!existing) {
       await prisma.user.create({
@@ -608,14 +609,15 @@ async function main() {
           email: user.email,
           passwordHash,
           displayName: user.displayName,
+          role,
         },
       });
-      console.log(`Seeded user ${user.email} / ${DEV_PASSWORD}`);
+      console.log(`Seeded user ${user.email} / ${DEV_PASSWORD} role=${role}`);
     } else {
       // Keep password in sync for local testing when re-seeding.
       await prisma.user.update({
         where: { email: user.email },
-        data: { passwordHash, displayName: user.displayName },
+        data: { passwordHash, displayName: user.displayName, role },
       });
     }
   }

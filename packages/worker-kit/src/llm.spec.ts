@@ -60,6 +60,7 @@ beforeEach(() => {
   workerEnv.openaiModel = "gpt-5-nano";
   workerEnv.modelRankTopN = 3;
   workerEnv.openaiBaseUrl = "https://api.openai.com/v1";
+  workerEnv.redisUrl = "";
   resetBudgetForTests();
   resetModelRankForTests();
   vi.stubGlobal("fetch", vi.fn(stubFetch));
@@ -124,24 +125,26 @@ describe("screening and budgets gate before fetch", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("consumeBudget resets at minute boundary and daily date change", () => {
+  it("consumeBudget resets at minute boundary and daily date change", async () => {
+    workerEnv.redisUrl = "";
     workerEnv.llmRateLimitPerMinute = 2;
     workerEnv.llmDailyBudget = 1000;
     const base = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
-    consumeBudget(base);
-    consumeBudget(base + 1);
-    expect(() => consumeBudget(base + 2)).toThrow(/per-minute/);
+    await consumeBudget(base);
+    await consumeBudget(base + 1);
+    await expect(consumeBudget(base + 2)).rejects.toThrow(/per-minute/);
     const nextMinute = base + 60_000;
-    expect(() => consumeBudget(nextMinute)).not.toThrow();
+    await expect(consumeBudget(nextMinute)).resolves.toBeUndefined();
   });
 
-  it("daily budget resets at UTC date change", () => {
+  it("daily budget resets at UTC date change", async () => {
+    workerEnv.redisUrl = "";
     workerEnv.llmRateLimitPerMinute = 1000;
     workerEnv.llmDailyBudget = 1;
     const base = Date.UTC(2026, 0, 1, 23, 59);
-    consumeBudget(base);
-    expect(() => consumeBudget(base + 1)).toThrow(/daily/);
-    expect(() => consumeBudget(base + 120_000)).not.toThrow();
+    await consumeBudget(base);
+    await expect(consumeBudget(base + 1)).rejects.toThrow(/daily/);
+    await expect(consumeBudget(base + 120_000)).resolves.toBeUndefined();
   });
 });
 

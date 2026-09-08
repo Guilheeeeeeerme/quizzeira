@@ -56,6 +56,55 @@ export async function putPrompt(
   return record;
 }
 
+function pendingKey(key: PromptKey): string {
+  return `qa:prompt:pending:${key}`;
+}
+
+/** Stage a prompt change for admin approval (does not mutate live prompt). */
+export async function proposePrompt(
+  key: PromptKey,
+  body: string,
+  note?: string,
+): Promise<{ key: PromptKey; body: string; note?: string; proposedAt: string; currentVersion: number }> {
+  const current = await getPrompt(key);
+  const proposal = {
+    key,
+    body,
+    note,
+    proposedAt: new Date().toISOString(),
+    currentVersion: current.version,
+  };
+  await redis.set(pendingKey(key), JSON.stringify(proposal));
+  return proposal;
+}
+
+export async function listPromptProposals(): Promise<
+  Array<{ key: PromptKey; body: string; note?: string; proposedAt: string; currentVersion: number }>
+> {
+  const out = [];
+  for (const key of PROMPT_KEYS) {
+    const raw = await redis.get(pendingKey(key));
+    if (raw) out.push(JSON.parse(raw));
+  }
+  return out;
+}
+
+export async function approvePromptProposal(key: PromptKey): Promise<PromptRecord> {
+  const raw = await redis.get(pendingKey(key));
+  if (!raw) {
+    throw Object.assign(new Error("No pending prompt proposal"), { statusCode: 404 });
+  }
+  const proposal = JSON.parse(raw) as { body: string; note?: string };
+  const record = await putPrompt(key, proposal.body, proposal.note ?? "approved");
+  await redis.del(pendingKey(key));
+  return record;
+}
+
+export async function rejectPromptProposal(key: PromptKey): Promise<{ ok: true }> {
+  await redis.del(pendingKey(key));
+  return { ok: true };
+}
+
 async function seedPrompt(key: PromptKey): Promise<PromptRecord> {
   const record: PromptRecord = {
     key,

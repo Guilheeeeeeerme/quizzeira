@@ -136,6 +136,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {t("Progress")}
           </NavLink>
+          {user?.role === "ADMIN" ? (
+            <NavLink
+              to="/admin/proposals"
+              className={({ isActive }) =>
+                [styles.navItem, isActive ? styles.navItemActive : ""].filter(Boolean).join(" ")
+              }
+            >
+              {t("Proposals")}
+            </NavLink>
+          ) : null}
         </nav>
       </aside>
 

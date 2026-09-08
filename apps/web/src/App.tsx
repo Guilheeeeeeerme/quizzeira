@@ -9,6 +9,7 @@ import { StudyFocusPage } from "./features/topics/StudyFocusPage";
 import { QuizPage } from "./features/quiz/QuizPage";
 import { ResultsPage } from "./features/quiz/ResultsPage";
 import { ProgressPage } from "./features/quiz/ProgressPage";
+import { ProposalsPage } from "./features/admin/ProposalsPage";
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
             <Route path="/quiz/:attemptId" element={<QuizPage />} />
             <Route path="/results/:attemptId" element={<ResultsPage />} />
             <Route path="/progress" element={<ProgressPage />} />
+            <Route path="/admin/proposals" element={<ProposalsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

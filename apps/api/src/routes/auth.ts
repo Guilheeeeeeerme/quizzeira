@@ -12,8 +12,18 @@ import { authenticate, parseTtlSeconds } from "../plugins/auth";
 import { env } from "../lib/env";
 import type { UserDto } from "@quizzeira/shared";
 
-function toUserDto(user: { id: string; email: string; displayName: string | null }): UserDto {
-  return { id: user.id, email: user.email, displayName: user.displayName };
+function toUserDto(user: {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: "USER" | "ADMIN";
+}): UserDto {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+  };
 }
 
 export async function authRoutes(app: FastifyInstance) {

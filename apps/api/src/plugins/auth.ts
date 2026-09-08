@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma";
 declare module "fastify" {
   interface FastifyRequest {
     userId?: string;
+    userRole?: "USER" | "ADMIN";
   }
 }
 
@@ -26,7 +27,16 @@ export async function authenticate(
   if (access) {
     try {
       const payload = verifyAccessToken(access);
-      request.userId = payload.sub;
+      const user = await prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, role: true },
+      });
+      if (!user) {
+        reply.code(401).send({ error: "Unauthorized" });
+        return;
+      }
+      request.userId = user.id;
+      request.userRole = user.role;
       return;
     } catch {
       // try refresh below
@@ -50,8 +60,20 @@ export async function authenticate(
     const newAccess = signAccessToken({ sub: user.id, email: user.email });
     reply.setCookie(ACCESS_COOKIE, newAccess, cookieOptions(15 * 60));
     request.userId = user.id;
+    request.userRole = user.role;
   } catch {
     reply.code(401).send({ error: "Unauthorized" });
+  }
+}
+
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  await authenticate(request, reply);
+  if (reply.sent) return;
+  if (request.userRole !== "ADMIN") {
+    reply.code(403).send({ error: "Admin required" });
   }
 }
 

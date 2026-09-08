@@ -300,3 +300,124 @@ export async function updateQuestion(id: string, input: QuestionUpdateInput) {
     lastReviewedAt: updated.lastReviewedAt?.toISOString() ?? null,
   };
 }
+
+function screenPatch(input: QuestionUpdateInput) {
+  const values = [
+    input.prompt,
+    input.explanation,
+    input.referenceAnswer,
+    ...(input.options ?? []),
+  ];
+  const blocked =
+    /<script|javascript:|onerror\s*=|eval\s*\(|document\.cookie|fetch\s*\(\s*['"]https?:\/\//i;
+  for (const value of values) {
+    if (typeof value === "string" && blocked.test(value)) {
+      throw Object.assign(new Error("Model output blocked by policy"), {
+        statusCode: 400,
+      });
+    }
+  }
+}
+
+export async function proposeQuestionUpdate(
+  questionId: string,
+  input: QuestionUpdateInput,
+  reason?: string,
+) {
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    include: { level: true },
+  });
+  if (!question) {
+    throw Object.assign(new Error("Question not found"), { statusCode: 404 });
+  }
+
+  const hasContentChange =
+    input.prompt !== undefined ||
+    input.options !== undefined ||
+    input.correctIndex !== undefined ||
+    input.referenceAnswer !== undefined ||
+    input.explanation !== undefined;
+
+  // Touch lastReviewedAt even when no content change (relevel-only still queued).
+  if (!hasContentChange && input.levelSlug === undefined) {
+    await prisma.question.update({
+      where: { id: questionId },
+      data: { lastReviewedAt: new Date() },
+    });
+    return { id: null as string | null, reviewedOnly: true };
+  }
+
+  if (hasContentChange) screenPatch(input);
+
+  const proposal = await prisma.questionUpdateProposal.create({
+    data: {
+      questionId,
+      proposedPatch: input as object,
+      reason: reason ?? null,
+      status: "PENDING",
+    },
+  });
+
+  await prisma.question.update({
+    where: { id: questionId },
+    data: { lastReviewedAt: new Date() },
+  });
+
+  return { id: proposal.id, reviewedOnly: false };
+}
+
+export async function listQuestionProposals(status: "PENDING" | "APPROVED" | "REJECTED" = "PENDING") {
+  const rows = await prisma.questionUpdateProposal.findMany({
+    where: { status },
+    include: { question: { include: { level: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    questionId: row.questionId,
+    proposedPatch: row.proposedPatch as QuestionUpdateInput,
+    reason: row.reason,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    questionPrompt: row.question.prompt,
+    questionType: row.question.type,
+    levelSlug: (row.question.level?.slug as LevelSlug | undefined) ?? "topic",
+  }));
+}
+
+export async function approveQuestionProposal(id: string, reviewerId: string) {
+  const row = await prisma.questionUpdateProposal.findUnique({ where: { id } });
+  if (!row || row.status !== "PENDING") {
+    throw Object.assign(new Error("Proposal not found"), { statusCode: 404 });
+  }
+  const patch = row.proposedPatch as QuestionUpdateInput;
+  const result = await updateQuestion(row.questionId, patch);
+  await prisma.questionUpdateProposal.update({
+    where: { id },
+    data: {
+      status: "APPROVED",
+      reviewedAt: new Date(),
+      reviewedById: reviewerId,
+    },
+  });
+  return result;
+}
+
+export async function rejectQuestionProposal(id: string, reviewerId: string) {
+  const row = await prisma.questionUpdateProposal.findUnique({ where: { id } });
+  if (!row || row.status !== "PENDING") {
+    throw Object.assign(new Error("Proposal not found"), { statusCode: 404 });
+  }
+  await prisma.questionUpdateProposal.update({
+    where: { id },
+    data: {
+      status: "REJECTED",
+      reviewedAt: new Date(),
+      reviewedById: reviewerId,
+    },
+  });
+  return { ok: true };
+}
