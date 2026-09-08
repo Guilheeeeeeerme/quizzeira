@@ -12,11 +12,13 @@ function num(key: string, fallback: number): number {
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 export const DEFAULT_OPENAI_MODEL = "gpt-5-nano";
+export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 
 export const workerEnv = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+  geminiBaseUrl: (process.env.GEMINI_BASE_URL || DEFAULT_GEMINI_BASE_URL).replace(/\/$/, ""),
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
   openaiModel: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
   openaiBaseUrl: (process.env.OPENAI_BASE_URL || DEFAULT_OPENAI_BASE_URL).replace(/\/$/, ""),

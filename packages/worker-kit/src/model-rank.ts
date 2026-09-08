@@ -82,7 +82,7 @@ function defaultModelFor(provider: ProviderName): string {
 
 async function fetchGeminiCatalog(): Promise<RankedModel[]> {
   const res = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models",
+    `${workerEnv.geminiBaseUrl}/v1beta/models`,
     { headers: { "x-goog-api-key": workerEnv.geminiApiKey } },
   );
   if (!res.ok) throw new Error(`Gemini models.list ${res.status}`);
