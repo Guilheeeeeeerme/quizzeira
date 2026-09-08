@@ -296,11 +296,50 @@ export async function internalRoutes(app: FastifyInstance) {
       }
     }
     try {
-      return await searchAndEnrichBank({
+      const result = await searchAndEnrichBank({
         ...body,
         subjects: Array.isArray(body.subjects) ? body.subjects.map(String) : [],
       });
+      const { appendExamActivity } = await import("../services/exam-activity.service");
+      const slug = body.examSlug!.trim();
+      if (result.skipped) {
+        await appendExamActivity({
+          examSlug: slug,
+          status: "skipped",
+          step: "past_exam_search",
+          title: "Past-exam search",
+          message: result.reason ?? "Skipped.",
+        });
+      } else if (result.upserted > 0) {
+        await appendExamActivity({
+          examSlug: slug,
+          status: "success",
+          step: "past_exam_search",
+          title: "Past-exam search",
+          message: `provider=${result.provider} hits=${result.hits.length} extracted=${result.extracted} upserted=${result.upserted}.`,
+        });
+      } else {
+        await appendExamActivity({
+          examSlug: slug,
+          status: "pending",
+          step: "past_exam_search",
+          title: "Past-exam search",
+          message: `provider=${result.provider} hits=${result.hits.length} but no questions extracted.`,
+        });
+      }
+      return result;
     } catch (err) {
+      const slug = body.examSlug?.trim();
+      if (slug) {
+        const { appendExamActivity } = await import("../services/exam-activity.service");
+        await appendExamActivity({
+          examSlug: slug,
+          status: "error",
+          step: "past_exam_search",
+          title: "Past-exam search failed",
+          message: err instanceof Error ? err.message : String(err),
+        }).catch(() => undefined);
+      }
       return httpError(err, reply);
     }
   });
@@ -448,6 +487,24 @@ export async function internalRoutes(app: FastifyInstance) {
         sourceId: body.sourceId.trim(),
         sourceDomain: body.sourceDomain.trim(),
       });
+      const { appendExamActivity } = await import("../services/exam-activity.service");
+      if (result.created) {
+        await appendExamActivity({
+          examSlug: result.record.examSlug,
+          status: "success",
+          step: "discovered",
+          title: "Discovered by crawler",
+          message: `New open exam from ${result.record.sourceDomain}.`,
+        });
+      } else if (result.changed) {
+        await appendExamActivity({
+          examSlug: result.record.examSlug,
+          status: "success",
+          step: "listing_updated",
+          title: "Listing updated",
+          message: `Open-exam fingerprint changed on ${result.record.sourceDomain}.`,
+        });
+      }
       return result;
     } catch (err) {
       return httpError(err, reply);

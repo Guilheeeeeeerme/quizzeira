@@ -29,6 +29,7 @@ function buildSearchQueries(input: PastExamSearchRequest & { examSlug: string })
   const subject = input.subjects[0] ?? "";
   const base = [
     // Portuguese search phrases (Firecrawl / web search — external query language).
+    `${label} prova anterior concurso PDF site:pciconcursos.com.br`,
     `${label} prova anterior concurso PDF`,
     `${label} Cesgranrio questões resolvidas ${emphasis ?? subject}`.trim(),
     `${label} gabarito prova objetiva ${subject || emphasis || ""}`.trim(),

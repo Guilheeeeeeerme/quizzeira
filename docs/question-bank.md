@@ -34,3 +34,5 @@ Then open http://localhost:5173 → **Open exams**.
 | `EXAM_CRAWLER_INTERVAL_MS` | `1800000` | Tick interval (2×/hour) |
 | `EXAM_CRAWLER_WINDOWS` | empty | Continuous ticks (no daily window) |
 | `FIRECRAWL_API_KEY` | empty | Live past-exam enrich (optional) |
+
+Primary past-exam hub seed: [PCI Concursos — Provas](https://www.pciconcursos.com.br/provas/) (`pciconcursos.com.br`).

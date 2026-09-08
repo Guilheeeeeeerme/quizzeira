@@ -70,6 +70,33 @@ export interface CrawlerObservability {
   openExams: number;
 }
 
+/** Per-exam pipeline / crawler timeline step (UI detail panel). */
+export type ExamActivityStatus = "success" | "error" | "pending" | "skipped" | "running";
+
+export interface ExamActivityEvent {
+  id: string;
+  examSlug: string;
+  at: string;
+  status: ExamActivityStatus;
+  step: string;
+  title: string;
+  message: string;
+}
+
+export interface ExamActivityTimelineDto {
+  examSlug: string;
+  examId: string;
+  title: string;
+  bankQuestionCount: number;
+  bankReady: boolean;
+  steps: ExamActivityEvent[];
+  lastCrawlerRun: CrawlerRunSummary | null;
+}
+
+export function examActivityKey(examSlug: string): string {
+  return `exam:activity:${slugifyKey(examSlug)}`;
+}
+
 export function crawlerSourceId(domain: string, name: string): string {
   return sha256Hex(`${slugifyKey(domain)}|${slugifyKey(name)}`).slice(0, 24);
 }

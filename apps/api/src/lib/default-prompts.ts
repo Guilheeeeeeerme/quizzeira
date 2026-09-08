@@ -111,8 +111,12 @@ CONSTRAINTS:
 - MULTIPLE_CHOICE: 2–6 options, exactly one correctIndex.
 - OPEN: include a strong but concise referenceAnswer.
 - Keep stems clear; avoid marathon multi-part stems even in long sessions.
+- NEVER repeat the answer choices inside "prompt". Put each choice only in "options".
+- Prompt is the stem only (command + any necessary context). Options are separate.
+- Figures: if a stem or option needs an image, put https URLs in promptMedia / optionMedia (parallel to options). You may also embed markdown images ![alt](url) in text; the server extracts them.
+- Do not invent image URLs. Only include media when present in materials or a real public figure URL from context.
 
-OUTPUT — JSON only, no markdown:
+OUTPUT — JSON only, no markdown fences:
 {
   "questions": [
     {
@@ -121,7 +125,9 @@ OUTPUT — JSON only, no markdown:
       "options": string[] | null,
       "correctIndex": number | null,
       "referenceAnswer": string | null,
-      "explanation": string | null
+      "explanation": string | null,
+      "promptMedia": [{ "url": string, "alt"?: string }] | null,
+      "optionMedia": [[{ "url": string, "alt"?: string }] | null] | null
     }
   ]
 }

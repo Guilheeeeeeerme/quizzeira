@@ -11,6 +11,7 @@ import type {
 import {
   isSessionDurationMinutes,
   normalizeLocale,
+  normalizeQuestionPresentation,
   questionBudgetForDuration,
 } from "@quizzeira/shared";
 import { prisma } from "../lib/prisma";
@@ -291,13 +292,24 @@ export async function completePillGeneration(
 
   await prisma.$transaction(async (tx) => {
     for (const [index, q] of questions.entries()) {
+      const normalized = normalizeQuestionPresentation({
+        prompt: q.prompt,
+        options: q.type === "MULTIPLE_CHOICE" ? q.options : null,
+        promptMedia: q.promptMedia,
+        optionMedia: q.optionMedia,
+      });
       const created = await tx.question.create({
         data: {
           topicId: attempt.topicId,
           sourceAttemptId: attemptId,
           type: q.type === "OPEN" ? QuestionType.OPEN : QuestionType.MULTIPLE_CHOICE,
-          prompt: q.prompt.trim(),
-          options: q.type === "MULTIPLE_CHOICE" ? (q.options ?? []) : undefined,
+          prompt: normalized.prompt,
+          options: q.type === "MULTIPLE_CHOICE" ? (normalized.options ?? []) : undefined,
+          promptMedia: normalized.promptMedia.length ? normalized.promptMedia : undefined,
+          optionMedia:
+            q.type === "MULTIPLE_CHOICE" && normalized.optionMedia?.some(Boolean)
+              ? normalized.optionMedia
+              : undefined,
           correctIndex: q.type === "MULTIPLE_CHOICE" ? q.correctIndex : null,
           referenceAnswer: q.type === "OPEN" ? q.referenceAnswer : null,
           explanation: q.explanation?.trim() || null,

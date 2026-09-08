@@ -12,6 +12,37 @@ export const STARTER_CRAWLER_SOURCES: Array<
     Partial<CrawlerSource>
 > = [
   {
+    domain: "pciconcursos.com.br",
+    name: "PCI Concursos — past exams & listings",
+    startUrls: [
+      "https://www.pciconcursos.com.br/provas/",
+      "https://www.pciconcursos.com.br/",
+    ],
+    strategy: "listing-links",
+    trust: "high",
+    linkPatterns: [
+      "prova",
+      "provas",
+      "concurso",
+      "edital",
+      "download",
+      "gabarito",
+      "organizadora",
+      "cargo",
+    ],
+    openPatterns: [
+      "inscri",
+      "aberto",
+      "edital",
+      "vagas",
+      "prova",
+      "download",
+    ],
+    politenessMs: 2000,
+    notes:
+      "Major Brazilian hub for past exam PDFs + open-exam news (https://www.pciconcursos.com.br/provas/). Primary feeder for question bank enrichment.",
+  },
+  {
     domain: "cesgranrio.org.br",
     name: "Cesgranrio listings",
     startUrls: ["https://www.cesgranrio.org.br/concursos/"],
@@ -230,6 +261,10 @@ export const STARTER_DISCOVERY_ORGS: DiscoveryOrgSeed[] = [
     searchQueries: [
       "prefeitura concurso edital aberto",
       "concurso municipal prova anterior PDF",
+      "site:pciconcursos.com.br prefeitura prova",
     ],
   },
 ];
+
+/** Prefer this aggregator when enriching past exams into the bank. */
+export const PAST_EXAM_HUB_URL = "https://www.pciconcursos.com.br/provas/";

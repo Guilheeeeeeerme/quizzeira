@@ -125,6 +125,10 @@ model Question {
   type             QuestionType
   prompt           String                   @db.Text
   options          Json?
+  /** Optional stem figures: QuestionMediaRef[] */
+  promptMedia      Json?
+  /** Optional per-option figures: (QuestionMediaRef[] | null)[] */
+  optionMedia      Json?
   correctIndex     Int?
   referenceAnswer  String?                  @db.Text
   explanation      String?                  @db.Text

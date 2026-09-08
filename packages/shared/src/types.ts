@@ -57,11 +57,20 @@ export interface LevelDto {
   sortOrder: number;
 }
 
+export interface QuestionMediaRef {
+  url: string;
+  alt?: string;
+}
+
 export interface QuizQuestionDto {
   id: string;
   type: QuestionType;
   prompt: string;
   options?: string[];
+  /** Figures that belong with the stem (URLs absolute or app-served). */
+  promptMedia?: QuestionMediaRef[];
+  /** Parallel to options: images for each choice (null = text-only). */
+  optionMedia?: Array<QuestionMediaRef[] | null>;
 }
 
 export interface SubmitAnswer {
@@ -354,6 +363,8 @@ export interface GeneratedQuestionInput {
   correctIndex: number | null;
   referenceAnswer: string | null;
   explanation: string | null;
+  promptMedia?: QuestionMediaRef[] | null;
+  optionMedia?: Array<QuestionMediaRef[] | null> | null;
 }
 
 export interface GenerationCompleteInput {

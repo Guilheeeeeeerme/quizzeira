@@ -1,0 +1,14 @@
+.stem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.paragraph {
+  margin: 0;
+  font-size: var(--text-17);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text-primary);
+  text-wrap: pretty;
+}

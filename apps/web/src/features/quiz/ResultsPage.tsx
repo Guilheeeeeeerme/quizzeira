@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { AttemptStatus, QuizResultsDto } from "@quizzeira/shared";
+import { stripEmbeddedChoicesFromPrompt } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useT } from "../../i18n";
 import {
@@ -12,6 +13,7 @@ import {
   Surface,
   Text,
 } from "../../ui";
+import { QuestionStem } from "./QuestionStem";
 import styles from "./ResultsPage.module.css";
 
 const statusMessages: Record<AttemptStatus, string> = {
@@ -112,8 +114,11 @@ export function ResultsPage() {
               <Surface key={answer.questionId}>
                 <Stack gap={2}>
                   <Text size="bodySm" className={styles.questionTitle}>
-                    {t("Q{index}.", { index: i + 1 })} {answer.prompt}
+                    {t("Q{index}.", { index: i + 1 })}
                   </Text>
+                  <QuestionStem
+                    text={stripEmbeddedChoicesFromPrompt(answer.prompt, null)}
+                  />
                   <Text size="caption" tone="secondary">
                     {t("Your answer:")} {answer.userResponse}
                   </Text>

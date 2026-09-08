@@ -42,6 +42,16 @@ export async function examRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get<{ Params: { id: string } }>("/exams/:id/activity", async (request, reply) => {
+    if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
+    try {
+      const { getExamActivityTimeline } = await import("../services/exam-activity.service");
+      return await getExamActivityTimeline(request.params.id);
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
   app.post<{
     Params: { id: string };
     Body: { locale?: LocaleCode | string };

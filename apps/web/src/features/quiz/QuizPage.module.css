@@ -1,11 +1,47 @@
 .root {
-  max-width: 720px;
+  max-width: 48rem;
 }
 
 .progressBlock {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.stemBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.optionRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.optionLetter {
+  flex: 0 0 auto;
+  min-width: 1.25rem;
+  font-size: var(--text-13);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.optionBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.optionText {
+  font-size: var(--text-14);
+  color: var(--text-primary);
+  text-wrap: pretty;
 }
 
 .actions {
