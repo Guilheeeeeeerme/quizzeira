@@ -98,6 +98,11 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Request failed": "Falha na requisição",
     "Quizzeira": "Quizzeira",
     "Topics": "Tópicos",
+    "Menu": "Menu",
+    "Close": "Fechar",
+    "Open navigation menu": "Abrir menu de navegação",
+    "Close navigation menu": "Fechar menu de navegação",
+    "Primary": "Principal",
     "Your topics": "Seus tópicos",
     "Create study topics, attach materials, and take short daily pills.":
       "Crie tópicos de estudo, anexe materiais e faça pills curtas diárias.",
