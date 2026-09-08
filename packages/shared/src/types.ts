@@ -57,10 +57,10 @@ export interface LevelDto {
   sortOrder: number;
 }
 
-export interface QuestionMediaRef {
+export type QuestionMediaRef = {
   url: string;
   alt?: string;
-}
+};
 
 export interface QuizQuestionDto {
   id: string;

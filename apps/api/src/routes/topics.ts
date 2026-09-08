@@ -1,5 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import type { CreateTopicInput, UpdateTopicInput } from "@quizzeira/shared";
+import type {
+  CreateTopicInput,
+  LocaleCode,
+  SessionDurationMinutes,
+  UpdateTopicInput,
+} from "@quizzeira/shared";
 import { authenticate } from "../plugins/auth";
 import {
   addTopicAttachment,
@@ -154,7 +159,7 @@ export async function topicRoutes(app: FastifyInstance) {
 
   app.post<{
     Params: { topicId: string };
-    Body: { focusText?: string; durationMinutes?: number | null; locale?: "en" | "pt" | "pt-BR" };
+    Body: { focusText?: string; durationMinutes?: SessionDurationMinutes | null; locale?: LocaleCode };
   }>("/topics/:topicId/pills/start", async (request, reply) => {
     if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
     try {
