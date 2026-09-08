@@ -1,12 +1,17 @@
 import { workerEnv } from "./env";
-import type { LlmProvider, ProviderCompleteInput } from "./gemini";
+import type { LlmCompletion, LlmProvider, ProviderCompleteInput } from "./gemini";
 
 type OpenAiResponse = {
   choices?: Array<{ message?: { content?: string } }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
   error?: { message?: string };
 };
 
-export async function openaiComplete(input: ProviderCompleteInput): Promise<string> {
+export async function openaiComplete(input: ProviderCompleteInput): Promise<LlmCompletion> {
   if (!workerEnv.openaiApiKey) {
     throw new Error("OPENAI_API_KEY not set");
   }
@@ -33,7 +38,17 @@ export async function openaiComplete(input: ProviderCompleteInput): Promise<stri
   }
   const text = data.choices?.[0]?.message?.content?.trim() ?? "";
   if (!text) throw new Error("Empty OpenAI response");
-  return text;
+  const promptTokens = data.usage?.prompt_tokens ?? 0;
+  const completionTokens = data.usage?.completion_tokens ?? 0;
+  const totalTokens = data.usage?.total_tokens ?? promptTokens + completionTokens;
+  return {
+    text,
+    usage: {
+      promptTokens,
+      completionTokens,
+      totalTokens: totalTokens || 1,
+    },
+  };
 }
 
 export const openaiProvider: LlmProvider = {

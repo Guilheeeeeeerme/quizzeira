@@ -33,12 +33,14 @@ import type {
   PastExamSearchRequest,
 } from "@quizzeira/shared";
 import {
+  applyBankDepositLive,
   depositGeneratedQuestions,
   questionBankOverview,
   sampleForAttempt,
   searchAndEnrichBank,
 } from "../services/question-bank.service";
-import { sampleBankQuestions, upsertBankQuestions } from "../services/question-bank.store";
+import { sampleBankQuestions } from "../services/question-bank.store";
+import { proposeBankDeposit } from "../services/bank-proposal.store";
 import { inferExamIdentity } from "../lib/exam-identity";
 import {
   getCrawlerObservability,
@@ -249,19 +251,24 @@ export async function internalRoutes(app: FastifyInstance) {
     }
     try {
       if (body.examSlug?.trim()) {
-        return await upsertBankQuestions({
+        const deposit = {
           examSlug: body.examSlug.trim(),
           emphasis: body.emphasis ?? null,
           subject: body.subject ?? null,
-          locale: body.locale === "en" ? "en" : "pt",
+          locale: (body.locale === "en" ? "en" : "pt") as LocaleCode,
           source: {
-            kind: body.sourceKind ?? "seed",
+            kind: (body.sourceKind ?? "seed") as "llm" | "seed" | "crawl" | "past_exam",
             url: body.sourceUrl,
             title: body.sourceTitle,
             fetchedAt: new Date().toISOString(),
           },
           questions: body.questions,
-        });
+        };
+        if (deposit.source.kind === "seed") {
+          return await applyBankDepositLive(deposit);
+        }
+        const proposal = await proposeBankDeposit(deposit);
+        return { proposed: true, proposalId: proposal.id, upserted: 0 };
       }
       if (!body.topicTitle?.trim() || typeof body.guidelines !== "string") {
         return reply.code(400).send({ error: "topicTitle and guidelines required (or examSlug)" });
@@ -273,7 +280,7 @@ export async function internalRoutes(app: FastifyInstance) {
         subjects: Array.isArray(body.subjects) ? body.subjects.map(String) : [],
         locale: body.locale === "en" ? "en" : "pt",
         questions: body.questions,
-        sourceKind: body.sourceKind ?? "llm",
+        sourceKind: body.sourceKind === "seed" ? "seed" : "llm",
       });
     } catch (err) {
       return httpError(err, reply);

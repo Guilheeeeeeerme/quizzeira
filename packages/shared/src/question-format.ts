@@ -1,3 +1,4 @@
+import { isAllowedMediaUrl } from "./media-url";
 import type { QuestionMediaRef } from "./types";
 
 const MD_IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
@@ -14,7 +15,8 @@ export function extractMarkdownImages(raw: string): {
   const text = raw
     .replace(MD_IMAGE_RE, (_full, alt: string, url: string) => {
       const href = url.trim();
-      if (/^https?:\/\//i.test(href) || href.startsWith("/") || href.startsWith("data:")) {
+      // LLM10: no data:/http:/javascript:; https only when host allowlisted.
+      if (isAllowedMediaUrl(href)) {
         media.push({ url: href, alt: String(alt || "").trim() || undefined });
       }
       return "\n";
@@ -63,7 +65,7 @@ export function mergeMedia(
   const out: QuestionMediaRef[] = [];
   for (const item of [...(explicit ?? []), ...fromText]) {
     const key = item.url.trim();
-    if (!key || seen.has(key)) continue;
+    if (!key || seen.has(key) || !isAllowedMediaUrl(key)) continue;
     seen.add(key);
     out.push({ url: key, alt: item.alt?.trim() || undefined });
   }

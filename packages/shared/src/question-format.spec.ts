@@ -28,15 +28,17 @@ describe("question-format", () => {
     assert.equal(stripLeadingChoiceLabel(options[0]!), "Documentos de arquivo são aqueles...");
   });
 
-  it("extracts markdown images into media arrays", () => {
+  it("extracts allowlisted https images and drops data: / unknown hosts", () => {
     const normalized = normalizeQuestionPresentation({
-      prompt: "Observe a figura:\n\n![Organograma](https://cdn.example.com/org.png)\n\nAssinale:",
-      options: ["Opção 1 ![alt](https://cdn.example.com/a.png)", "Opção 2"],
+      prompt:
+        "Observe:\n\n![Organograma](https://upload.wikimedia.org/org.png)\n" +
+        "![bad](data:image/png;base64,AAAA)\n![evil](https://evil.example/x.png)\nAssinale:",
+      options: ["Opção 1 ![alt](https://upload.wikimedia.org/a.png)", "Opção 2"],
     });
     assert.equal(normalized.promptMedia.length, 1);
-    assert.equal(normalized.promptMedia[0]?.url, "https://cdn.example.com/org.png");
+    assert.equal(normalized.promptMedia[0]?.url, "https://upload.wikimedia.org/org.png");
     assert.doesNotMatch(normalized.prompt, /!\[/);
-    assert.equal(normalized.optionMedia?.[0]?.[0]?.url, "https://cdn.example.com/a.png");
+    assert.equal(normalized.optionMedia?.[0]?.[0]?.url, "https://upload.wikimedia.org/a.png");
     assert.equal(normalized.options?.[0], "Opção 1");
   });
 });

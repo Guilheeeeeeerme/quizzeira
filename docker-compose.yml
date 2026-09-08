@@ -64,6 +64,10 @@ services:
       DATABASE_URL: mysql://${MYSQL_USER:-quizzeira}:${MYSQL_PASSWORD:-quizzeira}@mysql:3306/${MYSQL_DATABASE:-quizzeira}
       REDIS_URL: redis://redis:6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      INTERNAL_API_KEY_CORRECTOR: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
+      INTERNAL_API_KEY_GENERATOR: ${INTERNAL_API_KEY_GENERATOR:-dev-generator-key}
+      INTERNAL_API_KEY_UPDATER: ${INTERNAL_API_KEY_UPDATER:-dev-updater-key}
+      INTERNAL_API_KEY_CRAWLER: ${INTERNAL_API_KEY_CRAWLER:-dev-crawler-key}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-quizzeira}
@@ -71,7 +75,8 @@ services:
       S3_BUCKET: ${S3_BUCKET:-quizzeira}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
     ports:
-      - "3000:3000"
+      # Bind localhost only so /internal is not LAN-exposed in compose.
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./apps/api:/app/apps/api
       - ./packages/shared:/app/packages/shared
@@ -133,7 +138,7 @@ services:
       - .env
     environment:
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -144,6 +149,7 @@ services:
       MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
       WORKER_WINDOWS: ${WORKER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://redis:6379
@@ -172,7 +178,7 @@ services:
       - .env
     environment:
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_UPDATER:-dev-updater-key}
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -183,9 +189,11 @@ services:
       MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
       WORKER_WINDOWS: ${WORKER_WINDOWS:-07:00,19:00}
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://redis:6379
+      QUESTION_UPDATE_GROUNDING: ${QUESTION_UPDATE_GROUNDING:-false}
     volumes:
       - ./apps/question-updater:/app/apps/question-updater
       - ./packages/shared:/app/packages/shared
@@ -211,7 +219,7 @@ services:
       - .env
     environment:
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_GENERATOR:-dev-generator-key}
       WORKER_INTERVAL_MS: ${QUESTION_GENERATOR_INTERVAL_MS:-15000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -222,6 +230,7 @@ services:
       MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
       WORKER_WINDOWS: ${WORKER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://redis:6379
@@ -250,7 +259,7 @@ services:
       - .env
     environment:
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_CRAWLER:-dev-crawler-key}
       # 2×/hour; pipeline skips unchanged listings via fingerprints.
       WORKER_INTERVAL_MS: ${EXAM_CRAWLER_INTERVAL_MS:-1800000}
       WORKER_WINDOWS: ${EXAM_CRAWLER_WINDOWS:-}

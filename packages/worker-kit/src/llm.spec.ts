@@ -22,10 +22,16 @@ const jsonResponse = (body: unknown, status = 200) =>
   });
 
 const geminiText = (text: string) =>
-  jsonResponse({ candidates: [{ content: { parts: [{ text }] } }] });
+  jsonResponse({
+    candidates: [{ content: { parts: [{ text }] } }],
+    usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
+  });
 
 const openaiText = (text: string) =>
-  jsonResponse({ choices: [{ message: { content: text } }] });
+  jsonResponse({
+    choices: [{ message: { content: text } }],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+  });
 
 async function stubFetch(input: unknown, init?: RequestInit): Promise<Response> {
   const url = String(input);
@@ -61,6 +67,7 @@ beforeEach(() => {
   workerEnv.modelRankTopN = 3;
   workerEnv.openaiBaseUrl = "https://api.openai.com/v1";
   workerEnv.redisUrl = "";
+  workerEnv.allowMemoryBudget = true;
   resetBudgetForTests();
   resetModelRankForTests();
   vi.stubGlobal("fetch", vi.fn(stubFetch));
@@ -127,24 +134,40 @@ describe("screening and budgets gate before fetch", () => {
 
   it("consumeBudget resets at minute boundary and daily date change", async () => {
     workerEnv.redisUrl = "";
+    workerEnv.allowMemoryBudget = true;
     workerEnv.llmRateLimitPerMinute = 2;
     workerEnv.llmDailyBudget = 1000;
     const base = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
-    await consumeBudget(base);
-    await consumeBudget(base + 1);
-    await expect(consumeBudget(base + 2)).rejects.toThrow(/per-minute/);
+    await consumeBudget(base, { calls: 1 });
+    await consumeBudget(base + 1, { calls: 1 });
+    await expect(consumeBudget(base + 2, { calls: 1 })).rejects.toThrow(/per-minute/);
     const nextMinute = base + 60_000;
-    await expect(consumeBudget(nextMinute)).resolves.toBeUndefined();
+    await expect(consumeBudget(nextMinute, { calls: 1 })).resolves.toBeUndefined();
   });
 
   it("daily budget resets at UTC date change", async () => {
     workerEnv.redisUrl = "";
+    workerEnv.allowMemoryBudget = true;
     workerEnv.llmRateLimitPerMinute = 1000;
     workerEnv.llmDailyBudget = 1;
     const base = Date.UTC(2026, 0, 1, 23, 59);
-    await consumeBudget(base);
-    await expect(consumeBudget(base + 1)).rejects.toThrow(/daily/);
-    await expect(consumeBudget(base + 120_000)).resolves.toBeUndefined();
+    await consumeBudget(base, { calls: 1 });
+    await expect(consumeBudget(base + 1, { calls: 1 })).rejects.toThrow(/daily/);
+    await expect(consumeBudget(base + 120_000, { calls: 1 })).resolves.toBeUndefined();
+  });
+
+  it("token budget hard-halts after recorded usage", async () => {
+    workerEnv.redisUrl = "";
+    workerEnv.allowMemoryBudget = true;
+    workerEnv.llmDailyTokenBudget = 100;
+    await consumeBudget(Date.now(), { tokens: 100, calls: 0 });
+    await expect(consumeBudget(Date.now(), { tokens: 1, calls: 0 })).rejects.toThrow(/token/);
+  });
+
+  it("requires REDIS_URL outside test/memory mode", async () => {
+    workerEnv.redisUrl = "";
+    workerEnv.allowMemoryBudget = false;
+    await expect(consumeBudget(Date.now(), { calls: 1 })).rejects.toThrow(/REDIS_URL/);
   });
 });
 
