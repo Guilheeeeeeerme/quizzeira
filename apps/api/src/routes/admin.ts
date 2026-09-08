@@ -2,6 +2,11 @@ import type { FastifyInstance } from "fastify";
 import type { PromptKey } from "@quizzeira/shared";
 import { requireAdmin } from "../plugins/auth";
 import {
+  approveBankDepositProposal,
+  listBankDepositProposals,
+  rejectBankDepositProposal,
+} from "../services/bank-proposal.store";
+import {
   approveQuestionProposal,
   listQuestionProposals,
   rejectQuestionProposal,
@@ -90,6 +95,33 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   );
 
+  app.get("/admin/proposals/bank", async () => {
+    const items = await listBankDepositProposals();
+    return { items };
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/admin/proposals/bank/:id/approve",
+    async (request, reply) => {
+      try {
+        return await approveBankDepositProposal(request.params.id);
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/admin/proposals/bank/:id/reject",
+    async (request, reply) => {
+      try {
+        return await rejectBankDepositProposal(request.params.id);
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
   app.get<{ Querystring: { examSlug?: string } }>(
     "/admin/question-bank/stats",
     async (request) => questionBankOverview(request.query.examSlug),
@@ -130,4 +162,5 @@ export async function adminRoutes(app: FastifyInstance) {
     return { queued: true };
   });
 }
+
 

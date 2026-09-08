@@ -18,20 +18,36 @@ export interface ProviderCompleteInput {
   grounding?: boolean;
 }
 
+export interface LlmUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface LlmCompletion {
+  text: string;
+  usage: LlmUsage;
+}
+
 export interface LlmProvider {
   name: "gemini" | "openai";
   available(): boolean;
   defaultModel(): string;
-  complete(input: ProviderCompleteInput): Promise<string>;
+  complete(input: ProviderCompleteInput): Promise<LlmCompletion>;
 }
 
 type GeminiPart = { text?: string };
 type GeminiResponse = {
   candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
   error?: { message?: string };
 };
 
-async function geminiRequest(input: ProviderCompleteInput): Promise<string> {
+async function geminiRequest(input: ProviderCompleteInput): Promise<LlmCompletion> {
   const generationConfig: Record<string, unknown> = {
     temperature: input.temperature ?? 0.2,
   };
@@ -72,10 +88,21 @@ async function geminiRequest(input: ProviderCompleteInput): Promise<string> {
       .join("")
       .trim() ?? "";
   if (!text) throw new Error("Empty Gemini response");
-  return text;
+  const promptTokens = data.usageMetadata?.promptTokenCount ?? 0;
+  const completionTokens = data.usageMetadata?.candidatesTokenCount ?? 0;
+  const totalTokens =
+    data.usageMetadata?.totalTokenCount ?? promptTokens + completionTokens;
+  return {
+    text,
+    usage: {
+      promptTokens,
+      completionTokens,
+      totalTokens: totalTokens || 1,
+    },
+  };
 }
 
-export async function geminiComplete(input: ProviderCompleteInput): Promise<string> {
+export async function geminiComplete(input: ProviderCompleteInput): Promise<LlmCompletion> {
   if (!workerEnv.geminiApiKey) {
     throw new Error("GEMINI_API_KEY not set");
   }

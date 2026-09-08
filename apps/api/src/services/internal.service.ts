@@ -8,6 +8,7 @@ import type {
   ReviewQuestionPayload,
 } from "@quizzeira/shared";
 import { prisma } from "../lib/prisma";
+import { screenPersistedStrings } from "../lib/screen-model";
 
 const STALE_MS = 10 * 60 * 1000;
 
@@ -161,6 +162,8 @@ export async function completeAttemptCorrection(
       correctAnswerSummary = question.referenceAnswer;
     }
 
+    screenPersistedStrings(comment, explanation, correctAnswerSummary);
+
     totalScore += grade;
     await prisma.quizAnswer.update({
       where: { id: answer.id },
@@ -176,6 +179,7 @@ export async function completeAttemptCorrection(
   }
 
   const generalComment = String(input.generalComment ?? "").slice(0, 4000);
+  screenPersistedStrings(generalComment);
   await prisma.quizAttempt.update({
     where: { id: attemptId },
     data: {
@@ -302,21 +306,12 @@ export async function updateQuestion(id: string, input: QuestionUpdateInput) {
 }
 
 function screenPatch(input: QuestionUpdateInput) {
-  const values = [
+  screenPersistedStrings(
     input.prompt,
     input.explanation,
     input.referenceAnswer,
     ...(input.options ?? []),
-  ];
-  const blocked =
-    /<script|javascript:|onerror\s*=|eval\s*\(|document\.cookie|fetch\s*\(\s*['"]https?:\/\//i;
-  for (const value of values) {
-    if (typeof value === "string" && blocked.test(value)) {
-      throw Object.assign(new Error("Model output blocked by policy"), {
-        statusCode: 400,
-      });
-    }
-  }
+  );
 }
 
 export async function proposeQuestionUpdate(

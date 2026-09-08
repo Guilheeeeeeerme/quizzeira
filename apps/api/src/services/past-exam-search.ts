@@ -8,10 +8,8 @@ import { env } from "../lib/env";
 import { extractMcqCandidates } from "../lib/past-exam-extract";
 import { redis } from "../lib/redis";
 import { STARTER_DISCOVERY_ORGS } from "../lib/crawler-seed";
-import {
-  storeBankSource,
-  upsertBankQuestions,
-} from "./question-bank.store";
+import { proposeBankDeposit } from "./bank-proposal.store";
+import { storeBankSource } from "./question-bank.store";
 
 const FIRECRAWL_SEARCH = "https://api.firecrawl.dev/v1/search";
 const FIRECRAWL_SCRAPE = "https://api.firecrawl.dev/v1/scrape";
@@ -191,7 +189,8 @@ export async function searchPastExams(input: PastExamSearchRequest): Promise<{
     const candidates = extractMcqCandidates(markdown, 6);
     extracted += candidates.length;
     if (candidates.length === 0) continue;
-    const result = await upsertBankQuestions({
+    // HITL: stage past-exam scrape deposits; admin approve applies to bank.
+    await proposeBankDeposit({
       examSlug,
       emphasis: input.emphasis ?? null,
       subject,
@@ -205,7 +204,7 @@ export async function searchPastExams(input: PastExamSearchRequest): Promise<{
       },
       questions: candidates,
     });
-    upserted += result.upserted;
+    upserted += candidates.length;
   }
 
   await redis.set(cooldownKey, "1", "EX", env.pastExamSearchCooldownSec);

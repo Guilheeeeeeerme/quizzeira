@@ -27,6 +27,13 @@ export const workerEnv = {
   modelRankTopN: num("MODEL_RANK_TOP_N", 3),
   llmRateLimitPerMinute: num("LLM_RATE_LIMIT_PER_MINUTE", 20),
   llmDailyBudget: num("LLM_DAILY_BUDGET", 500),
+  /** Hard daily token halt (OWASP LLM06). Default ~2M tokens/day. */
+  llmDailyTokenBudget: num("LLM_DAILY_TOKEN_BUDGET", 2_000_000),
+  /** Allow in-process budgets only under test runners. */
+  allowMemoryBudget:
+    process.env.VITEST === "true" ||
+    process.env.NODE_ENV === "test" ||
+    process.env.LLM_ALLOW_MEMORY_BUDGET === "true",
   intervalMs: num("WORKER_INTERVAL_MS", 60_000),
   windows: (process.env.WORKER_WINDOWS ?? "").trim(),
   timeZone: process.env.WORKER_TZ || "UTC",

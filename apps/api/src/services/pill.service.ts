@@ -16,6 +16,7 @@ import {
 } from "@quizzeira/shared";
 import { prisma } from "../lib/prisma";
 import { excerptMaterialForGeneration } from "../lib/fetch-url";
+import { screenGeneratedQuestions, screenSyllabus } from "../lib/screen-model";
 import { toQuizQuestionDto } from "../utils/dto";
 
 const STALE_MS = 10 * 60 * 1000;
@@ -230,6 +231,8 @@ export async function saveTopicInferredSyllabus(
     throw Object.assign(new Error("subjects required"), { statusCode: 400 });
   }
 
+  screenSyllabus(normalized);
+
   const result = await prisma.topic.updateMany({
     where: { id: topicId },
     data: { inferredSyllabus: JSON.stringify(normalized) },
@@ -289,6 +292,8 @@ export async function completePillGeneration(
       throw Object.assign(new Error("OPEN questions need referenceAnswer"), { statusCode: 400 });
     }
   }
+
+  screenGeneratedQuestions(questions);
 
   await prisma.$transaction(async (tx) => {
     for (const [index, q] of questions.entries()) {

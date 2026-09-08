@@ -18,12 +18,9 @@ import { countMetaMaterialStems } from "./meta-stem.js";
 
 const NAME = "question-generator";
 
-function hasMaterialExcerpts(attempt: PendingGenerationAttempt): boolean {
+function hasMaterialsPresent(attempt: PendingGenerationAttempt): boolean {
   const { attachments, links } = attempt.materials;
-  return (
-    attachments.some((a) => Boolean(a.excerpt?.trim())) ||
-    links.some((l) => Boolean(l.excerpt?.trim()))
-  );
+  return attachments.length > 0 || links.length > 0;
 }
 
 function inferencePayload(attempt: PendingGenerationAttempt) {
@@ -77,7 +74,7 @@ async function ensureSyllabus(attempt: PendingGenerationAttempt): Promise<Inferr
 
   const system = await loadPrompt("topic-inference");
   const user = JSON.stringify(inferencePayload(attempt), null, 2);
-  const grounding = attempt.hasLinks && !hasMaterialExcerpts(attempt);
+  const grounding = attempt.hasLinks && !hasMaterialsPresent(attempt);
 
   const inferred = await generateJson<InferredSyllabus>(system, user, {
     requiredKeys: ["subjects", "styleNotes", "difficultyNotes", "materialRoles"],
@@ -123,7 +120,7 @@ async function generateQuestions(
     ? `${JSON.stringify(payload, null, 2)}\n\nRETRY NOTE:\n${extraUserNote}`
     : JSON.stringify(payload, null, 2);
 
-  const grounding = attempt.hasLinks && !hasMaterialExcerpts(attempt);
+  const grounding = attempt.hasLinks && !hasMaterialsPresent(attempt);
 
   const result = await generateJson<GenerationCompleteInput>(system, user, {
     requiredKeys: ["questions"],
@@ -218,16 +215,25 @@ async function depositBank(
 ): Promise<void> {
   if (!isExamPreset(attempt.presetSlug) || questions.length === 0) return;
   try {
-    const result = await dmzPost<{ upserted: number }>("/internal/question-bank/deposit", {
-      topicTitle: attempt.topicTitle,
-      guidelines: attempt.guidelines,
-      focusText: attempt.focusText,
-      subjects: syllabus.subjects,
-      locale: attempt.locale,
-      questions,
-      sourceKind: "llm",
-    });
-    console.log(`[${NAME}] deposited ${result.upserted} question(s) into bank`);
+    const result = await dmzPost<{ upserted: number; proposed?: boolean; proposalId?: string }>(
+      "/internal/question-bank/deposit",
+      {
+        topicTitle: attempt.topicTitle,
+        guidelines: attempt.guidelines,
+        focusText: attempt.focusText,
+        subjects: syllabus.subjects,
+        locale: attempt.locale,
+        questions,
+        sourceKind: "llm",
+      },
+    );
+    if (result.proposed) {
+      console.log(
+        `[${NAME}] staged bank deposit proposal=${result.proposalId} questions=${questions.length}`,
+      );
+    } else {
+      console.log(`[${NAME}] deposited ${result.upserted} question(s) into bank`);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[${NAME}] question-bank deposit failed: ${message}`);

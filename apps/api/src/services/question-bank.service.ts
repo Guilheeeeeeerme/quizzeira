@@ -6,6 +6,8 @@ import type {
   QuestionBankSampleRequest,
 } from "@quizzeira/shared";
 import { inferExamIdentity, pickSubjectForDeposit } from "../lib/exam-identity";
+import { screenGeneratedQuestions } from "../lib/screen-model";
+import { proposeBankDeposit } from "./bank-proposal.store";
 import { searchPastExams } from "./past-exam-search";
 import {
   getQuestionBankStats,
@@ -63,8 +65,24 @@ export async function depositGeneratedQuestions(input: {
     source: { kind: input.sourceKind ?? "llm" },
     questions: input.questions,
   };
-  const result = await upsertBankQuestions(req);
-  return { identity, ...result };
+  screenGeneratedQuestions(input.questions);
+  // Curated seed writes apply live; LLM deposits require admin HITL.
+  if (req.source.kind === "seed") {
+    const result = await upsertBankQuestions(req);
+    return { identity, ...result, proposed: false as const };
+  }
+  const proposal = await proposeBankDeposit(req);
+  return {
+    identity,
+    proposed: true as const,
+    proposalId: proposal.id,
+    upserted: 0,
+  };
+}
+
+export async function applyBankDepositLive(req: QuestionBankDepositRequest) {
+  screenGeneratedQuestions(req.questions);
+  return upsertBankQuestions(req);
 }
 
 export async function searchAndEnrichBank(input: PastExamSearchRequest) {

@@ -11,6 +11,27 @@ function requireEnv(key: string, fallback?: string): string {
   return value;
 }
 
+type InternalKeyEntry = { key: string; scopes: string };
+
+function parseInternalApiKeys(raw: string | undefined): InternalKeyEntry[] {
+  const out: InternalKeyEntry[] = [];
+  const roleDefaults: Record<string, string> = {
+    CORRECTOR: "reviews,prompts",
+    GENERATOR: "pills,bank,topics,prompts",
+    UPDATER: "questions,prompts",
+    CRAWLER: "crawler,bank,prompts",
+  };
+  for (const [role, scopes] of Object.entries(roleDefaults)) {
+    const key = process.env[`INTERNAL_API_KEY_${role}`]?.trim();
+    if (key) out.push({ key, scopes });
+  }
+  for (const part of (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean)) {
+    const [key, scopes = "*"] = part.split(":");
+    if (key?.trim()) out.push({ key: key.trim(), scopes: scopes.trim() || "*" });
+  }
+  return out;
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   webOrigin: requireEnv("WEB_ORIGIN", "http://localhost:5173"),
@@ -30,6 +51,11 @@ export const env = {
   port: Number(process.env.PORT ?? 3000),
   isProduction: process.env.NODE_ENV === "production",
   internalApiKey: requireEnv("INTERNAL_API_KEY", "dev-internal-key"),
+  /**
+   * Optional per-worker keys: INTERNAL_API_KEY_<ROLE>=key (scopes implied by role)
+   * or INTERNAL_API_KEYS=key:scope1|scope2,key2:reviews|prompts
+   */
+  internalApiKeys: parseInternalApiKeys(process.env.INTERNAL_API_KEYS),
   internalRateLimitMax: Number(process.env.INTERNAL_RATE_LIMIT_MAX ?? 120),
   s3Endpoint: requireEnv("S3_ENDPOINT", "http://minio:9000"),
   s3Region: requireEnv("S3_REGION", "us-east-1"),

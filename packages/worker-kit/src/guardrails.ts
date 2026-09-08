@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { load as loadYaml } from "js-yaml";
+import { screenModelOutput as sharedScreenModelOutput } from "@quizzeira/shared";
 import { llmError } from "./errors";
 
 export interface GuardrailPrompt {
@@ -225,15 +226,15 @@ export function screenUntrusted(payload: string): void {
 }
 
 /** Output-side subset (LLM10): block script/exfil/tracking payloads before persist. */
-const OUTPUT_POLICY_IDS = new Set(["script-exec", "data-exfil", "tracking"]);
-
 export function screenModelOutput(payload: string): void {
-  if (!payload) return;
-  for (const policy of registry().policies) {
-    if (!OUTPUT_POLICY_IDS.has(policy.id)) continue;
-    if (policy.action === "block" && policy.test(payload)) {
-      throw llmError("guardrail_block", `guardrail_block: ${policy.id}`);
-    }
+  try {
+    sharedScreenModelOutput(payload);
+  } catch (err) {
+    const policyId =
+      err && typeof err === "object" && "policyId" in err
+        ? String((err as { policyId: string }).policyId)
+        : "output";
+    throw llmError("guardrail_block", `guardrail_block: ${policyId}`);
   }
 }
 

@@ -49,57 +49,92 @@ const MINUTE_MS = 60_000;
 const RATE_TTL_SECONDS = 120;
 const BUDGET_TTL_SECONDS = 172_800;
 const minuteWindow = { key: 0, count: 0 };
-const dailyWindow = { key: "", count: 0 };
+const dailyWindow = { key: "", count: 0, tokens: 0 };
 
-function consumeBudgetMemory(now: number): void {
+function assertRedisOrTestMode(): void {
+  if (workerEnv.redisUrl) return;
+  if (workerEnv.allowMemoryBudget) return;
+  throw llmError(
+    "llm_budget_exceeded",
+    "llm_budget_exceeded: REDIS_URL required for shared LLM budgets",
+  );
+}
+
+function consumeBudgetMemory(now: number, opts: { tokens?: number; calls?: number } = {}): void {
+  const tokens = opts.tokens ?? 0;
+  const calls = opts.calls ?? 0;
   const minuteKey = Math.floor(now / MINUTE_MS) * MINUTE_MS;
   if (minuteWindow.key !== minuteKey) {
     minuteWindow.key = minuteKey;
     minuteWindow.count = 0;
   }
-  if (minuteWindow.count >= workerEnv.llmRateLimitPerMinute) {
+  if (calls > 0 && minuteWindow.count + calls > workerEnv.llmRateLimitPerMinute) {
     throw llmError("llm_budget_exceeded", "llm_budget_exceeded: per-minute LLM rate limit hit");
   }
   const dayKey = new Date(now).toISOString().slice(0, 10);
   if (dailyWindow.key !== dayKey) {
     dailyWindow.key = dayKey;
     dailyWindow.count = 0;
+    dailyWindow.tokens = 0;
   }
-  if (dailyWindow.count >= workerEnv.llmDailyBudget) {
+  if (calls > 0 && dailyWindow.count + calls > workerEnv.llmDailyBudget) {
     throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM budget hit");
   }
-  minuteWindow.count += 1;
-  dailyWindow.count += 1;
+  if (tokens > 0 && dailyWindow.tokens + tokens > workerEnv.llmDailyTokenBudget) {
+    throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM token budget hit");
+  }
+  minuteWindow.count += calls;
+  dailyWindow.count += calls;
+  dailyWindow.tokens += tokens;
 }
 
-async function consumeBudgetRedis(now: number): Promise<void> {
+async function consumeBudgetRedis(
+  now: number,
+  opts: { tokens?: number; calls?: number } = {},
+): Promise<void> {
+  const tokens = opts.tokens ?? 0;
+  const calls = opts.calls ?? 0;
   const redis = getWorkerRedis();
   if (!redis) {
-    consumeBudgetMemory(now);
+    consumeBudgetMemory(now, opts);
     return;
   }
   try {
     if (redis.status !== "ready") {
       await redis.connect();
     }
-    const minuteBucket = Math.floor(now / MINUTE_MS);
-    const rateKey = `llm:rate:${minuteBucket}`;
-    const rateCount = await redis.incr(rateKey);
-    if (rateCount === 1) {
-      await redis.expire(rateKey, RATE_TTL_SECONDS);
-    }
-    if (rateCount > workerEnv.llmRateLimitPerMinute) {
-      throw llmError("llm_budget_exceeded", "llm_budget_exceeded: per-minute LLM rate limit hit");
+    const dayKey = new Date(now).toISOString().slice(0, 10).replace(/-/g, "");
+
+    if (calls > 0) {
+      const minuteBucket = Math.floor(now / MINUTE_MS);
+      const rateKey = `llm:rate:${minuteBucket}`;
+      const rateCount = await redis.incrby(rateKey, calls);
+      if (rateCount === calls) {
+        await redis.expire(rateKey, RATE_TTL_SECONDS);
+      }
+      if (rateCount > workerEnv.llmRateLimitPerMinute) {
+        throw llmError("llm_budget_exceeded", "llm_budget_exceeded: per-minute LLM rate limit hit");
+      }
+
+      const budgetKey = `llm:budget:${dayKey}`;
+      const budgetCount = await redis.incrby(budgetKey, calls);
+      if (budgetCount === calls) {
+        await redis.expire(budgetKey, BUDGET_TTL_SECONDS);
+      }
+      if (budgetCount > workerEnv.llmDailyBudget) {
+        throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM budget hit");
+      }
     }
 
-    const dayKey = new Date(now).toISOString().slice(0, 10).replace(/-/g, "");
-    const budgetKey = `llm:budget:${dayKey}`;
-    const budgetCount = await redis.incr(budgetKey);
-    if (budgetCount === 1) {
-      await redis.expire(budgetKey, BUDGET_TTL_SECONDS);
-    }
-    if (budgetCount > workerEnv.llmDailyBudget) {
-      throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM budget hit");
+    if (tokens > 0) {
+      const tokenKey = `llm:tokens:${dayKey}`;
+      const tokenCount = await redis.incrby(tokenKey, tokens);
+      if (tokenCount === tokens) {
+        await redis.expire(tokenKey, BUDGET_TTL_SECONDS);
+      }
+      if (tokenCount > workerEnv.llmDailyTokenBudget) {
+        throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM token budget hit");
+      }
     }
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) throw err;
@@ -110,13 +145,17 @@ async function consumeBudgetRedis(now: number): Promise<void> {
   }
 }
 
-/** Shared Redis fixed-window budgets when REDIS_URL is set; otherwise in-process (tests). */
-export async function consumeBudget(now: number = Date.now()): Promise<void> {
+/** Call-count and/or token accounting. Redis required outside tests. */
+export async function consumeBudget(
+  now: number = Date.now(),
+  opts: { tokens?: number; calls?: number } = { calls: 1 },
+): Promise<void> {
+  assertRedisOrTestMode();
   if (workerEnv.redisUrl) {
-    await consumeBudgetRedis(now);
+    await consumeBudgetRedis(now, opts);
     return;
   }
-  consumeBudgetMemory(now);
+  consumeBudgetMemory(now, opts);
 }
 
 export function resetBudgetForTests(): void {
@@ -124,6 +163,7 @@ export function resetBudgetForTests(): void {
   minuteWindow.count = 0;
   dailyWindow.key = "";
   dailyWindow.count = 0;
+  dailyWindow.tokens = 0;
   void resetWorkerRedisForTests();
 }
 
@@ -141,7 +181,7 @@ export async function generateJson<T>(
   if (providers.length === 0) {
     throw llmError("llm_unavailable", "llm_unavailable: no provider API key configured");
   }
-  await consumeBudget();
+  await consumeBudget(Date.now(), { calls: 1 });
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
   const fencedUser = fenceUntrusted(user);
   const index = Math.max(0, opts.attempt ?? 0);
@@ -150,14 +190,18 @@ export async function generateJson<T>(
     const rank = rankFor(provider.name);
     const model = rank[index] ?? provider.defaultModel();
     try {
-      const text = await provider.complete({
+      const completion = await provider.complete({
         system: guardedSystem,
         user: fencedUser,
         model,
         temperature: opts.temperature,
         grounding: opts.grounding,
       });
-      return requireJsonShape<T>(extractJson(text), opts.requiredKeys ?? []);
+      await consumeBudget(Date.now(), {
+        tokens: Math.max(1, completion.usage.totalTokens),
+        calls: 0,
+      });
+      return requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
     } catch (err) {
       lastError = err;
     }

@@ -78,21 +78,22 @@ packages/worker-kit    Reusable worker runtime (LLM loops, prompts, internal API
 
 ## Guardrails & LLM spend
 
-See [docs/guardrails.md](docs/guardrails.md) for the OWASP GenAI Top 10 **2026** control map.
+See [docs/guardrails.md](docs/guardrails.md) for the OWASP GenAI Top 10 **2026** control map, and [docs/security-audit-owasp-llm-2026.md](docs/security-audit-owasp-llm-2026.md) for the audit.
 
-Worker LLM calls go through `worker-kit` (`packages/worker-kit`): `generateJson` owns provider fallback, fencing, and Redis-backed spend budgets when `REDIS_URL` is set.
+Worker LLM calls go through `worker-kit` (`packages/worker-kit`): `generateJson` owns provider fallback, fencing, Redis call budgets, and daily token hard-halts (`LLM_DAILY_TOKEN_BUDGET`).
 
 | OWASP risk (2026) | Mitigation |
 | --- | --- |
-| LLM01 Prompt injection | Pre-screen + fence; link fetch SSRF-hardened; **never** combine Google Search grounding with attachment/link excerpts |
-| LLM03 Excessive agency | Curriculum and prompt changes require **admin HITL** (`/admin/proposals`) |
-| LLM06 Unbounded consumption | Redis shared `LLM_RATE_LIMIT_PER_MINUTE` / `LLM_DAILY_BUDGET`; `/internal` rate-limited |
+| LLM01 Prompt injection | Pre-screen + fence; SSRF-hardened link fetch; Search off when any attachments/links are present |
+| LLM03 Excessive agency | Updater + bank LLM deposits require admin HITL; per-worker scoped `INTERNAL_API_KEY_*` |
+| LLM06 Unbounded consumption | Redis call + token budgets; `/internal` rate-limited |
+| LLM10 Improper output | Persist-time output policy; media URL allowlist (no `data:`) |
 
 Provider notes:
 
-- `QUESTION_UPDATE_GROUNDING=true` opts into Gemini Search for the updater only; proposals still go to HITL, not live bank.
-- Default updater grounding is **off**.
-- Docker compose should pass `REDIS_URL` to workers for shared budgets across replicas.
+- `QUESTION_UPDATE_GROUNDING=true` opts into Gemini Search for the updater; proposals still go to HITL. Default is **off**.
+- Generator grounds only when `hasLinks` and materials lists are empty.
+- Compose binds the API to `127.0.0.1:3000` and passes distinct worker keys + `REDIS_URL`.
 
 
 ## Deployment
