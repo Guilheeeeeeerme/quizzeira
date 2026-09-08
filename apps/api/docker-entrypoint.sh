@@ -1,6 +1,11 @@
 #!/bin/sh
 set -e
 
+cd /app
+
+# Keep shared package dist in sync for tsx watch / Vite consumers.
+npm run dev -w @quizzeira/shared &
+
 cd /app/apps/api
 
 echo "Waiting for database..."
