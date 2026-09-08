@@ -17,4 +17,4 @@ WORKDIR /app/apps/web
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["sh", "-c", "npm run dev -w @quizzeira/shared & npm run dev --workspace=@quizzeira/web -- --host 0.0.0.0"]

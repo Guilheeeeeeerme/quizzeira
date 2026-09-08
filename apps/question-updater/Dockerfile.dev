@@ -17,4 +17,4 @@ RUN npm run build -w @quizzeira/shared
 
 WORKDIR /app/apps/question-updater
 
-CMD ["npm", "run", "dev"]
+CMD ["sh", "-c", "npm run dev -w @quizzeira/shared & npm run dev"]
