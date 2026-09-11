@@ -166,12 +166,11 @@
 }
 
 .timelineDot {
-  width: 0.75rem;
-  height: 0.75rem;
-  margin-top: 0.2rem;
-  border-radius: 999px;
+  size: 0.75rem;
+  margin-top: var(--space-1);
+  border-radius: 50%;
   background: var(--text-tertiary);
-  border: 2px solid var(--surface-overlay);
+  border: var(--border-width) solid var(--surface-overlay);
   z-index: 1;
 }
 

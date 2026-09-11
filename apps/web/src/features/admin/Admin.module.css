@@ -2,16 +2,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: var(--border-width) solid var(--border-subtle);
   padding-bottom: var(--space-2);
 }
 
 .tab {
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1-25) var(--space-3);
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--text-13);
 }
 
 .tab:hover {
@@ -42,8 +42,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   padding: var(--space-4);
 }
@@ -68,8 +68,8 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   padding: var(--space-4);
 }
@@ -91,8 +91,9 @@
 
 .cardTitle {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-14);
   font-weight: 500;
+  text-wrap: balance;
 }
 
 .cardActions {
@@ -103,7 +104,7 @@
 
 .link {
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--text-12);
   text-decoration: none;
   width: fit-content;
 }
@@ -115,8 +116,9 @@
 .prompt {
   margin: 0;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-13);
   line-height: 1.5;
+  text-wrap: pretty;
   /* Queue rows stay scannable; full text lives behind "Show details". */
   overflow-wrap: anywhere;
 }
@@ -127,7 +129,7 @@
   background: none;
   padding: 0;
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--text-12);
   text-align: left;
   width: fit-content;
   cursor: pointer;
@@ -141,18 +143,18 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  border-left: 2px solid var(--border-default);
+  border-left: var(--border-width) solid var(--border-default);
   padding-left: var(--space-3);
 }
 
 .options {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
   padding-left: var(--space-4);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-12);
 }
 
 .optionCorrect {
@@ -178,20 +180,21 @@
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  gap: var(--space-1-25);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   padding: var(--space-3);
 }
 
 .statValue {
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: var(--text-20);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .statLabel {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-12);
 }

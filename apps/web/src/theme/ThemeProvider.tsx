@@ -1,65 +1,33 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
 import "@fontsource-variable/inter/wght.css";
 import "../styles/global.css";
 
-export type ThemeMode = "dark" | "light";
+export type ThemeMode = "dark";
 
 interface ThemeContextValue {
   theme: ThemeMode;
-  setTheme: (theme: ThemeMode) => void;
-  toggleTheme: () => void;
 }
 
-const STORAGE_KEY = "quizzeira.theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function detectTheme(): ThemeMode {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "dark" || stored === "light") return stored;
-  } catch {
-    /* ignore */
-  }
-  if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches) {
-    return "light";
-  }
-  return "dark";
-}
-
+/** Linear UI guide requires dark primary surfaces; light mode is not offered. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() =>
-    typeof document === "undefined" ? "dark" : detectTheme(),
-  );
-
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.theme = "dark";
     try {
-      localStorage.setItem(STORAGE_KEY, theme);
+      localStorage.removeItem("quizzeira.theme");
     } catch {
       /* ignore */
     }
-  }, [theme]);
-
-  const setTheme = useCallback((next: ThemeMode) => {
-    setThemeState(next);
   }, []);
 
-  const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
-  }, []);
-
-  const value = useMemo(
-    () => ({ theme, setTheme, toggleTheme }),
-    [theme, setTheme, toggleTheme],
-  );
+  const value = useMemo(() => ({ theme: "dark" as const }), []);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

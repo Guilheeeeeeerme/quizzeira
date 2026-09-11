@@ -2,10 +2,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  size: var(--icon-button-size);
   padding: 0;
-  border: 1px solid var(--border-subtle);
+  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
@@ -23,6 +22,5 @@
 }
 
 .root svg {
-  width: var(--icon-size);
-  height: var(--icon-size);
+  size: var(--icon-size);
 }
