@@ -1,6 +1,7 @@
 // Concept: Question bank (contracts shared by content-api, content-worker,
 // content-quality and the study API sampler).
 import { sha256Hex } from "./sha256";
+import { slugifyKey } from "./slug";
 import type { GeneratedQuestionInput, LocaleCode, QuestionType } from "./types";
 
 /**
@@ -115,14 +116,10 @@ export interface ContentStatsDto {
   bySubject: Record<string, number>;
 }
 
+/** Same slug rules as the rest of the platform, but "geral" when unlabelled. */
 export function subjectSlug(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64) || "geral";
+  const slug = slugifyKey(value);
+  return slug === "unknown" ? "geral" : slug;
 }
 
 /** Stable identity so re-extraction/re-generation dedupes instead of duplicating. */
