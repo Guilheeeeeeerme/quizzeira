@@ -12,6 +12,7 @@ export { extractJson } from "./gemini";
 export { loadPrompt } from "./prompts";
 export { runLoop, parseWindows, isWithinWindows } from "./loop";
 export { llmError, llmErrorCode, type LlmErrorCode } from "./errors";
+export { logInfo, logWarn, logError, type LogFields } from "./log";
 export {
   renderPrompt,
   screenUntrusted,

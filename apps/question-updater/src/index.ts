@@ -6,10 +6,14 @@ import {
   hasLlmProvider,
   llmErrorCode,
   loadPrompt,
+  logError,
+  logInfo,
+  logWarn,
   runLoop,
   workerEnv,
 } from "@quizzeira/worker-kit";
 
+process.env.SERVICE_NAME ||= "quizzeira-questionupdater";
 const NAME = "question-updater";
 const LEVELS: LevelSlug[] = [
   "beginner",
@@ -44,7 +48,7 @@ function adjacentLevel(current: LevelSlug, proposed?: LevelSlug): LevelSlug {
 
 async function tick(): Promise<void> {
   if (!hasLlmProvider()) {
-    console.warn(`[${NAME}] no LLM provider key configured, skipping`);
+    logWarn("no LLM provider key configured, skipping", { worker: NAME });
     return;
   }
 
@@ -52,7 +56,7 @@ async function tick(): Promise<void> {
     "/internal/questions/next-for-update",
   );
   if (!question) {
-    console.log(`[${NAME}] no questions to update`);
+    logInfo("no questions to update", { worker: NAME });
     return;
   }
 
@@ -117,18 +121,28 @@ async function tick(): Promise<void> {
       `/internal/questions/${question.id}/proposals`,
       { proposedPatch: update, reason },
     );
-    console.log(
-      `[${NAME}] reviewed ${question.id} proposal=${proposal.id ?? "none"} reviewedOnly=${proposal.reviewedOnly} updated=${Boolean(modernize.shouldUpdate)} level=${nextLevel} grounding=${workerEnv.questionUpdateGrounding}`,
-    );
+    logInfo("reviewed question", {
+      worker: NAME,
+      questionId: question.id,
+      proposalId: proposal.id ?? "none",
+      reviewedOnly: proposal.reviewedOnly,
+      updated: Boolean(modernize.shouldUpdate),
+      level: nextLevel,
+      grounding: workerEnv.questionUpdateGrounding,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[${NAME}] question skipped: code=${llmErrorCode(err) ?? "unknown"} message=${message}`,
-    );
+    logError("question skipped", {
+      worker: NAME,
+      code: llmErrorCode(err) ?? "unknown",
+      err: message,
+    });
   }
 }
 
-console.log(
-  `[${NAME}] starting intervalMs=${workerEnv.intervalMs} grounding=${workerEnv.questionUpdateGrounding}`,
-);
+logInfo("starting", {
+  worker: NAME,
+  intervalMs: workerEnv.intervalMs,
+  grounding: workerEnv.questionUpdateGrounding,
+});
 void runLoop(NAME, workerEnv.intervalMs, tick);
