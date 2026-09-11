@@ -12,6 +12,7 @@ import { ResultsPage } from "./features/quiz/ResultsPage";
 import { ProgressPage } from "./features/quiz/ProgressPage";
 import {
   AdminExamsPage,
+  AdminHealthPage,
   AdminLayout,
   AdminQualityPage,
   AdminSourcesPage,
@@ -55,6 +56,7 @@ export function App() {
               <Route path="sources" element={<AdminSourcesPage />} />
               <Route path="exams" element={<AdminExamsPage />} />
               <Route path="quality" element={<AdminQualityPage />} />
+              <Route path="health" element={<AdminHealthPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

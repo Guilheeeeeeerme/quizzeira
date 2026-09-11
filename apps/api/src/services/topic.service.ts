@@ -140,7 +140,6 @@ export async function updateTopic(
       ...(input.presetSlug !== undefined ? { presetSlug: input.presetSlug } : {}),
       ...(input.preferredLocale !== undefined ? { preferredLocale: input.preferredLocale } : {}),
       ...((input.guidelines !== undefined || input.presetSlug !== undefined) && {
-        inferredSyllabus: null,
       }),
       lastUsedAt: new Date(),
     },

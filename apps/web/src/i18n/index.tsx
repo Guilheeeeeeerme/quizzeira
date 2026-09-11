@@ -322,6 +322,92 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Demo sign-in failed": "Falha no acesso demo",
     "Failed to prepare": "Falha ao preparar",
     "Action failed": "Ação falhou",
+
+    // Admin (ADMIN-only screens: Source registry, discovered exams, HITL queue)
+    "Manage ingestion sources, discovered exams, and the question quality queue.":
+      "Gerencie as fontes de coleta, os concursos descobertos e a fila de qualidade das questões.",
+    "Admin sections": "Seções administrativas",
+    "Pipeline health": "Saúde do pipeline",
+    "Portals the crawler visits. Nothing is crawled until you add one.":
+      "Portais que o crawler visita. Nada é coletado até você cadastrar o primeiro.",
+    "Save source": "Salvar fonte",
+    "Crawl now": "Coletar agora",
+    "Crawl queued. It runs on the crawler's next tick.":
+      "Coleta agendada. Ela roda no próximo ciclo do crawler.",
+    "Source added. The crawler will pick it up on its next pass.":
+      "Fonte adicionada. O crawler vai usá-la na próxima passagem.",
+    "Add at least one start URL.": "Informe pelo menos uma URL inicial.",
+    "Add the first portal to crawl. Quizzeira ships with an empty registry on purpose — no seeded sources.":
+      "Cadastre o primeiro portal a coletar. O Quizzeira começa com registro vazio de propósito — sem fontes semeadas.",
+    "e.g. Cesgranrio concursos": "ex.: Cesgranrio concursos",
+    "Start URLs (one per line)": "URLs iniciais (uma por linha)",
+    "The listing pages to crawl. The domain is derived from the first URL.":
+      "As páginas de listagem a coletar. O domínio vem da primeira URL.",
+    "Link patterns (one regex per line)": "Padrões de link (um regex por linha)",
+    "Keep only links whose text or URL matches. Empty keeps everything.":
+      "Mantém apenas links cujo texto ou URL corresponda. Vazio mantém tudo.",
+    "Open patterns (one regex per line)": "Padrões de inscrição aberta (um regex por linha)",
+    "Marks a listing as an open registration period.":
+      "Marca uma listagem como período de inscrições aberto.",
+    "Crawl interval (minutes)": "Intervalo de coleta (minutos)",
+    "every {n} min": "a cada {n} min",
+    "{n} consecutive failures": "{n} falhas consecutivas",
+    "Last OK": "Último sucesso",
+    "Proposed sources": "Fontes propostas",
+    "Domains the crawler found in outbound links. They stay inert until you approve them.":
+      "Domínios que o crawler encontrou em links externos. Ficam inativos até você aprovar.",
+    "No proposals waiting.": "Nenhuma proposta aguardando.",
+    Active: "Ativa",
+    Broken: "Com falha",
+    Proposed: "Proposta",
+    Disabled: "Desativada",
+    Closed: "Encerrado",
+    Failed: "Reprovada",
+    "Needs review": "Requer revisão",
+    "Discovered exams": "Concursos descobertos",
+    "Everything Ingestion has found. Close an exam the crawler cannot tell is over.":
+      "Tudo que a coleta encontrou. Encerre um concurso que o crawler não consegue perceber que acabou.",
+    "Filter exams by status": "Filtrar concursos por situação",
+    "Add a source and run a crawl; discovered exams appear here.":
+      "Cadastre uma fonte e rode uma coleta; os concursos descobertos aparecem aqui.",
+    "No exams match this filter.": "Nenhum concurso corresponde a este filtro.",
+    "{n} artifact(s)": "{n} arquivo(s)",
+    "Last seen": "Visto por último",
+    "Open listing": "Abrir listagem",
+    "Mark closed": "Marcar como encerrado",
+    "Mark open": "Marcar como aberto",
+    "Questions the publish gate rejected or could not decide. Publishing here overrides the automated verdict.":
+      "Questões que o portão de publicação reprovou ou não conseguiu decidir. Publicar aqui sobrepõe o veredito automático.",
+    "Filter by verdict": "Filtrar por veredito",
+    "Items land here only when structural validation or the LLM judge rejects them.":
+      "Os itens chegam aqui apenas quando a validação estrutural ou o juiz LLM os reprova.",
+    "Show details": "Mostrar detalhes",
+    "Hide details": "Ocultar detalhes",
+    "keyed correct": "marcada como correta",
+    "Open source document": "Abrir documento de origem",
+    "Publish anyway": "Publicar mesmo assim",
+    "Re-run eval": "Reavaliar",
+    score: "nota",
+    "Live counters from the Discovery and Content stacks.":
+      "Contadores ao vivo das camadas de coleta e de conteúdo.",
+    Refresh: "Atualizar",
+    Ingestion: "Coleta",
+    "Discovery stack unreachable.": "Camada de coleta inacessível.",
+    "Content stack unreachable.": "Camada de conteúdo inacessível.",
+    "Extraction and Generation": "Extração e geração",
+    "Question bank": "Banco de questões",
+    Proposals: "Propostas",
+    Artifacts: "Arquivos",
+    "Docs pending": "Docs pendentes",
+    "Docs extracted": "Docs extraídos",
+    "Docs failed": "Docs com falha",
+    Chunks: "Trechos",
+    Embedded: "Vetorizados",
+    Draft: "Rascunho",
+    Published: "Publicadas",
+    "Last generation run": "Última geração",
+    "{n} drafted": "{n} rascunhos",
+    "No generation run yet.": "Nenhuma geração executada ainda.",
   },
 };
 

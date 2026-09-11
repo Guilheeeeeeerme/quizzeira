@@ -8,7 +8,8 @@ Living control map. Concept map: [ai-swe-concepts.md](./ai-swe-concepts.md). Ful
 | --- | --- | --- |
 | Input fence + regex pre-screen | `packages/worker-kit` | Content Generation + Eval judge + Grading |
 | Publish gate | `apps/content-quality` | Only Eval-approved items become `published` |
-| HITL quality fails | `/admin/quality`, `QualityFailure` | Admin approve/reject/recheck |
+| Structural validation | `apps/content-quality/src/structural.ts` | Deterministic pre-LLM reject |
+| HITL quality queue | `/admin/quality`, `QualityReview` | Admin approve/reject/recheck, audited |
 | HITL source proposals | `/admin/sources`, `SourceProposal` | New domains pending until approve |
 | Sampling (not RAG) | `content-api` `/published/*`, Study `startPill` | Study never invents bank items |
 | Redis call + token budgets | `packages/worker-kit/src/llm.ts` | LLM workers |

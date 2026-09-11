@@ -163,14 +163,6 @@ export function questionBudgetForDuration(durationMinutes?: number | null): {
   }
 }
 
-export interface InferredSyllabus {
-  subjects: string[];
-  styleNotes: string;
-  difficultyNotes: string;
-  seniority: string | null;
-  materialRoles: string[];
-}
-
 export interface PromptRecord {
   key: PromptKey;
   version: number;
@@ -344,7 +336,6 @@ export interface PendingGenerationAttempt {
   presetSlug: string | null;
   focusText: string | null;
   durationMinutes: number | null;
-  inferredSyllabus: InferredSyllabus | null;
   locale: LocaleCode;
   /** Always false — topic attachments/links were removed (exam + focus only). */
   hasLinks: boolean;

@@ -1,118 +1,269 @@
-# AI software engineering concepts in Quizzeira
+# AI SWE concepts in Quizzeira
 
-Canonical names below match code modules. Grep the concept name to find the implementation.
-**No content seed** — continuous Ingestion only; Study never invents exams or questions.
+Quizzeira is deliberately built so that each canonical AI software-engineering
+concept appears **once**, in **one** place, under its **own name**. Folder names,
+symbols, and log fields use the canonical term, so you can grep for a concept
+and find its implementation.
 
-### Ingestion
-**Definition:** Continuous collection of external sources into an artifact store.
-**In Quizzeira:** Playwright crawl of admin-registered sources; open exams + PDF/edital objects.
-**Code:** `apps/discovery-crawler`, `apps/discovery-api` (`Source`, `Exam`, `Artifact`, `CrawlRun`).
-**Not to confuse with:** Extraction (parse already-fetched artifacts) or Sampling (study reads published bank).
+Every entry below uses the same template:
 
-### Source registry
-**Definition:** Admin catalog of origins with politeness, trust, and health.
-**In Quizzeira:** Enable/interval/trust; proposals wait for HITL approve.
-**Code:** `Source`, `/admin/sources`, `apps/discovery-api/src/routes/admin.ts`.
-**Not to confuse with:** Document store (objects) or Question bank.
+- **Definition** — what the concept means in general, outside this repo.
+- **In Quizzeira** — the specific job it does here.
+- **Code** — where it lives.
+- **Not to confuse with** — the neighbouring concept people usually collapse it into.
 
-### Document store
-**Definition:** Object + metadata store for editais/provas/gabaritos.
-**In Quizzeira:** MinIO bucket `quizzeira` + `Artifact` / `Document` rows.
-**Code:** `apps/discovery-api/src/lib/storage.ts`, `Artifact`, `apps/content-api` `Document`.
-**Not to confuse with:** Question bank (Q&A lifecycle).
+The pipeline reads left to right, and each arrow is a service boundary:
 
-### Extraction
-**Definition:** Raw artifact → text/structure (chunks).
-**In Quizzeira:** Split document text into chunks before Generation.
-**Code:** `apps/content-worker/src/extraction/`.
-**Not to confuse with:** Generation (LLM creates Q&A) or Embeddings.
+```
+Ingestion ──▶ Extraction ──▶ Embeddings ──▶ Generation ──▶ Eval ──▶ Sampling ──▶ Grading
+(discovery)   (content)      (content)      (content)      (quality) (study)     (study)
+```
 
-### Generation
-**Definition:** LLM creates Q&A from programa/edital evidence.
-**In Quizzeira:** Worker deposits `QuestionItem` with `status=draft` only.
-**Code:** `apps/content-worker/src/generation/`, `POST /internal/questions/deposit`.
-**Not to confuse with:** Grading (learner attempt correction) or Eval (bank quality).
+A question only becomes visible to a learner by passing the **publish gate** in
+Eval. Nothing else in the system can publish.
 
-### Question bank
-**Definition:** Versioned corpus of Q&A with lifecycle states.
-**In Quizzeira:** Postgres `QuestionItem` (`draft` → Eval → `published`|`failed`).
-**Code:** `apps/content-api` Prisma `QuestionItem`.
-**Not to confuse with:** Redis legacy stores (being retired) or Study MySQL attempt snapshots.
+---
 
-### Publish gate
-**Definition:** Only approved items enter the product surface.
-**In Quizzeira:** Content never self-publishes; Quality promotes draft→published.
-**Code:** `apps/content-quality`, `POST /internal/quality/:id/complete`, `/published/*`.
-**Not to confuse with:** Admin force-publish (HITL exception with audit).
+## Ingestion
 
-### Eval
-**Definition:** Automatic quality assessment of items/outputs.
-**In Quizzeira:** Continuous worker over draft items.
-**Code:** `apps/content-quality` (`// Concept: Eval`).
-**Not to confuse with:** Grading (learner scores).
+- **Definition** — Acquiring raw source material from the outside world and
+  recording it, without interpreting it.
+- **In Quizzeira** — A polite crawler visits registered exam portals, discovers
+  open exams, and downloads editais into object storage. It parses listings only
+  far enough to identify an exam; it never reads the PDF's meaning.
+- **Code** — `apps/discovery-api/`, `apps/discovery-crawler/`. Database
+  `quizzeira_discovery`. Header comment: `// Concept: Ingestion`.
+- **Not to confuse with** — **Extraction**. Ingestion gets the bytes; Extraction
+  turns bytes into text. Discovery has no idea what a question is.
 
-### LLM-as-judge
-**Definition:** Model returns structured JSON judging completeness/coherence.
-**In Quizzeira:** Completeness, coherence, single clear answer.
-**Code:** `apps/content-quality/src/judge.ts`, prompt key `quality-completeness`.
-**Not to confuse with:** Structural validation (no LLM).
+## Source registry
 
-### Structural validation
-**Definition:** Deterministic rules without an LLM.
-**In Quizzeira:** Stem/options/correctIndex/referenceAnswer shape checks.
-**Code:** `apps/content-quality/src/structural.ts`.
-**Not to confuse with:** Output-policy / media allowlist (shared Guardrails).
+- **Definition** — The governed list of places a crawler is allowed to visit,
+  with per-source policy.
+- **In Quizzeira** — `Source` rows carry start URLs, link/open regex patterns,
+  politeness delay, crawl interval, trust, and health. **It ships empty.** An
+  admin adds the first source through `/admin/sources`; there is no seed.
+- **Code** — `Source` and `SourceProposal` in
+  `apps/discovery-api/prisma/schema.prisma`; CRUD in
+  `apps/discovery-api/src/routes/admin.ts`.
+- **Not to confuse with** — a crawl *queue*. The registry is durable policy; a
+  `CrawlRun` is one pass over it.
 
-### HITL
-**Definition:** Human approves/rejects before production.
-**In Quizzeira:** Quality failure queue + source proposals.
-**Code:** `/admin/quality`, `/admin/sources` proposals, `QualityFailure`.
-**Not to confuse with:** Publish gate automation (default path).
+## Adaptive reach (source proposals)
 
-### Guardrails
-**Definition:** Fences, budgets, output policy around LLM use.
-**In Quizzeira:** worker-kit fence/screen, Redis LLM budgets, internal key scopes.
-**Code:** `packages/worker-kit`, `packages/shared` output-policy, `docs/guardrails.md`.
-**Not to confuse with:** Eval (item quality) or Grading.
+- **Definition** — Letting a crawler suggest expansions of its own scope,
+  subject to review.
+- **In Quizzeira** — When a crawl sees outbound links to unknown domains, it
+  files at most two `SourceProposal` rows per source per pass. Proposals are
+  **inert**: nothing is crawled until an admin approves them.
+- **Code** — `POST /internal/sources/propose`, approve/reject in
+  `apps/discovery-api/src/routes/admin.ts`.
+- **Not to confuse with** — autonomous scope growth. The crawler can *ask*, never
+  *decide*.
 
-### Prompt registry
-**Definition:** Versioned prompts loaded at runtime.
-**In Quizzeira:** Study API prompt store; workers `loadPrompt(key)`.
-**Code:** `apps/api/src/services/prompt-store.ts`, worker-kit `loadPrompt`.
-**Not to confuse with:** default prompt seed strings in repo (templates, not content bank).
+## Listing fingerprint
 
-### Worker / agent loop
-**Definition:** Claim job → tools/LLM → write results → repeat.
-**In Quizzeira:** `runLoop` workers for discovery/content/quality/corrector.
-**Code:** `packages/worker-kit/src/loop.ts`, each `apps/*/src/index.ts`.
-**Not to confuse with:** HTTP request/response Study API.
+- **Definition** — A content digest used to skip work that would be a no-op.
+- **In Quizzeira** — Each source's listing set is hashed per pass. An unchanged
+  fingerprint costs one page fetch instead of a full re-ingest, which is what
+  makes a 30-minute crawl interval affordable and polite.
+- **Code** — `listingsFingerprint()` in `packages/shared/src/crawler.ts`;
+  `ListingFingerprint` model in `apps/discovery-api/prisma/schema.prisma`.
+- **Not to confuse with** — a cache. A fingerprint mismatch triggers real work;
+  it stores no content.
 
-### Grading
-**Definition:** Correct a learner attempt (≠ bank Eval).
-**In Quizzeira:** `quiz-corrector` claims PENDING attempts.
-**Code:** `apps/quiz-corrector`, `apps/api` review internal routes.
-**Not to confuse with:** Eval / LLM-as-judge on the bank.
+## Document store
 
-### Embeddings
-**Definition:** Vectors for similarity search.
-**In Quizzeira:** `Chunk.embedding` (pgvector) written on ingest path readiness.
-**Code:** `apps/content-api` `Chunk`, migration `vector`.
-**Not to confuse with:** RAG (not on Study path yet).
+- **Definition** — Durable storage of original artifacts, separating bytes from
+  metadata.
+- **In Quizzeira** — Edital/prova PDFs go to MinIO under a content-addressed key;
+  Postgres keeps only the key, checksum, size and content type. Content later
+  reads the bytes back through `content-api`, so no worker needs S3 credentials.
+- **Code** — `apps/discovery-api/src/lib/storage.ts` (write),
+  `apps/content-api/src/lib/storage.ts` (read), `Artifact` / `Document` models.
+- **Not to confuse with** — the **Question bank**. The document store holds source
+  material; the question bank holds finished questions.
 
-### RAG
-**Definition:** Retrieve → augment → generate.
-**In Quizzeira:** Prepared via embeddings; **not** used on Study Sampling in this refactor.
-**Code:** embeddings on `Chunk`; Study uses Sampling instead.
-**Not to confuse with:** Sampling (metadata filter of published bank).
+## Extraction
 
-### Grounding
-**Definition:** Constrain generation to evidence.
-**In Quizzeira:** Future Content path; Generation already passes chunk evidence.
-**Code:** `apps/content-worker` generation prompt evidence block.
-**Not to confuse with:** Guardrails fencing of untrusted text.
+- **Definition** — Converting a source artifact into clean, model-usable text.
+- **In Quizzeira** — Inflate PDF content streams, read the text-showing
+  operators, normalize whitespace, then split into overlapping chunks. Image-only
+  PDFs produce no text and are marked `failed` with a reason rather than silently
+  yielding nothing — OCR would be a separate stage, not a hidden fallback.
+- **Code** — `apps/content-worker/src/extraction/` (`pdf-text.ts`, `chunk.ts`).
+- **Not to confuse with** — **Generation**. Extraction never invents text; if the
+  PDF does not say it, it does not appear.
 
-### Sampling (not RAG)
-**Definition:** Filter the bank by metadata (exam/subject/locale).
-**In Quizzeira:** Study `startPill` calls `/published/questions/sample`.
-**Code:** `apps/content-api/src/routes/published.ts`, `apps/api/src/lib/pipeline-clients.ts`, `pill.service.ts`.
-**Not to confuse with:** RAG retrieval.
+## Chunking
+
+- **Definition** — Splitting a document into retrieval-sized units.
+- **In Quizzeira** — Paragraph-boundary packing to a ~3000 character target with
+  ~300 characters of carried overlap, hard-splitting only runaway blocks. Chunks
+  are the unit that gets embedded and retrieved.
+- **Code** — `apps/content-worker/src/extraction/chunk.ts`.
+- **Not to confuse with** — pagination. Chunk boundaries follow meaning, not page
+  breaks.
+
+## Embeddings
+
+- **Definition** — Dense vector representations that make text searchable by
+  meaning rather than keyword.
+- **In Quizzeira** — Each chunk gets a 768-dimension vector stored in a pgvector
+  column, searched by cosine distance. The dimension is pinned in both the
+  worker and the column; a mismatch fails loudly instead of writing garbage.
+- **Code** — `apps/content-worker/src/embeddings/`,
+  `apps/content-api/src/lib/vectors.ts`, `Chunk.embedding`.
+- **Not to confuse with** — full-text search. Embeddings match meaning; they are
+  not a substitute for exact lookup, and they are never used at quiz time.
+
+## Retrieval (RAG)
+
+- **Definition** — Fetching relevant context at inference time and putting it in
+  the prompt, so the model answers from provided facts.
+- **In Quizzeira** — Retrieval happens **only during Generation**: embed a
+  subject query, k-NN over chunk vectors, feed the top hits to the model as
+  fenced untrusted material.
+- **Code** — `searchChunks()` in `apps/content-api/src/lib/vectors.ts`, called
+  from `apps/content-worker/src/generation/index.ts`.
+- **Not to confuse with** — **Sampling**. This is the single most common mistake
+  in this codebase's history: serving a quiz is *not* RAG. See Sampling below.
+
+## Generation
+
+- **Definition** — Using a model to produce new artifacts from provided context.
+- **In Quizzeira** — Produces multiple-choice draft questions grounded in
+  retrieved chunks. Output is shape-validated before persistence, and screened
+  by the output guardrail. Every generated item lands as `draft` — Generation
+  **cannot publish**.
+- **Code** — `apps/content-worker/src/generation/` (`prompt.ts`, `index.ts`),
+  `GenerationRun` model.
+- **Not to confuse with** — **Eval**. Generation writes; Eval judges. Keeping the
+  writer unable to approve its own work is the point.
+
+## Question bank
+
+- **Definition** — The curated, reusable store of finished assessment items.
+- **In Quizzeira** — `QuestionItem` rows in `quizzeira_content`, with a lifecycle
+  of `draft → needs_review | published | failed`. A content fingerprint makes
+  re-extraction and re-generation idempotent instead of duplicative.
+- **Code** — `QuestionItem` in `apps/content-api/prisma/schema.prisma`; read API
+  in `apps/content-api/src/routes/published.ts`.
+- **Not to confuse with** — a question *pool* tagged by difficulty level. The old
+  curriculum model (levels, per-topic pools) was removed; the bank is keyed by
+  exam and subject.
+
+## Structural validation
+
+- **Definition** — Deterministic, rule-based checks on an artifact's form.
+- **In Quizzeira** — Pre-LLM gate: prompt length, option count, duplicate or
+  blank options, `correctIndex` range, banned "none of the above" phrasing,
+  giveaway-length correct answers, and stems that refer back to the source text.
+  Running it first keeps judge spend off items that were never usable.
+- **Code** — `apps/content-quality/src/structural.ts` (+ `structural.spec.ts`).
+- **Not to confuse with** — **LLM-as-judge**. Structural checks are free,
+  deterministic, and cannot assess correctness.
+
+## LLM-as-judge
+
+- **Definition** — Using a model to score another model's output against
+  criteria, instead of relying on exact-match metrics.
+- **In Quizzeira** — Scores an item 0–1 on factual correctness, single defensible
+  answer, clarity, and exam-appropriateness, and independently answers the
+  question. The judge **scores but never rewrites**, which is what makes its
+  verdict auditable.
+- **Code** — `apps/content-quality/src/judge.ts`.
+- **Not to confuse with** — **Grading**. The judge evaluates *questions*; grading
+  evaluates *learner answers*. Different subject, different prompt, different
+  service.
+
+## Eval
+
+- **Definition** — The systematic quality assessment stage of a pipeline.
+- **In Quizzeira** — The `content-quality` worker: structural validation, then
+  LLM-as-judge, then the publish gate. It is the **only** service that can move
+  an item to `published`. If it stops, nothing new reaches learners — the
+  intended failure mode.
+- **Code** — `apps/content-quality/`.
+- **Not to confuse with** — monitoring. Eval decides whether an artifact ships;
+  monitoring reports on a system already running.
+
+## Publish gate
+
+- **Definition** — A single explicit checkpoint that an artifact must pass to
+  become visible.
+- **In Quizzeira** — A pure function combining both quality signals: structural
+  failure fails outright; judge/item answer disagreement fails; score ≥ 0.8
+  publishes; < 0.5 fails; the band between goes to HITL. A missing judge verdict
+  never publishes and never fails — infrastructure gaps are not the item's fault.
+- **Code** — `decide()` in `apps/content-quality/src/gate.ts` (+ `gate.spec.ts`);
+  the sole `published` write is
+  `POST /internal/question-items/verdict` in `apps/content-api`.
+- **Not to confuse with** — a feature flag. The gate is a per-item decision with a
+  recorded rationale, not a global on/off switch.
+
+## HITL (human-in-the-loop)
+
+- **Definition** — Routing the cases automation should not decide alone to a
+  human, with enough context to decide well.
+- **In Quizzeira** — Items that are `failed` or `needs_review` appear in the admin
+  quality queue with their score, machine-readable fail reasons, judge notes,
+  full review history, and a link to the source document. An admin can publish
+  anyway, reject, or send the item back through Eval.
+- **Code** — `apps/content-api/src/routes/admin.ts`,
+  `apps/web/src/features/admin/AdminPages.tsx` (`AdminQualityPage`);
+  `QualityReview` model.
+- **Not to confuse with** — manual authoring. Humans adjudicate here; they do not
+  write questions.
+
+## Sampling (not RAG)
+
+- **Definition** — Selecting items from an existing, finished pool to assemble a
+  session.
+- **In Quizzeira** — Starting a study pill draws N `published` questions for the
+  exam from `content-api`, filtered by subject and locale, shuffled. **No
+  retrieval, no embeddings, no model call on the request path.** The questions
+  already exist and already passed the gate.
+- **Code** — `apps/api/src/lib/pipeline-clients.ts`
+  (`samplePublishedForAttempt`), `apps/api/src/services/pill.service.ts`,
+  `POST /published/sample`.
+- **Not to confuse with** — **Retrieval (RAG)**. Sampling picks from finished
+  items; RAG fetches context to build something new. Quizzeira does RAG once, in
+  Generation, offline — never while a learner waits.
+
+## Grading
+
+- **Definition** — Scoring a learner's response against ground truth.
+- **In Quizzeira** — The `quiz-corrector` worker claims submitted attempts and
+  grades them 0/1 per question against the stored `correctIndex` or
+  `referenceAnswer`, adding a comment, explanation, and answer reveal. The prompt
+  forbids inventing or changing the correct answer.
+- **Code** — `apps/quiz-corrector/`, `/internal/reviews/*` in
+  `apps/api/src/routes/internal.ts`, `quiz-correction` prompt in
+  `apps/api/src/lib/default-prompts.ts`.
+- **Not to confuse with** — **LLM-as-judge**. Grading assesses the learner and
+  treats the question as correct by construction.
+
+## Worker loop
+
+- **Definition** — A long-running process that repeatedly performs a bounded unit
+  of work on an interval.
+- **In Quizzeira** — All four background services share `runLoop` with per-pass
+  caps and optional time windows, so a pass is always bounded and a restart is
+  always safe. Progress is durable in Postgres, never in worker memory.
+- **Code** — `packages/worker-kit/src/loop.ts`; `src/index.ts` of each worker.
+- **Not to confuse with** — a job queue. There are no per-item messages; each
+  pass queries for outstanding work.
+
+## Guardrails
+
+- **Definition** — Controls on what enters and leaves a model, independent of the
+  prompt.
+- **In Quizzeira** — Crawled text is untrusted (OWASP LLM01): it is fenced and
+  input-screened before reaching a model, and every model-authored string is
+  output-screened (LLM10) before being persisted or shown in admin. Token and
+  call budgets are shared in Redis (LLM06).
+- **Code** — `packages/worker-kit/src/guardrails.ts`, `llm.ts`; see
+  [`docs/guardrails.md`](./guardrails.md).
+- **Not to confuse with** — prompt instructions. A model can ignore its prompt; it
+  cannot ignore a screen that runs outside it.
