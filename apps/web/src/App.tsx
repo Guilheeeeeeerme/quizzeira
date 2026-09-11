@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider } from "./shell/AuthContext";
+import { AuthProvider, useAuth } from "./shell/AuthContext";
 import { AuthGuard, GuestGuard } from "./shell/AuthGuard";
 import { LoginPage } from "./features/auth/LoginPage";
 import { RegisterPage } from "./features/auth/RegisterPage";
@@ -10,6 +10,20 @@ import { StudyFocusPage } from "./features/topics/StudyFocusPage";
 import { QuizPage } from "./features/quiz/QuizPage";
 import { ResultsPage } from "./features/quiz/ResultsPage";
 import { ProgressPage } from "./features/quiz/ProgressPage";
+import {
+  AdminExamsPage,
+  AdminHealthPage,
+  AdminLayout,
+  AdminQualityPage,
+  AdminSourcesPage,
+} from "./features/admin/AdminPages";
+
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user || user.role !== "ADMIN") return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
 
 export function App() {
   return (
@@ -30,6 +44,20 @@ export function App() {
             <Route path="/quiz/:attemptId" element={<QuizPage />} />
             <Route path="/results/:attemptId" element={<ResultsPage />} />
             <Route path="/progress" element={<ProgressPage />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminGuard>
+                  <AdminLayout />
+                </AdminGuard>
+              }
+            >
+              <Route index element={<Navigate to="sources" replace />} />
+              <Route path="sources" element={<AdminSourcesPage />} />
+              <Route path="exams" element={<AdminExamsPage />} />
+              <Route path="quality" element={<AdminQualityPage />} />
+              <Route path="health" element={<AdminHealthPage />} />
+            </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

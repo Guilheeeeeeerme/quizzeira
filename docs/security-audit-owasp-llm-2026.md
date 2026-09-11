@@ -73,4 +73,4 @@ flowchart LR
 | LLM loop | `packages/worker-kit/src/llm.ts`, `guardrails.ts` |
 | Output / media | `packages/shared/src/output-policy.ts`, `media-url.ts` |
 | Agency | `apps/api/src/plugins/internal-auth.ts`, `bank-proposal.store.ts`, `admin` proposals |
-| Workers | corrector, generator, updater, exam-crawler |
+| Workers | quiz-corrector, discovery-crawler, content-worker, content-quality |

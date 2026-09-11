@@ -40,6 +40,4 @@ export const workerEnv = {
   internalApiUrl: (process.env.INTERNAL_API_URL ?? "http://localhost:3000").replace(/\/$/, ""),
   internalApiKey: process.env.INTERNAL_API_KEY ?? "dev-internal-key",
   redisUrl: (process.env.REDIS_URL ?? "").trim(),
-  /** Opt-in Google Search grounding for question-updater only. */
-  questionUpdateGrounding: (process.env.QUESTION_UPDATE_GROUNDING ?? "").toLowerCase() === "true",
 };

@@ -1,5 +1,4 @@
 import Fastify from "fastify";
-import multipart from "@fastify/multipart";
 import { env } from "./lib/env";
 import { redis } from "./lib/redis";
 import { registerCors } from "./plugins/cors";
@@ -14,7 +13,6 @@ import { examRoutes } from "./routes/exams";
 import { internalRoutes } from "./routes/internal";
 import { adminRoutes } from "./routes/admin";
 import { seedPrompts } from "./services/prompt-store";
-import { ensureCatalogSeeded } from "./services/exam-catalog.service";
 
 async function bootstrap() {
   if (env.isProduction && env.internalApiKey === "dev-internal-key") {
@@ -36,9 +34,6 @@ async function bootstrap() {
   await registerCors(app);
   await registerCookie(app);
   await registerRateLimit(app);
-  await app.register(multipart, {
-    limits: { fileSize: 20 * 1024 * 1024 },
-  });
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
@@ -50,9 +45,6 @@ async function bootstrap() {
   await app.register(internalRoutes, { prefix: "/internal" });
 
   await seedPrompts();
-  await ensureCatalogSeeded().catch((err) => {
-    app.log.warn({ err }, "exam catalog seed skipped");
-  });
 
   app.addHook("onClose", async () => {
     await redis.quit();

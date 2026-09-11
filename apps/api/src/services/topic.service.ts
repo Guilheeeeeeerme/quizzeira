@@ -1,21 +1,6 @@
-import { randomUUID } from "crypto";
-import { LinkFetchStatus } from "@prisma/client";
-import type {
-  CreateTopicInput,
-  LocaleCode,
-  TopicDto,
-  TopicListItemDto,
-  TopicPresetSlug,
-  UpdateTopicInput,
-} from "@quizzeira/shared";
+import type { LocaleCode, TopicDto, TopicListItemDto, TopicPresetSlug, CreateTopicInput, UpdateTopicInput } from "@quizzeira/shared";
 import { isTopicPresetSlug } from "@quizzeira/shared";
 import { prisma } from "../lib/prisma";
-import { fetchUrlText } from "../lib/fetch-url";
-import {
-  attachmentKindFromMime,
-  extractAndStoreAttachmentText,
-} from "../lib/extract-text";
-import { putObject, deleteObject, getObjectBuffer } from "../lib/storage";
 
 export const TOPIC_TTL_DAYS = 30;
 
@@ -26,12 +11,7 @@ export async function touchTopicLastUsed(topicId: string): Promise<void> {
   });
 }
 
-/** Delete topic and all related attempts, questions, attachments (S3 best-effort). */
 export async function purgeTopicById(topicId: string): Promise<void> {
-  const attachments = await prisma.topicAttachment.findMany({
-    where: { topicId },
-    select: { storageKey: true },
-  });
   const attempts = await prisma.quizAttempt.findMany({
     where: { topicId },
     select: { id: true },
@@ -56,8 +36,6 @@ export async function purgeTopicById(topicId: string): Promise<void> {
     }
     await tx.topic.delete({ where: { id: topicId } });
   });
-
-  await Promise.all(attachments.map((a) => deleteObject(a.storageKey)));
 }
 
 export async function purgeStaleTopics(
@@ -83,23 +61,6 @@ function toTopicDto(topic: {
   preferredLocale: string | null;
   createdAt: Date;
   updatedAt: Date;
-  attachments: Array<{
-    id: string;
-    kind: "TEXT" | "PDF" | "IMAGE";
-    filename: string;
-    mimeType: string;
-    byteSize: number;
-    extractedText: string | null;
-    createdAt: Date;
-  }>;
-  links: Array<{
-    id: string;
-    url: string;
-    label: string | null;
-    fetchStatus: LinkFetchStatus;
-    fetchedText: string | null;
-    createdAt: Date;
-  }>;
 }): TopicDto {
   return {
     id: topic.id,
@@ -109,33 +70,12 @@ function toTopicDto(topic: {
     preferredLocale: (topic.preferredLocale as LocaleCode | null) ?? null,
     createdAt: topic.createdAt.toISOString(),
     updatedAt: topic.updatedAt.toISOString(),
-    attachments: topic.attachments.map((a) => ({
-      id: a.id,
-      kind: a.kind,
-      filename: a.filename,
-      mimeType: a.mimeType,
-      byteSize: a.byteSize,
-      hasExtractedText: Boolean(a.extractedText),
-      createdAt: a.createdAt.toISOString(),
-    })),
-    links: topic.links.map((l) => ({
-      id: l.id,
-      url: l.url,
-      label: l.label,
-      fetchStatus: l.fetchStatus,
-      hasFetchedText: Boolean(l.fetchedText),
-      createdAt: l.createdAt.toISOString(),
-    })),
   };
 }
 
 async function loadTopic(userId: string, topicId: string) {
   const topic = await prisma.topic.findFirst({
     where: { id: topicId, userId },
-    include: {
-      attachments: { orderBy: { createdAt: "asc" } },
-      links: { orderBy: { createdAt: "asc" } },
-    },
   });
   if (!topic) {
     throw Object.assign(new Error("Topic not found"), { statusCode: 404 });
@@ -146,9 +86,6 @@ async function loadTopic(userId: string, topicId: string) {
 export async function listTopics(userId: string): Promise<TopicListItemDto[]> {
   const topics = await prisma.topic.findMany({
     where: { userId },
-    include: {
-      _count: { select: { attachments: true, links: true } },
-    },
     orderBy: { updatedAt: "desc" },
   });
   return topics.map((t) => ({
@@ -156,8 +93,6 @@ export async function listTopics(userId: string): Promise<TopicListItemDto[]> {
     title: t.title,
     presetSlug: (t.presetSlug as TopicPresetSlug | null) ?? null,
     preferredLocale: (t.preferredLocale as LocaleCode | null) ?? null,
-    attachmentCount: t._count.attachments,
-    linkCount: t._count.links,
     updatedAt: t.updatedAt.toISOString(),
   }));
 }
@@ -184,10 +119,6 @@ export async function createTopic(userId: string, input: CreateTopicInput): Prom
       preferredLocale: input.preferredLocale ?? null,
       lastUsedAt: new Date(),
     },
-    include: {
-      attachments: true,
-      links: true,
-    },
   });
   return toTopicDto(topic);
 }
@@ -208,15 +139,9 @@ export async function updateTopic(
       ...(input.guidelines !== undefined ? { guidelines: input.guidelines.trim() } : {}),
       ...(input.presetSlug !== undefined ? { presetSlug: input.presetSlug } : {}),
       ...(input.preferredLocale !== undefined ? { preferredLocale: input.preferredLocale } : {}),
-      // Guidelines/preset shape the study plan — force re-inference next generation.
       ...((input.guidelines !== undefined || input.presetSlug !== undefined) && {
-        inferredSyllabus: null,
       }),
       lastUsedAt: new Date(),
-    },
-    include: {
-      attachments: { orderBy: { createdAt: "asc" } },
-      links: { orderBy: { createdAt: "asc" } },
     },
   });
   return toTopicDto(topic);
@@ -225,149 +150,4 @@ export async function updateTopic(
 export async function deleteTopic(userId: string, topicId: string): Promise<void> {
   await loadTopic(userId, topicId);
   await purgeTopicById(topicId);
-}
-
-export async function addTopicLink(
-  userId: string,
-  topicId: string,
-  url: string,
-  label?: string | null,
-): Promise<TopicDto> {
-  await loadTopic(userId, topicId);
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw Object.assign(new Error("Invalid URL"), { statusCode: 400 });
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw Object.assign(new Error("URL must be http(s)"), { statusCode: 400 });
-  }
-
-  const link = await prisma.topicLink.create({
-    data: {
-      topicId,
-      url: parsed.toString(),
-      label: label?.trim() || null,
-      fetchStatus: LinkFetchStatus.PENDING,
-    },
-  });
-
-  const fetched = await fetchUrlText(link.url);
-  await prisma.topicLink.update({
-    where: { id: link.id },
-    data: {
-      fetchedText: fetched.text,
-      fetchStatus: fetched.ok ? LinkFetchStatus.OK : LinkFetchStatus.FAILED,
-    },
-  });
-  await prisma.topic.update({
-    where: { id: topicId },
-    data: { lastUsedAt: new Date(), inferredSyllabus: null },
-  });
-
-  return getTopic(userId, topicId);
-}
-
-export async function deleteTopicLink(
-  userId: string,
-  topicId: string,
-  linkId: string,
-): Promise<TopicDto> {
-  await loadTopic(userId, topicId);
-  const result = await prisma.topicLink.deleteMany({ where: { id: linkId, topicId } });
-  if (result.count === 0) {
-    throw Object.assign(new Error("Link not found"), { statusCode: 404 });
-  }
-  await prisma.topic.update({
-    where: { id: topicId },
-    data: { lastUsedAt: new Date(), inferredSyllabus: null },
-  });
-  return getTopic(userId, topicId);
-}
-
-export async function addTopicAttachment(
-  userId: string,
-  topicId: string,
-  file: { filename: string; mimeType: string; buffer: Buffer },
-): Promise<TopicDto> {
-  await loadTopic(userId, topicId);
-  if (!file.buffer.length) {
-    throw Object.assign(new Error("Empty file"), { statusCode: 400 });
-  }
-  if (file.buffer.length > 20 * 1024 * 1024) {
-    throw Object.assign(new Error("File too large (max 20MB)"), { statusCode: 400 });
-  }
-
-  const kind = attachmentKindFromMime(file.mimeType, file.filename);
-  const storageKey = `topics/${topicId}/${randomUUID()}-${file.filename.replace(/[^\w.\-]+/g, "_")}`;
-  await putObject(storageKey, file.buffer, file.mimeType || "application/octet-stream");
-  const extractedText = await extractAndStoreAttachmentText(
-    kind,
-    file.buffer,
-    file.mimeType,
-  );
-
-  await prisma.topicAttachment.create({
-    data: {
-      topicId,
-      kind,
-      filename: file.filename,
-      storageKey,
-      mimeType: file.mimeType || "application/octet-stream",
-      extractedText,
-      byteSize: file.buffer.length,
-    },
-  });
-  await prisma.topic.update({
-    where: { id: topicId },
-    data: { lastUsedAt: new Date(), inferredSyllabus: null },
-  });
-
-  return getTopic(userId, topicId);
-}
-
-/** Re-run PDF/text extraction with current study-context rules; clears inferredSyllabus. */
-export async function refreshTopicAttachmentExtractions(
-  userId: string,
-  topicId: string,
-): Promise<TopicDto> {
-  await loadTopic(userId, topicId);
-  const attachments = await prisma.topicAttachment.findMany({ where: { topicId } });
-  for (const attachment of attachments) {
-    const buffer = await getObjectBuffer(attachment.storageKey);
-    const extractedText = await extractAndStoreAttachmentText(
-      attachment.kind,
-      buffer,
-      attachment.mimeType,
-    );
-    await prisma.topicAttachment.update({
-      where: { id: attachment.id },
-      data: { extractedText },
-    });
-  }
-  await prisma.topic.update({
-    where: { id: topicId },
-    data: { lastUsedAt: new Date(), inferredSyllabus: null },
-  });
-  return getTopic(userId, topicId);
-}
-
-export async function deleteTopicAttachment(
-  userId: string,
-  topicId: string,
-  attachmentId: string,
-): Promise<TopicDto> {
-  await loadTopic(userId, topicId);
-  const result = await prisma.topicAttachment.deleteMany({
-    where: { id: attachmentId, topicId },
-  });
-  if (result.count === 0) {
-    throw Object.assign(new Error("Attachment not found"), { statusCode: 404 });
-  }
-  await prisma.topic.update({
-    where: { id: topicId },
-    data: { lastUsedAt: new Date(), inferredSyllabus: null },
-  });
-  return getTopic(userId, topicId);
 }

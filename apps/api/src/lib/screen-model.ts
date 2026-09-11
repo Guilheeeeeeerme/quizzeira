@@ -2,7 +2,6 @@ import {
   OutputPolicyError,
   screenModelStrings,
   type GeneratedQuestionInput,
-  type InferredSyllabus,
 } from "@quizzeira/shared";
 
 function policyHttpError(err: unknown): never {
@@ -33,14 +32,4 @@ export function screenGeneratedQuestions(questions: GeneratedQuestionInput[]): v
       ),
     );
   }
-}
-
-export function screenSyllabus(syllabus: InferredSyllabus): void {
-  screenPersistedStrings(
-    syllabus.styleNotes,
-    syllabus.difficultyNotes,
-    syllabus.seniority,
-    ...syllabus.subjects,
-    ...syllabus.materialRoles,
-  );
 }

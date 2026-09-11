@@ -2,49 +2,33 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DEFAULT_PROMPTS } from "./default-prompts.js";
 
-describe("question-generation default prompt", () => {
-  const body = DEFAULT_PROMPTS["question-generation"];
-
-  it("treats materials as context and forbids document meta-questions", () => {
-    assert.match(body, /MATERIALS ARE CONTEXT/i);
-    assert.match(body, /NEVER quiz document/i);
-    assert.doesNotMatch(body, /ground questions in them/i);
-  });
-
-  it("defines open_exam and entrevista subject-matter rules", () => {
-    assert.match(body, /open_exam:/i);
-    assert.match(body, /entrevista:/i);
-    assert.match(body, /inferredSyllabus/);
-    assert.match(body, /durationMinutes|mode "pill"/);
-    assert.match(body, /seniority|senioridade/i);
+describe("prompt registry", () => {
+  it("only ships the grading prompt", () => {
+    // Generation, Eval and Extraction prompts belong to the content stack; a
+    // stray key here means study is growing an LLM step it should not own.
+    assert.deepEqual(Object.keys(DEFAULT_PROMPTS), ["quiz-correction"]);
   });
 });
 
-describe("topic-inference default prompt", () => {
-  const body = DEFAULT_PROMPTS["topic-inference"];
+describe("quiz-correction default prompt", () => {
+  const body = DEFAULT_PROMPTS["quiz-correction"];
 
-  it("builds a stable study plan from materials as context", () => {
-    assert.match(body, /STABLE study plan/i);
-    assert.match(body, /past exams/i);
-    assert.match(body, /open_exam:/i);
-    assert.match(body, /entrevista:/i);
-    assert.match(body, /"subjects"/);
+  it("pins grading to the stored ground truth", () => {
+    assert.match(body, /never invent answers/i);
+    assert.match(body, /correctIndex/);
+    assert.match(body, /referenceAnswer/);
+    assert.match(body, /Do not change the correct answer/i);
   });
 
-  it("forbids treating ênfase/cargo vacancy names as subjects", () => {
-    assert.match(body, /[Êê]nfase/);
-    assert.match(body, /NOT study subjects/i);
-    assert.match(body, /focusText/);
+  it("specifies the JSON contract the corrector parses", () => {
+    assert.match(body, /"answers"/);
+    assert.match(body, /"generalComment"/);
+    assert.match(body, /correctAnswerSummary/);
+    assert.match(body, /JSON only/i);
   });
-});
 
-describe("question-generation forbids edital logistics", () => {
-  const body = DEFAULT_PROMPTS["question-generation"];
-
-  it("explicitly bans organizadora, CLT, polos, and file-citation stems", () => {
-    assert.match(body, /organizadora|Cesgranrio/i);
-    assert.match(body, /\bCLT\b/);
-    assert.match(body, /polos/i);
-    assert.match(body, /based on the provided file/i);
+  it("keeps scoring binary and locale-aware", () => {
+    assert.match(body, /grade 0 or 1/i);
+    assert.match(body, /locale/i);
   });
 });

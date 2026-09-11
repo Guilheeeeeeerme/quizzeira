@@ -5,3 +5,6 @@ dist/
 .DS_Store
 *.tsbuildinfo
 apps/api/prisma/migrations/**/migration_lock.toml
+
+# Prisma clients generated at build/migrate time
+apps/*/src/generated/

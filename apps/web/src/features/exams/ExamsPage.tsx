@@ -323,7 +323,12 @@ export function ExamsPage() {
       ) : null}
 
       {items.length === 0 ? (
-        <EmptyState title={t("No open exams yet.")} />
+        <EmptyState
+          title={t("No open exams yet.")}
+          description={t(
+            "Catalog stays empty until admin adds sources and Ingestion discovers exams. No content seeds.",
+          )}
+        />
       ) : filtered.length === 0 ? (
         <EmptyState
           title={t("No exams match your filters.")}
@@ -364,7 +369,6 @@ export function ExamsPage() {
                         <Badge tone={item.status === "open" ? "success" : "neutral"}>
                           {item.status === "open" ? t("Open") : t("Unknown")}
                         </Badge>
-                        {item.placeholder ? <span>{t("Catalog seed")}</span> : null}
                         {item.emphasis.length > 0 ? (
                           <span>{item.emphasis.slice(0, 3).join(" · ")}</span>
                         ) : null}

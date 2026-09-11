@@ -1,31 +1,18 @@
+// Concept: HITL — the admin control plane.
+//
+// discovery-api and content-api have no public ingress. Every admin action goes
+// through here so it is checked against a real ADMIN session first; this file is
+// only a proxy, and the paths below mirror the upstream routes one-for-one.
 import type { FastifyInstance } from "fastify";
 import type { PromptKey } from "@quizzeira/shared";
 import { requireAdmin } from "../plugins/auth";
-import {
-  approveBankDepositProposal,
-  listBankDepositProposals,
-  rejectBankDepositProposal,
-} from "../services/bank-proposal.store";
-import {
-  approveQuestionProposal,
-  listQuestionProposals,
-  rejectQuestionProposal,
-} from "../services/internal.service";
 import {
   approvePromptProposal,
   isPromptKey,
   listPromptProposals,
   rejectPromptProposal,
 } from "../services/prompt-store";
-import { crawlerForceRunKey } from "@quizzeira/shared";
-import { redis } from "../lib/redis";
-import { questionBankOverview } from "../services/question-bank.service";
-import {
-  getCrawlerObservability,
-  listCrawlerSources,
-  proposeCrawlerSource,
-  upsertCrawlerSource,
-} from "../services/crawler-registry.store";
+import { contentFetch, discoveryFetch } from "../lib/pipeline-clients";
 
 function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
   const error = err as { statusCode?: number; message?: string };
@@ -35,33 +22,7 @@ function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unkno
 export async function adminRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAdmin);
 
-  app.get("/admin/proposals/questions", async () => {
-    const items = await listQuestionProposals("PENDING");
-    return { items };
-  });
-
-  app.post<{ Params: { id: string } }>(
-    "/admin/proposals/questions/:id/approve",
-    async (request, reply) => {
-      try {
-        return await approveQuestionProposal(request.params.id, request.userId!);
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    "/admin/proposals/questions/:id/reject",
-    async (request, reply) => {
-      try {
-        return await rejectQuestionProposal(request.params.id, request.userId!);
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
+  // Concept: Prompt registry — proposals are staged by workers, applied here.
   app.get("/admin/proposals/prompts", async () => {
     const items = await listPromptProposals();
     return { items };
@@ -95,72 +56,201 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get("/admin/proposals/bank", async () => {
-    const items = await listBankDepositProposals();
-    return { items };
-  });
-
-  app.post<{ Params: { id: string } }>(
-    "/admin/proposals/bank/:id/approve",
-    async (request, reply) => {
-      try {
-        return await approveBankDepositProposal(request.params.id);
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    "/admin/proposals/bank/:id/reject",
-    async (request, reply) => {
-      try {
-        return await rejectBankDepositProposal(request.params.id);
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
-  app.get<{ Querystring: { examSlug?: string } }>(
-    "/admin/question-bank/stats",
-    async (request) => questionBankOverview(request.query.examSlug),
-  );
-
-  app.get("/admin/crawler/status", async () => getCrawlerObservability());
-
-  app.get("/admin/crawler/sources", async () => {
-    const items = await listCrawlerSources();
-    return { items };
-  });
-
-  app.post<{
-    Body: { url?: string; name?: string; notes?: string; activate?: boolean };
-  }>("/admin/crawler/sources/propose", async (request, reply) => {
-    if (!request.body?.url?.trim()) {
-      return reply.code(400).send({ error: "url required" });
+  // Concept: Source registry (discovery-api)
+  app.get("/admin/sources", async (_request, reply) => {
+    try {
+      return await discoveryFetch("/admin/sources");
+    } catch (err) {
+      return httpError(err, reply);
     }
-    const result = await proposeCrawlerSource({
-      url: request.body.url.trim(),
-      name: request.body.name,
-      notes: request.body.notes,
-    });
-    if (result.proposed && result.source && request.body.activate) {
-      const source = await upsertCrawlerSource({
-        ...result.source,
-        status: "active",
-        trust: "medium",
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/admin/sources", async (request, reply) => {
+    try {
+      return await discoveryFetch("/admin/sources", {
+        method: "POST",
+        body: JSON.stringify(request.body ?? {}),
       });
-      return { proposed: true, source };
+    } catch (err) {
+      return httpError(err, reply);
     }
-    return result;
   });
 
-  /** Soft trigger: set a Redis flag the crawler checks each tick. */
-  app.post("/admin/crawler/run-now", async () => {
-    await redis.set(crawlerForceRunKey(), "1", "EX", 3600);
-    return { queued: true };
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/admin/sources/:id",
+    async (request, reply) => {
+      try {
+        return await discoveryFetch(`/admin/sources/${request.params.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(request.body ?? {}),
+        });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>("/admin/sources/:id", async (request, reply) => {
+    try {
+      return await discoveryFetch(`/admin/sources/${request.params.id}`, { method: "DELETE" });
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  app.get("/admin/source-proposals", async (_request, reply) => {
+    try {
+      return await discoveryFetch("/admin/source-proposals");
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/admin/source-proposals/:id/approve",
+    async (request, reply) => {
+      try {
+        return await discoveryFetch(`/admin/source-proposals/${request.params.id}/approve`, {
+          method: "POST",
+        });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/admin/source-proposals/:id/reject",
+    async (request, reply) => {
+      try {
+        return await discoveryFetch(`/admin/source-proposals/${request.params.id}/reject`, {
+          method: "POST",
+        });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.get("/admin/exams", async (request, reply) => {
+    const q = request.query as { status?: string; limit?: string };
+    const params = new URLSearchParams();
+    if (q.status) params.set("status", q.status);
+    if (q.limit) params.set("limit", q.limit);
+    const suffix = params.size ? `?${params}` : "";
+    try {
+      return await discoveryFetch(`/admin/exams${suffix}`);
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  app.patch<{ Params: { id: string }; Body: { status?: string } }>(
+    "/admin/exams/:id",
+    async (request, reply) => {
+      try {
+        return await discoveryFetch(`/admin/exams/${request.params.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(request.body ?? {}),
+        });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  /** Queue a crawl that ignores the per-source interval. */
+  app.post<{ Body: { sourceId?: string } }>("/admin/crawl/force", async (request, reply) => {
+    try {
+      return await discoveryFetch("/admin/crawl/force", {
+        method: "POST",
+        body: JSON.stringify(request.body ?? {}),
+      });
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  app.get("/admin/runs", async (_request, reply) => {
+    try {
+      return await discoveryFetch("/admin/runs");
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  app.get("/admin/discovery/health", async (_request, reply) => {
+    try {
+      return await discoveryFetch("/admin/health");
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  // Concept: HITL — the queue of items the Eval stage rejected or deferred.
+  app.get("/admin/quality/queue", async (request, reply) => {
+    const q = request.query as { status?: string; examSlug?: string; limit?: string };
+    const params = new URLSearchParams();
+    for (const key of ["status", "examSlug", "limit"] as const) {
+      if (q[key]) params.set(key, q[key]!);
+    }
+    const suffix = params.size ? `?${params}` : "";
+    try {
+      return await contentFetch(`/admin/quality/queue${suffix}`);
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  /** Publish-gate override. The audit row upstream records who decided. */
+  app.post<{ Params: { id: string }; Body: { decision?: string; notes?: string } }>(
+    "/admin/quality/queue/:id",
+    async (request, reply) => {
+      try {
+        return await contentFetch(`/admin/quality/queue/${request.params.id}`, {
+          method: "POST",
+          body: JSON.stringify({
+            ...request.body,
+            notes: request.body?.notes || `admin override by ${request.userId}`,
+          }),
+        });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/admin/quality/queue/:id/requeue",
+    async (request, reply) => {
+      try {
+        return await contentFetch(`/admin/quality/queue/${request.params.id}/requeue`, {
+          method: "POST",
+        });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.get("/admin/content/health", async (_request, reply) => {
+    try {
+      return await contentFetch("/admin/health");
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  app.get("/admin/content/documents", async (request, reply) => {
+    const q = request.query as { status?: string; limit?: string };
+    const params = new URLSearchParams();
+    if (q.status) params.set("status", q.status);
+    if (q.limit) params.set("limit", q.limit);
+    const suffix = params.size ? `?${params}` : "";
+    try {
+      return await contentFetch(`/admin/documents${suffix}`);
+    } catch (err) {
+      return httpError(err, reply);
+    }
   });
 }
-
-

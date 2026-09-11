@@ -1,3 +1,10 @@
+// Concept: Sampling (not RAG) + Grading — the study runtime's own state.
+//
+// This schema holds users, study configs (Topic), and attempts. It deliberately
+// does NOT hold a question bank: questions are sampled from content-api's
+// published set and materialized per attempt. Anything curriculum-shaped
+// (difficulty levels, topic attachments/links, question pools) was removed —
+// producing questions is Content's job, not Study's.
 generator client {
   provider = "prisma-client-js"
 }
@@ -20,28 +27,9 @@ enum AttemptStatus {
   CORRECTED
 }
 
-enum AttachmentKind {
-  TEXT
-  PDF
-  IMAGE
-}
-
-enum LinkFetchStatus {
-  PENDING
-  OK
-  FAILED
-  SKIPPED
-}
-
 enum UserRole {
   USER
   ADMIN
-}
-
-enum ProposalStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 model User {
@@ -55,115 +43,56 @@ model User {
   topics       Topic[]
 }
 
-model DifficultyLevel {
-  id        Int           @id @default(autoincrement())
-  slug      String        @unique
-  label     String
-  sortOrder Int
-  questions Question[]
-  attempts  QuizAttempt[]
-}
-
+/// A learner's study config for one open exam. `guidelines` carries the
+/// examSlug marker that links it to the Discovery catalog.
 model Topic {
-  id               String            @id @default(cuid())
-  userId           String
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title            String
-  guidelines       String            @db.Text
-  presetSlug       String?
-  preferredLocale  String?
-  /// Stable study-subject plan inferred from preset + materials + guidelines (JSON text).
-  inferredSyllabus String?           @db.LongText
-  lastUsedAt       DateTime          @default(now())
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  attachments      TopicAttachment[]
-  links            TopicLink[]
-  questions        Question[]
-  attempts         QuizAttempt[]
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  guidelines      String        @db.Text
+  presetSlug      String?
+  preferredLocale String?
+  lastUsedAt      DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  questions       Question[]
+  attempts        QuizAttempt[]
 
   @@index([userId])
   @@index([lastUsedAt])
 }
 
-model TopicAttachment {
-  id            String         @id @default(cuid())
-  topicId       String
-  topic         Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  kind          AttachmentKind
-  filename      String
-  storageKey    String
-  mimeType      String
-  extractedText String?        @db.LongText
-  byteSize      Int
-  createdAt     DateTime       @default(now())
-
-  @@index([topicId])
-}
-
-model TopicLink {
-  id          String          @id @default(cuid())
-  topicId     String
-  topic       Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  url         String          @db.Text
-  label       String?
-  fetchedText String?         @db.LongText
-  fetchStatus LinkFetchStatus @default(PENDING)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  @@index([topicId])
-}
-
+/// A question as it was shown in one attempt — a snapshot, not a pool. The
+/// canonical row lives in quizzeira_content; this copy keeps a submitted
+/// attempt readable even if the published item is later changed or unpublished.
 model Question {
-  id               String                   @id @default(cuid())
-  levelId          Int?
-  level            DifficultyLevel?         @relation(fields: [levelId], references: [id])
+  id               String            @id @default(cuid())
   topicId          String?
-  topic            Topic?                   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topic            Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
   sourceAttemptId  String?
   type             QuestionType
-  prompt           String                   @db.Text
+  prompt           String            @db.Text
   options          Json?
   /** Optional stem figures: QuestionMediaRef[] */
   promptMedia      Json?
   /** Optional per-option figures: (QuestionMediaRef[] | null)[] */
   optionMedia      Json?
   correctIndex     Int?
-  referenceAnswer  String?                  @db.Text
-  explanation      String?                  @db.Text
-  isActive         Boolean                  @default(true)
+  referenceAnswer  String?           @db.Text
+  explanation      String?           @db.Text
+  isActive         Boolean           @default(true)
   lastReviewedAt   DateTime?
   answers          QuizAnswer[]
   attemptQuestions AttemptQuestion[]
-  updateProposals  QuestionUpdateProposal[]
 
   @@index([topicId])
-  @@index([levelId])
-}
-
-model QuestionUpdateProposal {
-  id            String         @id @default(cuid())
-  questionId    String
-  question      Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  proposedPatch Json
-  reason        String?        @db.Text
-  status        ProposalStatus @default(PENDING)
-  createdAt     DateTime       @default(now())
-  reviewedAt    DateTime?
-  reviewedById  String?
-
-  @@index([status, createdAt])
-  @@index([questionId])
-  @@map("question_update_proposals")
 }
 
 model QuizAttempt {
   id                  String            @id @default(cuid())
   userId              String
   user                User              @relation(fields: [userId], references: [id])
-  levelId             Int?
-  level               DifficultyLevel?  @relation(fields: [levelId], references: [id])
   topicId             String?
   topic               Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
   locale              String            @default("en")
@@ -198,19 +127,19 @@ model AttemptQuestion {
 }
 
 model QuizAnswer {
-  id            String      @id @default(cuid())
-  attemptId     String
-  attempt       QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  questionId    String
-  question      Question    @relation(fields: [questionId], references: [id])
-  selectedIndex Int?
-  openText      String?     @db.Text
-  grade         Int?
-  comment       String?     @db.Text
-  explanation   String?     @db.Text
-  correctAnswerSummary String? @db.Text
-  isCorrect     Boolean?
-  correctedAt   DateTime?
+  id                   String      @id @default(cuid())
+  attemptId            String
+  attempt              QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId           String
+  question             Question    @relation(fields: [questionId], references: [id])
+  selectedIndex        Int?
+  openText             String?     @db.Text
+  grade                Int?
+  comment              String?     @db.Text
+  explanation          String?     @db.Text
+  correctAnswerSummary String?     @db.Text
+  isCorrect            Boolean?
+  correctedAt          DateTime?
 
   @@unique([attemptId, questionId])
 }

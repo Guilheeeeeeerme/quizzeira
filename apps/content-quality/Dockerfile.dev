@@ -1,0 +1,20 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+COPY apps/content-quality/package.json ./apps/content-quality/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/worker-kit/package.json ./packages/worker-kit/
+
+RUN npm install
+
+COPY packages/shared ./packages/shared
+COPY packages/worker-kit ./packages/worker-kit
+COPY apps/content-quality ./apps/content-quality
+
+RUN npm run build -w @quizzeira/shared
+
+WORKDIR /app/apps/content-quality
+
+CMD ["sh", "-c", "npm run dev -w @quizzeira/shared & npm run dev"]

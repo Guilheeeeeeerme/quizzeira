@@ -1,7 +1,6 @@
 import { AttemptStatus, QuestionType } from "@prisma/client";
 import type {
   AttemptCorrectionInput,
-  LevelSlug,
   PendingReviewAttempt,
   QuestionUpdateCandidate,
   QuestionUpdateInput,
@@ -45,7 +44,6 @@ async function loadAttemptForReview(attemptId: string): Promise<PendingReviewAtt
   const attempt = await prisma.quizAttempt.findUnique({
     where: { id: attemptId },
     include: {
-      level: true,
       topic: true,
       answers: { include: { question: true } },
       questions: { include: { question: true }, orderBy: { sortOrder: "asc" } },
@@ -57,8 +55,8 @@ async function loadAttemptForReview(attemptId: string): Promise<PendingReviewAtt
   const answerByQuestion = new Map(attempt.answers.map((a) => [a.questionId, a]));
   return {
     attemptId: attempt.id,
-    levelSlug: (attempt.level?.slug as LevelSlug | undefined) ?? "topic",
-    levelLabel: attempt.level?.label ?? attempt.topic?.title ?? "Topic",
+    levelSlug: "topic",
+    levelLabel: attempt.topic?.title ?? "Topic",
     locale: attempt.locale === "pt" || attempt.locale === "pt-BR" ? "pt" : "en",
     questions: attempt.questions.map(({ question }) => {
       const answer = answerByQuestion.get(question.id);
@@ -211,47 +209,14 @@ async function questionPerformance(questionId: string) {
 }
 
 export async function nextQuestionForUpdate(): Promise<QuestionUpdateCandidate | null> {
-  const question = await prisma.question.findFirst({
-    where: { isActive: true, levelId: { not: null } },
-    include: { level: true },
-    orderBy: [{ lastReviewedAt: "asc" }, { id: "asc" }],
-  });
-  if (!question?.level) return null;
-
-  const levels = await prisma.difficultyLevel.findMany({
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, slug: true, label: true, sortOrder: true },
-  });
-
-  return {
-    id: question.id,
-    type: question.type,
-    prompt: question.prompt,
-    options: asOptions(question.options),
-    correctIndex: question.correctIndex,
-    referenceAnswer: question.referenceAnswer,
-    explanation: question.explanation,
-    levelSlug: question.level.slug as LevelSlug,
-    levelLabel: question.level.label,
-    levels: levels.map((l) => ({ ...l, slug: l.slug as LevelSlug })),
-    performance: await questionPerformance(question.id),
-    lastReviewedAt: question.lastReviewedAt?.toISOString() ?? null,
-  };
+  // Classic level updater removed — content-quality owns bank Eval.
+  return null;
 }
 
 export async function updateQuestion(id: string, input: QuestionUpdateInput) {
   const question = await prisma.question.findUnique({ where: { id } });
   if (!question) {
     throw Object.assign(new Error("Question not found"), { statusCode: 404 });
-  }
-
-  let levelId: number | undefined;
-  if (input.levelSlug) {
-    const level = await prisma.difficultyLevel.findUnique({ where: { slug: input.levelSlug } });
-    if (!level) {
-      throw Object.assign(new Error("Level not found"), { statusCode: 400 });
-    }
-    levelId = level.id;
   }
 
   const data: {
@@ -261,7 +226,6 @@ export async function updateQuestion(id: string, input: QuestionUpdateInput) {
     referenceAnswer?: string | null;
     explanation?: string | null;
     isActive?: boolean;
-    levelId?: number;
     lastReviewedAt: Date;
   } = { lastReviewedAt: new Date() };
 
@@ -269,7 +233,6 @@ export async function updateQuestion(id: string, input: QuestionUpdateInput) {
   if (input.referenceAnswer !== undefined) data.referenceAnswer = input.referenceAnswer;
   if (input.explanation !== undefined) data.explanation = input.explanation;
   if (input.isActive !== undefined) data.isActive = input.isActive;
-  if (levelId !== undefined) data.levelId = levelId;
 
   if (question.type === QuestionType.MULTIPLE_CHOICE) {
     if (input.options !== undefined) {
@@ -289,7 +252,6 @@ export async function updateQuestion(id: string, input: QuestionUpdateInput) {
   const updated = await prisma.question.update({
     where: { id },
     data,
-    include: { level: true },
   });
 
   return {
@@ -300,119 +262,55 @@ export async function updateQuestion(id: string, input: QuestionUpdateInput) {
     correctIndex: updated.correctIndex,
     referenceAnswer: updated.referenceAnswer,
     explanation: updated.explanation,
-    levelSlug: updated.level?.slug ?? "beginner",
+    levelSlug: "topic",
     lastReviewedAt: updated.lastReviewedAt?.toISOString() ?? null,
   };
-}
-
-function screenPatch(input: QuestionUpdateInput) {
-  screenPersistedStrings(
-    input.prompt,
-    input.explanation,
-    input.referenceAnswer,
-    ...(input.options ?? []),
-  );
 }
 
 export async function proposeQuestionUpdate(
   questionId: string,
   input: QuestionUpdateInput,
-  reason?: string,
+  _reason?: string,
 ) {
-  const question = await prisma.question.findUnique({
-    where: { id: questionId },
-    include: { level: true },
-  });
+  // Updater / level proposals removed — touch review timestamp only.
+  const question = await prisma.question.findUnique({ where: { id: questionId } });
   if (!question) {
     throw Object.assign(new Error("Question not found"), { statusCode: 404 });
   }
-
-  const hasContentChange =
-    input.prompt !== undefined ||
-    input.options !== undefined ||
-    input.correctIndex !== undefined ||
-    input.referenceAnswer !== undefined ||
-    input.explanation !== undefined;
-
-  // Touch lastReviewedAt even when no content change (relevel-only still queued).
-  if (!hasContentChange && input.levelSlug === undefined) {
-    await prisma.question.update({
-      where: { id: questionId },
-      data: { lastReviewedAt: new Date() },
-    });
-    return { id: null as string | null, reviewedOnly: true };
-  }
-
-  if (hasContentChange) screenPatch(input);
-
-  const proposal = await prisma.questionUpdateProposal.create({
-    data: {
-      questionId,
-      proposedPatch: input as object,
-      reason: reason ?? null,
-      status: "PENDING",
-    },
-  });
-
   await prisma.question.update({
     where: { id: questionId },
     data: { lastReviewedAt: new Date() },
   });
-
-  return { id: proposal.id, reviewedOnly: false };
-}
-
-export async function listQuestionProposals(status: "PENDING" | "APPROVED" | "REJECTED" = "PENDING") {
-  const rows = await prisma.questionUpdateProposal.findMany({
-    where: { status },
-    include: { question: { include: { level: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
-  return rows.map((row) => ({
-    id: row.id,
-    questionId: row.questionId,
-    proposedPatch: row.proposedPatch as QuestionUpdateInput,
-    reason: row.reason,
-    status: row.status,
-    createdAt: row.createdAt.toISOString(),
-    reviewedAt: row.reviewedAt?.toISOString() ?? null,
-    questionPrompt: row.question.prompt,
-    questionType: row.question.type,
-    levelSlug: (row.question.level?.slug as LevelSlug | undefined) ?? "topic",
-  }));
-}
-
-export async function approveQuestionProposal(id: string, reviewerId: string) {
-  const row = await prisma.questionUpdateProposal.findUnique({ where: { id } });
-  if (!row || row.status !== "PENDING") {
-    throw Object.assign(new Error("Proposal not found"), { statusCode: 404 });
+  if (
+    input.prompt !== undefined ||
+    input.options !== undefined ||
+    input.correctIndex !== undefined ||
+    input.referenceAnswer !== undefined ||
+    input.explanation !== undefined
+  ) {
+    screenPersistedStrings(
+      input.prompt,
+      input.explanation,
+      input.referenceAnswer,
+      ...(input.options ?? []),
+    );
+    return updateQuestion(questionId, input).then((result) => ({
+      id: null as string | null,
+      reviewedOnly: false,
+      result,
+    }));
   }
-  const patch = row.proposedPatch as QuestionUpdateInput;
-  const result = await updateQuestion(row.questionId, patch);
-  await prisma.questionUpdateProposal.update({
-    where: { id },
-    data: {
-      status: "APPROVED",
-      reviewedAt: new Date(),
-      reviewedById: reviewerId,
-    },
-  });
-  return result;
+  return { id: null as string | null, reviewedOnly: true };
 }
 
-export async function rejectQuestionProposal(id: string, reviewerId: string) {
-  const row = await prisma.questionUpdateProposal.findUnique({ where: { id } });
-  if (!row || row.status !== "PENDING") {
-    throw Object.assign(new Error("Proposal not found"), { statusCode: 404 });
-  }
-  await prisma.questionUpdateProposal.update({
-    where: { id },
-    data: {
-      status: "REJECTED",
-      reviewedAt: new Date(),
-      reviewedById: reviewerId,
-    },
-  });
-  return { ok: true };
+export async function listQuestionProposals(_status: "PENDING" | "APPROVED" | "REJECTED" = "PENDING") {
+  return [] as Array<Record<string, unknown>>;
+}
+
+export async function approveQuestionProposal(_id: string, _reviewerId: string) {
+  throw Object.assign(new Error("Question update proposals removed"), { statusCode: 410 });
+}
+
+export async function rejectQuestionProposal(_id: string, _reviewerId: string) {
+  throw Object.assign(new Error("Question update proposals removed"), { statusCode: 410 });
 }

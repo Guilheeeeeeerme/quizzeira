@@ -25,19 +25,7 @@ export function normalizeLocale(value: string | null | undefined): LocaleCode {
   return "pt";
 }
 
-export type TopicPresetSlug =
-  | "open_exam"
-  | "vestibular"
-  | "certificacao"
-  | "entrevista"
-  | "idioma"
-  | "faculdade"
-  | "trabalho"
-  | "livre";
-
-export type AttachmentKind = "TEXT" | "PDF" | "IMAGE";
-
-export type LinkFetchStatus = "PENDING" | "OK" | "FAILED" | "SKIPPED";
+export type TopicPresetSlug = "open_exam";
 
 export type UserRole = "USER" | "ADMIN";
 
@@ -124,19 +112,19 @@ export interface ProgressItemDto {
 }
 
 export interface ProgressSummaryDto {
-  levelSlug: LevelSlug;
-  levelLabel: string;
+  topicId: string | null;
+  topicTitle: string;
   attemptCount: number;
   bestScore: number | null;
   lastScore: number | null;
 }
 
-export type PromptKey =
-  | "quiz-correction"
-  | "question-modernization"
-  | "difficulty-releveling"
-  | "question-generation"
-  | "topic-inference";
+/**
+ * Prompts the study API stores and versions. Grading is the only LLM step left
+ * on the study side; Extraction/Generation/Eval prompts live with their own
+ * workers in the content stack.
+ */
+export type PromptKey = "quiz-correction";
 
 export const SESSION_DURATION_MINUTES = [15, 20, 30, 45, 60, 90] as const;
 export type SessionDurationMinutes = (typeof SESSION_DURATION_MINUTES)[number];
@@ -173,14 +161,6 @@ export function questionBudgetForDuration(durationMinutes?: number | null): {
     default:
       return { minQuestions: 3, maxQuestions: 6, mode: "pill" };
   }
-}
-
-export interface InferredSyllabus {
-  subjects: string[];
-  styleNotes: string;
-  difficultyNotes: string;
-  seniority: string | null;
-  materialRoles: string[];
 }
 
 export interface PromptRecord {
@@ -279,25 +259,6 @@ export interface PromptProposalDto {
   currentVersion: number;
 }
 
-export interface TopicAttachmentDto {
-  id: string;
-  kind: AttachmentKind;
-  filename: string;
-  mimeType: string;
-  byteSize: number;
-  hasExtractedText: boolean;
-  createdAt: string;
-}
-
-export interface TopicLinkDto {
-  id: string;
-  url: string;
-  label: string | null;
-  fetchStatus: LinkFetchStatus;
-  hasFetchedText: boolean;
-  createdAt: string;
-}
-
 export interface TopicDto {
   id: string;
   title: string;
@@ -306,8 +267,6 @@ export interface TopicDto {
   preferredLocale: LocaleCode | null;
   createdAt: string;
   updatedAt: string;
-  attachments: TopicAttachmentDto[];
-  links: TopicLinkDto[];
 }
 
 export interface TopicListItemDto {
@@ -315,8 +274,6 @@ export interface TopicListItemDto {
   title: string;
   presetSlug: TopicPresetSlug | null;
   preferredLocale: LocaleCode | null;
-  attachmentCount: number;
-  linkCount: number;
   updatedAt: string;
 }
 
@@ -379,11 +336,11 @@ export interface PendingGenerationAttempt {
   presetSlug: string | null;
   focusText: string | null;
   durationMinutes: number | null;
-  inferredSyllabus: InferredSyllabus | null;
   locale: LocaleCode;
+  /** Always false — topic attachments/links were removed (exam + focus only). */
   hasLinks: boolean;
   materials: {
-    attachments: Array<{ filename: string; kind: AttachmentKind; excerpt: string | null }>;
+    attachments: Array<{ filename: string; kind: string; excerpt: string | null }>;
     links: Array<{ url: string; label: string | null; excerpt: string | null }>;
   };
   recentPerformance: Array<{
