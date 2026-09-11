@@ -37,6 +37,7 @@ async function lastCrawlRun(): Promise<CrawlerRunSummary | null> {
       status: run.status ?? "running",
       sourcesOk: run.sourcesOk ?? 0,
       sourcesFailed: run.sourcesFailed ?? 0,
+      sourcesSkipped: run.sourcesSkipped ?? 0,
       openDiscovered: run.openDiscovered ?? 0,
       proposedSources: run.proposedSources ?? 0,
       artifactsStored: run.artifactsStored ?? 0,
