@@ -1,4 +1,5 @@
 import { workerEnv } from "./env";
+import { logError, logInfo } from "./log";
 
 const MINUTES_PER_DAY = 1440;
 const WINDOW_TOLERANCE_MINUTES = 30;
@@ -73,7 +74,11 @@ export async function runLoop(
     throw new Error(`Invalid WORKER_TZ: ${timeZone}`);
   }
   if (windows.length > 0) {
-    console.log(`[${name}] schedule windows=${(opts.windows ?? workerEnv.windows).trim()} tz=${timeZone}`);
+    logInfo("schedule windows configured", {
+      worker: name,
+      windows: (opts.windows ?? workerEnv.windows).trim(),
+      timeZone,
+    });
   }
 
   let firstRun = true;
@@ -88,7 +93,7 @@ export async function runLoop(
       await tick();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[${name}] tick failed: ${message}`);
+      logError("tick failed", { worker: name, err: message });
     }
   };
 

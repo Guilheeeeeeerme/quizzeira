@@ -11,11 +11,15 @@ import {
   hasLlmProvider,
   llmErrorCode,
   loadPrompt,
+  logError,
+  logInfo,
+  logWarn,
   runLoop,
   workerEnv,
 } from "@quizzeira/worker-kit";
 import { countMetaMaterialStems } from "./meta-stem.js";
 
+process.env.SERVICE_NAME ||= "quizzeira-questiongenerator";
 const NAME = "question-generator";
 
 function hasMaterialsPresent(attempt: PendingGenerationAttempt): boolean {
@@ -252,7 +256,7 @@ async function tick(): Promise<void> {
   }
 
   if (!hasLlmProvider()) {
-    console.warn(`[${NAME}] no LLM provider key configured, skipping`);
+    logWarn("no LLM provider key configured, skipping", { worker: NAME });
     return;
   }
 
@@ -343,21 +347,26 @@ async function tick(): Promise<void> {
       `/internal/pills/${attempt.attemptId}/complete`,
       { questions: merged.questions },
     );
-    console.log(
-      `[${NAME}] generated ${completed.questionCount} questions for ${completed.attemptId} mode=${attempt.constraints.mode}`,
-    );
+    logInfo("generated questions", {
+      worker: NAME,
+      questionCount: completed.questionCount,
+      attemptId: completed.attemptId,
+      mode: attempt.constraints.mode,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[${NAME}] generation failed: code=${llmErrorCode(err) ?? "unknown"} message=${message}`,
-    );
+    logError("generation failed", {
+      worker: NAME,
+      code: llmErrorCode(err) ?? "unknown",
+      err: message,
+    });
     await dmzPost(`/internal/pills/${attempt.attemptId}/release`).catch((releaseErr) => {
       const releaseMessage =
         releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-      console.error(`[${NAME}] release failed: ${releaseMessage}`);
+      logError("release failed", { worker: NAME, err: releaseMessage });
     });
   }
 }
 
-console.log(`[${NAME}] starting intervalMs=${workerEnv.intervalMs}`);
+logInfo("starting", { worker: NAME, intervalMs: workerEnv.intervalMs });
 void runLoop(NAME, workerEnv.intervalMs, tick);

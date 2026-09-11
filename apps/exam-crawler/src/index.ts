@@ -1,7 +1,8 @@
-import { dmzPost, runLoop, workerEnv } from "@quizzeira/worker-kit";
+import { dmzPost, logInfo, runLoop, workerEnv } from "@quizzeira/worker-kit";
 import { crawlerEnv } from "./env.js";
 import { runDiscoveryPipeline } from "./pipeline.js";
 
+process.env.SERVICE_NAME ||= "quizzeira-examcrawler";
 const NAME = "exam-crawler";
 
 /**
@@ -24,14 +25,18 @@ async function shouldRunDiscovery(): Promise<{ run: boolean; reason: string }> {
 async function tick(): Promise<void> {
   const gate = await shouldRunDiscovery();
   if (!gate.run) {
-    console.log(`[${NAME}] skip: ${gate.reason}`);
+    logInfo("skip", { worker: NAME, reason: gate.reason });
     return;
   }
-  console.log(`[${NAME}] discovery pass: ${gate.reason}`);
+  logInfo("discovery pass", { worker: NAME, reason: gate.reason });
   await runDiscoveryPipeline();
 }
 
-console.log(
-  `[${NAME}] interval mode intervalMs=${workerEnv.intervalMs} fixture=${crawlerEnv.fixtureMode} windows=${workerEnv.windows || "(any)"} tz=${workerEnv.timeZone}`,
-);
+logInfo("interval mode", {
+  worker: NAME,
+  intervalMs: workerEnv.intervalMs,
+  fixture: crawlerEnv.fixtureMode,
+  windows: workerEnv.windows || "(any)",
+  timeZone: workerEnv.timeZone,
+});
 void runLoop(NAME, workerEnv.intervalMs, tick);

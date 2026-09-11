@@ -5,15 +5,19 @@ import {
   hasLlmProvider,
   llmErrorCode,
   loadPrompt,
+  logError,
+  logInfo,
+  logWarn,
   runLoop,
   workerEnv,
 } from "@quizzeira/worker-kit";
 
+process.env.SERVICE_NAME ||= "quizzeira-quizcorrector";
 const NAME = "quiz-corrector";
 
 async function tick(): Promise<void> {
   if (!hasLlmProvider()) {
-    console.warn(`[${NAME}] no LLM provider key configured, skipping`);
+    logWarn("no LLM provider key configured, skipping", { worker: NAME });
     return;
   }
 
@@ -21,7 +25,7 @@ async function tick(): Promise<void> {
     "/internal/reviews/claim",
   );
   if (!attempt) {
-    console.log(`[${NAME}] no pending reviews`);
+    logInfo("no pending reviews", { worker: NAME });
     return;
   }
 
@@ -58,19 +62,26 @@ async function tick(): Promise<void> {
       `/internal/reviews/${attempt.attemptId}/complete`,
       result,
     );
-    console.log(
-      `[${NAME}] corrected ${completed.attemptId} score=${completed.score}`,
-    );
+    logInfo("corrected attempt", {
+      worker: NAME,
+      attemptId: completed.attemptId,
+      score: completed.score,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[${NAME}] correction failed: code=${llmErrorCode(err) ?? "unknown"} message=${message}`);
+    logError("correction failed", {
+      worker: NAME,
+      code: llmErrorCode(err) ?? "unknown",
+      err: message,
+      attemptId: attempt.attemptId,
+    });
     await dmzPost(`/internal/reviews/${attempt.attemptId}/release`).catch((releaseErr) => {
       const releaseMessage =
         releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-      console.error(`[${NAME}] release failed: ${releaseMessage}`);
+      logError("release failed", { worker: NAME, err: releaseMessage });
     });
   }
 }
 
-console.log(`[${NAME}] starting intervalMs=${workerEnv.intervalMs}`);
+logInfo("starting", { worker: NAME, intervalMs: workerEnv.intervalMs });
 void runLoop(NAME, workerEnv.intervalMs, tick);

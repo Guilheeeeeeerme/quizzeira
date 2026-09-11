@@ -24,7 +24,12 @@ async function bootstrap() {
   }
 
   const app = Fastify({
-    logger: true,
+    logger: {
+      level: process.env.LOG_LEVEL?.trim() || "info",
+      base: {
+        service: process.env.SERVICE_NAME?.trim() || "quizzeira-api",
+      },
+    },
     trustProxy: true,
   });
 
