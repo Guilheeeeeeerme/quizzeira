@@ -56,12 +56,6 @@ export const env = {
    */
   internalApiKeys: parseInternalApiKeys(process.env.INTERNAL_API_KEYS),
   internalRateLimitMax: Number(process.env.INTERNAL_RATE_LIMIT_MAX ?? 120),
-  s3Endpoint: requireEnv("S3_ENDPOINT", "http://minio:9000"),
-  s3Region: requireEnv("S3_REGION", "us-east-1"),
-  s3AccessKeyId: requireEnv("S3_ACCESS_KEY_ID", "quizzeira"),
-  s3SecretAccessKey: requireEnv("S3_SECRET_ACCESS_KEY", "quizzeira-secret"),
-  s3Bucket: requireEnv("S3_BUCKET", "quizzeira"),
-  s3ForcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "true") !== "false",
   /** Content stack — published Question bank (Sampling, not RAG). */
   contentApiUrl: requireEnv("CONTENT_API_URL", "http://content-api:3020").replace(/\/+$/, ""),
   /** Discovery stack — Source registry / open exams. */
