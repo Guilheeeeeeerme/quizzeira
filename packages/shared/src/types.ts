@@ -119,12 +119,12 @@ export interface ProgressSummaryDto {
   lastScore: number | null;
 }
 
-export type PromptKey =
-  | "quiz-correction"
-  | "question-modernization"
-  | "difficulty-releveling"
-  | "question-generation"
-  | "topic-inference";
+/**
+ * Prompts the study API stores and versions. Grading is the only LLM step left
+ * on the study side; Extraction/Generation/Eval prompts live with their own
+ * workers in the content stack.
+ */
+export type PromptKey = "quiz-correction";
 
 export const SESSION_DURATION_MINUTES = [15, 20, 30, 45, 60, 90] as const;
 export type SessionDurationMinutes = (typeof SESSION_DURATION_MINUTES)[number];

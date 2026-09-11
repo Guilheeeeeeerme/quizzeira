@@ -2,13 +2,7 @@ import type { PromptKey, PromptRecord } from "@quizzeira/shared";
 import { DEFAULT_PROMPTS } from "../lib/default-prompts";
 import { redis } from "../lib/redis";
 
-export const PROMPT_KEYS = [
-  "quiz-correction",
-  "question-modernization",
-  "difficulty-releveling",
-  "question-generation",
-  "topic-inference",
-] as const satisfies readonly PromptKey[];
+export const PROMPT_KEYS = ["quiz-correction"] as const satisfies readonly PromptKey[];
 
 const HISTORY_LIMIT = 20;
 
