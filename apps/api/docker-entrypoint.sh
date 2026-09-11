@@ -18,5 +18,7 @@ for i in $(seq 1 30); do
 done
 
 npx prisma generate
+# Platform always; demo only when SEED_DEMO is truthy (default 1 in local compose).
+export SEED_DEMO="${SEED_DEMO:-1}"
 npm run db:seed || true
 npm run dev

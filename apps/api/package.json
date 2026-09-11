@@ -9,6 +9,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:platform": "tsx prisma/run-seed-platform.ts",
+    "db:seed:demo": "tsx prisma/run-seed-demo.ts",
     "db:generate": "prisma generate"
   },
   "dependencies": {

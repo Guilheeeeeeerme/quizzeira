@@ -74,6 +74,11 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-quizzeira-secret}
       S3_BUCKET: ${S3_BUCKET:-quizzeira}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      SEED_DEMO: ${SEED_DEMO:-1}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-Password123!}
+      DEV_ROOT_EMAIL: ${DEV_ROOT_EMAIL:-root@quizzeira.local}
+      DEV_ROOT_PASSWORD: ${DEV_ROOT_PASSWORD:-Password123!}
+      NODE_ENV: ${NODE_ENV:-development}
     ports:
       # Bind localhost only so /internal is not LAN-exposed in compose.
       - "127.0.0.1:3000:3000"
