@@ -51,6 +51,8 @@ export interface CrawlerRunSummary {
   status: "running" | "ok" | "partial" | "failed";
   sourcesOk: number;
   sourcesFailed: number;
+  /** Sources whose listing fingerprint was unchanged, so nothing was re-ingested. */
+  sourcesSkipped: number;
   openDiscovered: number;
   proposedSources: number;
   /** Artifacts pulled into the Document store during the pass. */

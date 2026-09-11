@@ -39,8 +39,7 @@ async function lastCrawlRun(): Promise<CrawlerRunSummary | null> {
       sourcesFailed: run.sourcesFailed ?? 0,
       openDiscovered: run.openDiscovered ?? 0,
       proposedSources: run.proposedSources ?? 0,
-      bankUpserts: run.bankUpserts ?? 0,
-      searchTriggered: run.searchTriggered ?? 0,
+      artifactsStored: run.artifactsStored ?? 0,
       errors: run.errors ?? [],
     };
   } catch {

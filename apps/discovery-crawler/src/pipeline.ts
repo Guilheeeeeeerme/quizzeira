@@ -3,7 +3,7 @@
 // Every write goes to discovery-api. The crawler has no knowledge of topics,
 // quizzes, or the question bank — turning a PDF into questions is Content's job.
 import { randomUUID } from "node:crypto";
-import type { CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
+import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
 import { listingsFingerprint } from "@quizzeira/shared";
 import { dmzGet, dmzPost, dmzPut, logError, logInfo } from "@quizzeira/worker-kit";
 import { closeBrowser, crawlSourceListings, listingsToOpenRecords } from "./browser.js";
@@ -11,25 +11,11 @@ import { crawlerEnv } from "./env.js";
 
 const NAME = "discovery-crawler";
 
-export interface DiscoveryRunSummary {
-  runId: string;
-  startedAt: string;
-  finishedAt: string | null;
-  status: "running" | "ok" | "partial" | "failed";
-  sourcesOk: number;
-  sourcesFailed: number;
-  sourcesSkipped: number;
-  openDiscovered: number;
-  proposedSources: number;
-  artifactsStored: number;
-  errors: string[];
-}
-
 export async function runDiscoveryPipeline(
   onlySourceId?: string | null,
-): Promise<DiscoveryRunSummary> {
+): Promise<CrawlerRunSummary> {
   const runId = randomUUID().slice(0, 12);
-  const summary: DiscoveryRunSummary = {
+  const summary: CrawlerRunSummary = {
     runId,
     startedAt: new Date().toISOString(),
     finishedAt: null,
@@ -147,7 +133,7 @@ export async function runDiscoveryPipeline(
   return finish(summary);
 }
 
-async function finish(summary: DiscoveryRunSummary): Promise<DiscoveryRunSummary> {
+async function finish(summary: CrawlerRunSummary): Promise<CrawlerRunSummary> {
   summary.finishedAt = new Date().toISOString();
   await dmzPost("/internal/runs", summary).catch(() => undefined);
   await closeBrowser().catch(() => undefined);
