@@ -1,0 +1,171 @@
+// Concept: Question bank + Embeddings (quizzeira_content)
+//
+// Content owns every question that exists. The study API only ever reads rows
+// with status = published, and only the Eval stage (content-quality) may set it.
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("CONTENT_DATABASE_URL")
+  extensions = [vector]
+}
+
+enum ExtractionStatus {
+  pending
+  extracting
+  extracted
+  failed
+}
+
+enum DocumentKind {
+  edital
+  prova
+  gabarito
+  programa
+  other
+}
+
+enum QuestionItemStatus {
+  draft
+  needs_review
+  published
+  failed
+}
+
+enum QuestionItemOrigin {
+  extraction
+  generation
+}
+
+enum QuestionItemType {
+  MULTIPLE_CHOICE
+  OPEN
+}
+
+enum GenerationRunStatus {
+  queued
+  running
+  ok
+  partial
+  failed
+}
+
+/// A source PDF/HTML pulled from Discovery's Document store. `discoveryArtifactId`
+/// is the join key back to quizzeira_discovery — the databases stay separate.
+model Document {
+  id                  String           @id @default(cuid())
+  discoveryArtifactId String?          @unique
+  examSlug            String
+  examTitle           String?
+  kind                DocumentKind     @default(other)
+  sourceUrl           String?
+  storageKey          String?
+  checksum            String?
+  contentType         String?
+  status              ExtractionStatus @default(pending)
+  failReason          String?
+  attempts            Int              @default(0)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  chunks              Chunk[]
+  questionItems       QuestionItem[]
+
+  @@index([status])
+  @@index([examSlug])
+}
+
+/// Chunked plain text plus its embedding. Retrieval over these chunks is what
+/// grounds generation — the study runtime never touches them.
+model Chunk {
+  id         String                      @id @default(cuid())
+  documentId String
+  document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  ordinal    Int
+  text       String
+  tokenCount Int                         @default(0)
+  /// pgvector column; written and searched through raw SQL because Prisma has
+  /// no native vector type. 768 dims matches text-embedding-004 / -3-small@768.
+  embedding  Unsupported("vector(768)")?
+  createdAt  DateTime                    @default(now())
+
+  @@unique([documentId, ordinal])
+  @@index([documentId])
+}
+
+/// The canonical question row. Lifecycle: draft → (Eval) → published | failed,
+/// with needs_review parking borderline items in the HITL queue.
+model QuestionItem {
+  id              String             @id @default(cuid())
+  /// Stable content hash so re-extraction and re-generation dedupe.
+  fingerprint     String             @unique
+  examSlug        String
+  subject         String
+  subjectSlug     String
+  emphasis        String?
+  origin          QuestionItemOrigin
+  status          QuestionItemStatus @default(draft)
+  type            QuestionItemType
+  prompt          String
+  options         Json?
+  correctIndex    Int?
+  referenceAnswer String?
+  explanation     String?
+  locale          String             @default("pt")
+  documentId      String?
+  document        Document?          @relation(fields: [documentId], references: [id])
+  generationRunId String?
+  generationRun   GenerationRun?     @relation(fields: [generationRunId], references: [id])
+  qualityScore    Float?
+  qualityNotes    String?
+  failReasons     Json               @default("[]")
+  reviewCount     Int                @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  publishedAt     DateTime?
+  reviews         QualityReview[]
+
+  @@index([status, examSlug])
+  @@index([examSlug, subjectSlug, status])
+  @@index([status, createdAt])
+}
+
+/// One Generation pass for an exam/subject pair. Keeps cost and yield visible.
+model GenerationRun {
+  id            String              @id @default(cuid())
+  examSlug      String
+  subject       String
+  status        GenerationRunStatus @default(queued)
+  requested     Int                 @default(0)
+  drafted       Int                 @default(0)
+  chunksUsed    Int                 @default(0)
+  model         String?
+  error         String?
+  startedAt     DateTime            @default(now())
+  finishedAt    DateTime?
+  questionItems QuestionItem[]
+
+  @@index([status, startedAt])
+  @@index([examSlug])
+}
+
+/// Audit trail for the Eval stage. One row per structural+judge verdict, so a
+/// publish decision is always explainable after the fact.
+model QualityReview {
+  id        String       @id @default(cuid())
+  itemId    String
+  item      QuestionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  stage     String
+  decision  String
+  score     Float
+  notes     String?
+  reasons   Json         @default("[]")
+  model     String?
+  createdAt DateTime     @default(now())
+
+  @@index([itemId, createdAt])
+  @@index([decision, createdAt])
+}

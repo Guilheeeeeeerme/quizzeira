@@ -1,53 +1,7 @@
 import { AttemptStatus, QuestionType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { formatUserResponse, shuffle, toQuizQuestionDto } from "../utils/dto";
+import { formatUserResponse, toQuizQuestionDto } from "../utils/dto";
 import type { QuizResultsDto, SubmitAnswer } from "@quizzeira/shared";
-
-const MCQ_COUNT = 4;
-const OPEN_COUNT = 1;
-
-export async function startQuiz(userId: string, levelSlug: string) {
-  const level = await prisma.difficultyLevel.findUnique({
-    where: { slug: levelSlug },
-  });
-  if (!level) {
-    throw Object.assign(new Error("Level not found"), { statusCode: 404 });
-  }
-
-  const mcqPool = await prisma.question.findMany({
-    where: { levelId: level.id, type: QuestionType.MULTIPLE_CHOICE, isActive: true },
-  });
-  const openPool = await prisma.question.findMany({
-    where: { levelId: level.id, type: QuestionType.OPEN, isActive: true },
-  });
-
-  if (mcqPool.length < MCQ_COUNT || openPool.length < OPEN_COUNT) {
-    throw Object.assign(new Error("Insufficient questions for level"), { statusCode: 500 });
-  }
-
-  const selectedMcq = shuffle(mcqPool).slice(0, MCQ_COUNT);
-  const selectedOpen = shuffle(openPool).slice(0, OPEN_COUNT);
-  const selected = [...selectedMcq, ...selectedOpen];
-
-  const attempt = await prisma.quizAttempt.create({
-    data: {
-      userId,
-      levelId: level.id,
-      status: AttemptStatus.IN_PROGRESS,
-      questions: {
-        create: selected.map((q, index) => ({
-          questionId: q.id,
-          sortOrder: index,
-        })),
-      },
-    },
-  });
-
-  return {
-    attemptId: attempt.id,
-    questions: selected.map(toQuizQuestionDto),
-  };
-}
 
 export async function submitQuiz(
   userId: string,

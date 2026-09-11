@@ -7,14 +7,9 @@ import type {
 } from "@quizzeira/shared";
 import { authenticate } from "../plugins/auth";
 import {
-  addTopicAttachment,
-  addTopicLink,
   deleteTopic,
-  deleteTopicAttachment,
-  deleteTopicLink,
   getTopic,
   listTopics,
-  refreshTopicAttachmentExtractions,
   updateTopic,
 } from "../services/topic.service";
 import { getPillAttempt, startPill } from "../services/pill.service";
@@ -76,86 +71,6 @@ export async function topicRoutes(app: FastifyInstance) {
       return httpError(err, reply);
     }
   });
-
-  app.post<{ Params: { topicId: string }; Body: { url?: string; label?: string } }>(
-    "/topics/:topicId/links",
-    async (request, reply) => {
-      if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
-      const url = request.body?.url?.trim();
-      if (!url) return reply.code(400).send({ error: "url required" });
-      try {
-        return await addTopicLink(request.userId, request.params.topicId, url, request.body?.label);
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
-  app.delete<{ Params: { topicId: string; linkId: string } }>(
-    "/topics/:topicId/links/:linkId",
-    async (request, reply) => {
-      if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        return await deleteTopicLink(
-          request.userId,
-          request.params.topicId,
-          request.params.linkId,
-        );
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
-  app.post<{ Params: { topicId: string } }>(
-    "/topics/:topicId/attachments",
-    async (request, reply) => {
-      if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
-      const file = await request.file();
-      if (!file) return reply.code(400).send({ error: "file required" });
-      const buffer = await file.toBuffer();
-      try {
-        return await addTopicAttachment(request.userId, request.params.topicId, {
-          filename: file.filename,
-          mimeType: file.mimetype,
-          buffer,
-        });
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
-  app.post<{ Params: { topicId: string } }>(
-    "/topics/:topicId/attachments/refresh",
-    async (request, reply) => {
-      if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        return await refreshTopicAttachmentExtractions(
-          request.userId,
-          request.params.topicId,
-        );
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
-
-  app.delete<{ Params: { topicId: string; attachmentId: string } }>(
-    "/topics/:topicId/attachments/:attachmentId",
-    async (request, reply) => {
-      if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        return await deleteTopicAttachment(
-          request.userId,
-          request.params.topicId,
-          request.params.attachmentId,
-        );
-      } catch (err) {
-        return httpError(err, reply);
-      }
-    },
-  );
 
   app.post<{
     Params: { topicId: string };

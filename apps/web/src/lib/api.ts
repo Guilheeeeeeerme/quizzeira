@@ -48,21 +48,3 @@ export async function api<T>(
 
   return data as T;
 }
-
-export async function apiUpload<T>(path: string, file: File): Promise<T> {
-  const body = new FormData();
-  body.append("file", file);
-
-  const response = await fetch(`${base}${path}`, {
-    method: "POST",
-    credentials: "include",
-    headers: localeHeader(),
-    body,
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new ApiError(data.error ?? "Request failed", response.status);
-  }
-  return data as T;
-}

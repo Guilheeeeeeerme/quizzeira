@@ -17,6 +17,23 @@ services:
     networks:
       - private
 
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/local-postgres-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -52,6 +69,92 @@ services:
       - private
       - dmz
 
+  discovery-api:
+    build:
+      context: .
+      dockerfile: apps/discovery-api/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3010
+      DISCOVERY_DATABASE_URL: postgresql://quizzeira:quizzeira@postgres:5432/quizzeira_discovery
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      INTERNAL_API_KEY_DISCOVERY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-quizzeira}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-quizzeira-secret}
+      S3_BUCKET: ${S3_BUCKET:-quizzeira}
+      S3_FORCE_PATH_STYLE: "true"
+    ports:
+      - "127.0.0.1:3010:3010"
+    volumes:
+      - ./apps/discovery-api:/app/apps/discovery-api
+      - ./packages/shared:/app/packages/shared
+      - /app/node_modules
+      - /app/apps/discovery-api/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3010/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - dmz
+      - private
+
+  content-api:
+    build:
+      context: .
+      dockerfile: apps/content-api/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3020
+      CONTENT_DATABASE_URL: postgresql://quizzeira:quizzeira@postgres:5432/quizzeira_content
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
+    ports:
+      - "127.0.0.1:3020:3020"
+    volumes:
+      - ./apps/content-api:/app/apps/content-api
+      - ./packages/shared:/app/packages/shared
+      - /app/node_modules
+      - /app/apps/content-api/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3020/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - dmz
+      - private
+
   api:
     build:
       context: .
@@ -65,22 +168,19 @@ services:
       REDIS_URL: redis://redis:6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       INTERNAL_API_KEY_CORRECTOR: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
-      INTERNAL_API_KEY_GENERATOR: ${INTERNAL_API_KEY_GENERATOR:-dev-generator-key}
-      INTERNAL_API_KEY_UPDATER: ${INTERNAL_API_KEY_UPDATER:-dev-updater-key}
       INTERNAL_API_KEY_CRAWLER: ${INTERNAL_API_KEY_CRAWLER:-dev-crawler-key}
+      CONTENT_API_URL: ${CONTENT_API_URL:-http://content-api:3020}
+      DISCOVERY_API_URL: ${DISCOVERY_API_URL:-http://discovery-api:3010}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-quizzeira}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-quizzeira-secret}
       S3_BUCKET: ${S3_BUCKET:-quizzeira}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
-      SEED_DEMO: ${SEED_DEMO:-1}
-      DEMO_PASSWORD: ${DEMO_PASSWORD:-Password123!}
       DEV_ROOT_EMAIL: ${DEV_ROOT_EMAIL:-root@quizzeira.local}
       DEV_ROOT_PASSWORD: ${DEV_ROOT_PASSWORD:-Password123!}
       NODE_ENV: ${NODE_ENV:-development}
     ports:
-      # Bind localhost only so /internal is not LAN-exposed in compose.
       - "127.0.0.1:3000:3000"
     volumes:
       - ./apps/api:/app/apps/api
@@ -92,7 +192,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+      discovery-api:
+        condition: service_healthy
+      content-api:
         condition: service_healthy
     command: sh /app/apps/api/docker-entrypoint.sh
     healthcheck:
@@ -151,14 +253,9 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,openai}
-      MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
-      MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
-      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
-      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
-      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
+      REDIS_URL: redis://redis:6379
       WORKER_WINDOWS: ${WORKER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
     volumes:
       - ./apps/quiz-corrector:/app/apps/quiz-corrector
       - ./packages/shared:/app/packages/shared
@@ -174,41 +271,69 @@ services:
       - dmz
       - private
 
-  question-updater:
+  discovery-crawler:
     build:
       context: .
-      dockerfile: apps/question-updater/Dockerfile.dev
+      dockerfile: apps/discovery-crawler/Dockerfile.dev
       network: host
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY_UPDATER:-dev-updater-key}
-      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
+      INTERNAL_API_URL: ${DISCOVERY_API_URL:-http://discovery-api:3010}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      WORKER_INTERVAL_MS: ${DISCOVERY_CRAWLER_INTERVAL_MS:-1800000}
+      WORKER_WINDOWS: ${DISCOVERY_CRAWLER_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
+      DISCOVERY_CRAWLER_ENABLED: ${DISCOVERY_CRAWLER_ENABLED:-true}
+      DISCOVERY_CRAWLER_FIXTURE_MODE: ${DISCOVERY_CRAWLER_FIXTURE_MODE:-true}
+    volumes:
+      - ./apps/discovery-crawler:/app/apps/discovery-crawler
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/discovery-crawler/node_modules
+    depends_on:
+      discovery-api:
+        condition: service_healthy
+    networks:
+      - dmz
+      - private
+
+  content-worker:
+    build:
+      context: .
+      dockerfile: apps/content-worker/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CONTENT_API_URL: ${CONTENT_API_URL:-http://content-api:3020}
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
+      # Optional: mirrors published discovery artifacts into content documents.
+      DISCOVERY_API_URL: ${DISCOVERY_API_URL:-http://discovery-api:3010}
+      INTERNAL_API_KEY_DISCOVERY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-30000}
+      CONTENT_DOCS_PER_PASS: ${CONTENT_DOCS_PER_PASS:-3}
+      CONTENT_EXAMS_PER_GENERATION_PASS: ${CONTENT_EXAMS_PER_GENERATION_PASS:-2}
+      CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,openai}
-      MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
-      MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
-      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
-      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
-      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
-      WORKER_WINDOWS: ${WORKER_WINDOWS:-07:00,19:00}
-      WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://redis:6379
-      QUESTION_UPDATE_GROUNDING: ${QUESTION_UPDATE_GROUNDING:-false}
     volumes:
-      - ./apps/question-updater:/app/apps/question-updater
+      - ./apps/content-worker:/app/apps/content-worker
       - ./packages/shared:/app/packages/shared
       - ./packages/worker-kit:/app/packages/worker-kit
       - /app/node_modules
-      - /app/apps/question-updater/node_modules
+      - /app/apps/content-worker/node_modules
     depends_on:
-      api:
+      content-api:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -216,77 +341,36 @@ services:
       - dmz
       - private
 
-  question-generator:
+  content-quality:
     build:
       context: .
-      dockerfile: apps/question-generator/Dockerfile.dev
+      dockerfile: apps/content-quality/Dockerfile.dev
       network: host
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY_GENERATOR:-dev-generator-key}
-      WORKER_INTERVAL_MS: ${QUESTION_GENERATOR_INTERVAL_MS:-15000}
+      CONTENT_API_URL: ${CONTENT_API_URL:-http://content-api:3020}
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
+      WORKER_INTERVAL_MS: ${CONTENT_QUALITY_INTERVAL_MS:-20000}
+      CONTENT_QUALITY_ITEMS_PER_PASS: ${CONTENT_QUALITY_ITEMS_PER_PASS:-10}
+      CONTENT_QUALITY_PUBLISH_THRESHOLD: ${CONTENT_QUALITY_PUBLISH_THRESHOLD:-0.8}
+      CONTENT_QUALITY_FAIL_THRESHOLD: ${CONTENT_QUALITY_FAIL_THRESHOLD:-0.5}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,openai}
-      MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
-      MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
-      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
-      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
-      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
-      WORKER_WINDOWS: ${WORKER_WINDOWS:-}
-      WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://redis:6379
     volumes:
-      - ./apps/question-generator:/app/apps/question-generator
+      - ./apps/content-quality:/app/apps/content-quality
       - ./packages/shared:/app/packages/shared
       - ./packages/worker-kit:/app/packages/worker-kit
       - /app/node_modules
-      - /app/apps/question-generator/node_modules
+      - /app/apps/content-quality/node_modules
     depends_on:
-      api:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - dmz
-      - private
-
-  exam-crawler:
-    build:
-      context: .
-      dockerfile: apps/exam-crawler/Dockerfile.dev
-      network: host
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3000}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY_CRAWLER:-dev-crawler-key}
-      # 2×/hour; pipeline skips unchanged listings via fingerprints.
-      WORKER_INTERVAL_MS: ${EXAM_CRAWLER_INTERVAL_MS:-1800000}
-      WORKER_WINDOWS: ${EXAM_CRAWLER_WINDOWS:-}
-      WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
-      EXAM_CRAWLER_ENABLED: ${EXAM_CRAWLER_ENABLED:-true}
-      # Local/MVP default: fixture HTML so catalog fills without live site flakiness.
-      EXAM_CRAWLER_FIXTURE_MODE: ${EXAM_CRAWLER_FIXTURE_MODE:-true}
-      EXAM_CRAWLER_MAX_SOURCES: ${EXAM_CRAWLER_MAX_SOURCES:-4}
-      EXAM_CRAWLER_MAX_OPEN_PER_SOURCE: ${EXAM_CRAWLER_MAX_OPEN_PER_SOURCE:-8}
-      EXAM_CRAWLER_MAX_SEARCHES: ${EXAM_CRAWLER_MAX_SEARCHES:-2}
-    volumes:
-      - ./apps/exam-crawler:/app/apps/exam-crawler
-      - ./packages/shared:/app/packages/shared
-      - ./packages/worker-kit:/app/packages/worker-kit
-      - /app/node_modules
-      - /app/apps/exam-crawler/node_modules
-    depends_on:
-      api:
+      content-api:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -296,6 +380,7 @@ services:
 
 volumes:
   mysql_data:
+  postgres_data:
   minio_data:
   redis_data:
 

@@ -69,12 +69,6 @@ export function TopicsPage() {
                 <Heading level={2} size="card">
                   {topic.title}
                 </Heading>
-                <div className={styles.meta}>
-                  <Text size="caption" tone="tertiary">
-                    {t("{n} files", { n: topic.attachmentCount })} ·{" "}
-                    {t("{n} links", { n: topic.linkCount })}
-                  </Text>
-                </div>
                 <div className={styles.actions}>
                   <Button size="sm" onClick={() => navigate(`/topics/${topic.id}/study`)}>
                     {t("Study now")}
@@ -84,7 +78,7 @@ export function TopicsPage() {
                     variant="secondary"
                     onClick={() => navigate(`/topics/${topic.id}`)}
                   >
-                    {t("Materials")}
+                    {t("Edit")}
                   </Button>
                 </div>
               </Stack>

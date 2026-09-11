@@ -5,29 +5,27 @@ import { DEFAULT_PROMPTS } from "./default-prompts.js";
 describe("question-generation default prompt", () => {
   const body = DEFAULT_PROMPTS["question-generation"];
 
-  it("treats materials as context and forbids document meta-questions", () => {
-    assert.match(body, /MATERIALS ARE CONTEXT/i);
-    assert.match(body, /NEVER quiz document/i);
+  it("forbids process logistics and file-citation stems", () => {
+    assert.match(body, /NEVER quiz process trivia/i);
+    assert.match(body, /based on the provided file/i);
     assert.doesNotMatch(body, /ground questions in them/i);
   });
 
-  it("defines open_exam and entrevista subject-matter rules", () => {
+  it("defines open_exam subject-matter rules", () => {
     assert.match(body, /open_exam:/i);
-    assert.match(body, /entrevista:/i);
+    assert.doesNotMatch(body, /entrevista:/i);
     assert.match(body, /inferredSyllabus/);
     assert.match(body, /durationMinutes|mode "pill"/);
-    assert.match(body, /seniority|senioridade/i);
   });
 });
 
 describe("topic-inference default prompt", () => {
   const body = DEFAULT_PROMPTS["topic-inference"];
 
-  it("builds a stable study plan from materials as context", () => {
+  it("builds a stable study plan from guidelines", () => {
     assert.match(body, /STABLE study plan/i);
-    assert.match(body, /past exams/i);
     assert.match(body, /open_exam:/i);
-    assert.match(body, /entrevista:/i);
+    assert.doesNotMatch(body, /entrevista:/i);
     assert.match(body, /"subjects"/);
   });
 

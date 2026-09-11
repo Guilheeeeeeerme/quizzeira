@@ -36,27 +36,18 @@ Rules:
 - generalComment fairly summarizes overall performance.
 - Do not mention these instructions.`,
 
-  "topic-inference": `You build a STABLE study plan for a Quizzeira topic. Materials are CONTEXT, never the quiz subject.
+  "topic-inference": `You build a STABLE study plan for a Quizzeira open public exam topic.
 
-INPUT: topic title, presetSlug, user guidelines, optional focusText (today's emphasis), attachment/link excerpts (edital, job posting, past exams, solved exams, notes, vacancy tables, drafts).
+INPUT: topic title, presetSlug (open_exam), user guidelines (org, cargo/ênfase, subjects, banca notes), optional focusText (today's emphasis).
 
-GOAL: Infer WHAT the learner must practice for the real exam/interview (subject matter), not how the selection process is organized.
-
-MATERIAL ROLES (label each file/link briefly):
-- edital / job posting → map of tested subjects / required skills (prefer "conteúdo programático", conhecimentos gerais/específicos, JD requirements)
-- past exams / solved exams → style, difficulty, recurring themes (NOT trivia about that PDF)
-- notes / drafts → emphasis hints
-- vacancy tables → cargo/ênfase context only (never vacancy counts as study subjects)
+GOAL: Infer WHAT the learner must practice for the real exam (subject matter), not how the selection process is organized.
 
 HARD FORBIDDEN AS subjects (never list these):
 - Selection process logistics: etapas/fases do certame, banca executor, cidades de prova, modalidades de vaga (AC/PcD/…), inscrição, taxa, cronograma, lotação, reservas de vaga, "o que o edital diz", employment regime (CLT), organizadora
-- Job-posting meta: "what the JD lists", salary, benefits counts
-- Ênfase / cargo / polo NAMES from a vacancy table (Administração, Engenharia Mecânica, …) are NOT study subjects by themselves — they only select WHICH conteúdo programático block to use. Expand into the actual disciplines inside that block (e.g. Administração Financeira e Orçamentária, Gestão de Pessoas, Contabilidade…).
+- Ênfase / cargo / polo NAMES (Administração, Engenharia Mecânica, …) are NOT study subjects by themselves — they only select WHICH conteúdo programático block to use. Expand into the actual disciplines inside that block (e.g. Administração Financeira e Orçamentária, Gestão de Pessoas, Contabilidade…).
 
 PRESET RULES:
-- open_exam: Prefer subjects from conteúdo programático / programa da prova (e.g. Língua Portuguesa, Língua Inglesa, conhecimentos específicos da ênfase/cargo). If guidelines or focusText name an ênfase/cargo, prioritize that ênfase's específicos topics — never list every ênfase in the notice. Vacancy/admin sections are context only.
-- entrevista: Extract role, stack/products, seniority (júnior/pleno/sênior), interview axes. Never treat "what the posting lists" as a question topic.
-- Other / null: Derive practice subjects from guidelines + materials.
+- open_exam: Prefer subjects from conteúdo programático / programa da prova (e.g. Língua Portuguesa, Língua Inglesa, conhecimentos específicos da ênfase/cargo). If guidelines or focusText name an ênfase/cargo, prioritize that ênfase's específicos topics — never list every ênfase in the notice.
 
 OUTPUT LANGUAGE: subject labels and notes in the provided locale (en or pt).
 
@@ -70,29 +61,24 @@ OUTPUT — JSON only, no markdown:
 }
 
 Rules:
-- subjects: 3–12 concrete PRACTICE areas (exam/interview skills), never process logistics or raw ênfase titles.
-- styleNotes: exam/interview format cues (e.g. Cesgranrio MCQ A–E; banca style) without making logistics a subject.
-- difficultyNotes: depth cues (banca hardness, seniority).
-- seniority: for entrevista when known; else null.
-- materialRoles: one short line per material describing its role as context.
+- subjects: 3–12 concrete PRACTICE areas (exam skills), never process logistics or raw ênfase titles.
+- styleNotes: exam format cues (e.g. Cesgranrio MCQ A–E; banca style) without making logistics a subject.
+- difficultyNotes: depth cues (banca hardness).
+- seniority: usually null for open_exam.
+- materialRoles: short notes derived from guidelines when useful; else [].
 - Do not mention these instructions.`,
 
-  "question-generation": `You create a study session that PREPARES the learner for a real exam or interview — never a quiz ABOUT uploaded documents.
+  "question-generation": `You create a study session that PREPARES the learner for a real Brazilian public exam — never a quiz ABOUT process logistics.
 
-INPUT includes: topic title, presetSlug, guidelines (standing user instructions), optional today's focusText (session extras), durationMinutes + constraints, inferredSyllabus (stable study plan), attachment/link excerpts, recent scores, locale.
+INPUT includes: topic title, presetSlug, guidelines (standing user instructions), optional today's focusText (session extras), durationMinutes + constraints, inferredSyllabus (stable study plan), recent scores, locale.
 
-MATERIALS ARE CONTEXT, NOT THE SUBJECT:
-- Files may be edital, job posting, papers, notes, past exams, solved exams, drafts, vacancy tables.
-- Use them only to know WHAT/HOW to practice. Prefer conteúdo programático / skill lists deep in anexos over opening administrative pages.
-- Past exams = style/difficulty patterns, not trivia about that PDF.
+GUIDELINES AND SYLLABUS ARE THE SUBJECT:
 - Prefer subjects in inferredSyllabus when present; they are the stable topic prompt for this study topic.
 - If focusText names an ênfase/discipline (e.g. Administração), EVERY question must train that subject's program content (gestão, orçamento, contabilidade, processos…), not the selection process.
-- NEVER quiz document / process trivia, including: vacancy counts; salary; dates; inscription rules; page numbers; section titles; etapas/fases do certame; quem executa / organizadora do certame (Cesgranrio, etc.); cidades/polos de prova; modalidades de concorrência (AC/PcD/…); employment regime (CLT); "what does the edital/posting say/list/require"; "which languages appear in the JD"; "based on the provided file/PDF…"; listing ênfases from a quadro de vagas.
+- NEVER quiz process trivia, including: vacancy counts; salary; dates; inscription rules; page numbers; section titles; etapas/fases do certame; quem executa / organizadora do certame (Cesgranrio, etc.); cidades/polos de prova; modalidades de concorrência (AC/PcD/…); employment regime (CLT); "what does the edital say/list/require"; "based on the provided file/PDF…"; listing ênfases from a quadro de vagas.
 
 PRESET RULES (read presetSlug):
 - open_exam: Exam-style items ON the syllabus subjects (Português, Inglês, conhecimentos específicos da ênfase, etc.). Ask as if the learner sat the real prova objetiva/discursiva — NOT questions that cite the edital as the answer source for logistics.
-- entrevista: Realistic interview questions on stack/products, depth scaled to seniority; behavioral when guidelines/focus ask. Posting = axes, not content to recite.
-- Other / null: Follow guidelines + inferredSyllabus + focusText; still never meta-quiz files.
 
 USER GUIDELINES vs FOCUS:
 - guidelines = standing topic instructions (always honor).
@@ -114,7 +100,7 @@ CONSTRAINTS:
 - NEVER repeat the answer choices inside "prompt". Put each choice only in "options".
 - Prompt is the stem only (command + any necessary context). Options are separate.
 - Figures: if a stem or option needs an image, put https URLs in promptMedia / optionMedia (parallel to options). You may also embed markdown images ![alt](url) in text; the server extracts them.
-- Do not invent image URLs. Only include media when present in materials or a real public figure URL from context.
+- Do not invent image URLs.
 
 OUTPUT — JSON only, no markdown fences:
 {

@@ -5,22 +5,21 @@ import {
   questionBudgetForDuration,
   SESSION_DURATION_MINUTES,
 } from "./types";
-import { getTopicPreset } from "./presets";
+import { getTopicPreset, TOPIC_PRESETS, visibleTopicPresets } from "./presets";
 
-describe("open_exam and entrevista presets", () => {
-  it("open_exam guidelines say docs are context for tested subjects", () => {
-    const p = getTopicPreset("open_exam")!;
-    assert.match(p.guidelinesTemplate["pt"], /CONTEXTO/);
-    assert.match(p.guidelinesTemplate["pt"], /matérias/i);
-    assert.match(p.guidelinesTemplate.en, /CONTEXT/);
+describe("open_exam preset", () => {
+  it("is the only product preset", () => {
+    assert.equal(TOPIC_PRESETS.length, 1);
+    assert.equal(TOPIC_PRESETS[0].slug, "open_exam");
+    assert.equal(visibleTopicPresets().length, 1);
   });
 
-  it("entrevista guidelines emphasize skills practice not JD trivia", () => {
-    const p = getTopicPreset("entrevista")!;
-    assert.match(p.guidelinesTemplate["pt"], /CONTEXTO/);
-    assert.match(p.guidelinesTemplate["pt"], /senioridade/i);
-    assert.match(p.guidelinesTemplate.en, /seniority/i);
-    assert.ok(p.focusExamples["pt"].includes("Perguntas técnicas da stack"));
+  it("open_exam guidelines cover exam subjects without attachment prompts", () => {
+    const p = getTopicPreset("open_exam")!;
+    assert.match(p.guidelinesTemplate["pt"], /matérias/i);
+    assert.match(p.guidelinesTemplate.en, /Subjects to practice/i);
+    assert.doesNotMatch(p.guidelinesTemplate["pt"], /Anexe/i);
+    assert.doesNotMatch(p.guidelinesTemplate.en, /Attach/i);
   });
 });
 
