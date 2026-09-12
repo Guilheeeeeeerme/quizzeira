@@ -22,7 +22,7 @@
     "test:worker-kit": "npm run test -w @quizzeira/worker-kit",
     "test:api": "node --import tsx --test apps/api/src/**/*.spec.ts",
     "test:content": "node --import tsx --test \"apps/content-worker/src/**/*.spec.ts\"",
-    "test:quality": "node --import tsx --test apps/content-quality/src/**/*.spec.ts",
+    "test:quality": "node --import tsx --test \"apps/content-quality/src/**/*.spec.ts\"",
     "test:discovery": "node --import tsx --test apps/discovery-crawler/src/**/*.spec.ts",
     "db:migrate": "npm run db:migrate -w @quizzeira/api",
     "db:migrate:discovery": "npm run db:migrate -w @quizzeira/discovery-api",

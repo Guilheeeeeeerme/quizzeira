@@ -121,7 +121,7 @@ export function ExamsPage() {
       }
       if (bankFilter === "empty" && item.bankQuestionCount > 0) return false;
       if (!q) return true;
-      const hay = [item.title, item.org, item.banca, item.examSlug, ...item.emphasis]
+      const hay = [item.title, item.org, item.banca, item.examSlug, ...item.positions]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -369,8 +369,8 @@ export function ExamsPage() {
                         <Badge tone={item.status === "open" ? "success" : "neutral"}>
                           {item.status === "open" ? t("Open") : t("Unknown")}
                         </Badge>
-                        {item.emphasis.length > 0 ? (
-                          <span>{item.emphasis.slice(0, 3).join(" · ")}</span>
+                        {item.positions.length > 0 ? (
+                          <span>{item.positions.slice(0, 3).join(" · ")}</span>
                         ) : null}
                       </div>
                     </div>

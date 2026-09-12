@@ -51,9 +51,11 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
         examSlug,
         examTitle: (body.examTitle as string) || null,
         kind: (body.kind as never) || "other",
+        role: ((body.roleHint as string) || "unknown") as never,
         sourceUrl: (body.sourceUrl as string) || null,
         storageKey: (body.storageKey as string) || null,
         checksum: (body.checksum as string) || null,
+        contentHash: (body.contentHash as string) || (body.checksum as string) || null,
         contentType: (body.contentType as string) || null,
       },
     });
@@ -145,7 +147,16 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
   /** Extraction output. Replaces any prior chunks for the document. */
   app.post<{
     Params: { id: string };
-    Body: { chunks: Array<{ text: string; tokenCount?: number }> };
+    Body: {
+      chunks: Array<{
+        text: string;
+        tokenCount?: number;
+        contentHash?: string;
+        eligibility?: string;
+        eligibilityReason?: string | null;
+        sectionOrdinal?: number;
+      }>;
+    };
   }>("/internal/documents/:id/chunks", async (request) => {
     const documentId = request.params.id;
     const chunks = (request.body?.chunks ?? []).filter((c) => c.text?.trim());
@@ -157,6 +168,9 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
           ordinal,
           text: c.text.trim(),
           tokenCount: Number(c.tokenCount || Math.ceil(c.text.length / 4)),
+          contentHash: c.contentHash || "",
+          eligibility: (c.eligibility as never) || "parked",
+          eligibilityReason: c.eligibilityReason ?? null,
         })),
       });
     }
@@ -166,6 +180,183 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
     });
     return { chunkCount: chunks.length };
   });
+
+  app.post<{ Params: { id: string }; Body: { normalized: Record<string, unknown> } }>(
+    "/internal/documents/:id/normalized",
+    async (request) => {
+      const normalized = request.body?.normalized ?? {};
+      const document = await prisma.document.update({
+        where: { id: request.params.id },
+        data: {
+          contentHash: (normalized.contentHash as string) || undefined,
+          stats: (normalized.stats as never) || undefined,
+          language: ((normalized.stats as { language?: string } | undefined)?.language) || undefined,
+          normalizerVersion: "1",
+          status: "classifying",
+        },
+      });
+      return { document };
+    },
+  );
+
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/internal/documents/:id/classification",
+    async (request) => {
+      const body = request.body ?? {};
+      const sections = (body.sections as Array<Record<string, unknown>>) || [];
+      await prisma.section.deleteMany({ where: { documentId: request.params.id } });
+      if (sections.length) {
+        await prisma.section.createMany({
+          data: sections.map((s) => ({
+            documentId: request.params.id,
+            ordinal: Number(s.ordinal || 0),
+            path: (s.path as never) || [],
+            heading: (s.heading as string) || null,
+            level: Number(s.level || 1),
+            role: (s.role as never) || "other",
+            scores: (s.scores as never) || undefined,
+            charCount: Number(s.charCount || 0),
+          })),
+        });
+      }
+      const document = await prisma.document.update({
+        where: { id: request.params.id },
+        data: {
+          role: (body.role as never) || "unknown",
+          roleConfidence: body.roleConfidence != null ? Number(body.roleConfidence) : null,
+          roleMethod: (body.roleMethod as string) || null,
+          subtype: (body.subtype as string) || null,
+        },
+      });
+      return { document };
+    },
+  );
+
+  app.post<{ Body: Record<string, unknown> }>("/internal/syllabus", async (request) => {
+    const body = request.body ?? {};
+    const examSlug = String(body.examSlug || "");
+    const latest = await prisma.syllabus.findFirst({
+      where: { examSlug },
+      orderBy: { version: "desc" },
+    });
+    const version = (latest?.version ?? 0) + 1;
+    if (latest) {
+      await prisma.syllabus.update({ where: { id: latest.id }, data: { status: "superseded" } });
+    }
+    const syllabus = await prisma.syllabus.create({
+      data: {
+        examSlug,
+        version,
+        sourceDocumentId: String(body.sourceDocumentId || ""),
+        sourceDocumentHash: String(body.sourceDocumentHash || ""),
+        status: String(body.status || "active"),
+        positions: {
+          create: ((body.positions as Array<Record<string, unknown>>) || []).map((p) => ({
+            title: String(p.title || ""),
+            slug: String(p.slug || ""),
+            implicit: Boolean(p.implicit),
+          })),
+        },
+        nodes: {
+          create: ((body.nodes as Array<Record<string, unknown>>) || []).map((n) => ({
+            parentId: null,
+            depth: Number(n.depth || 0),
+            ordinal: Number(n.ordinal || 0),
+            title: String(n.title || ""),
+            rawText: String(n.rawText || n.title || ""),
+            pathSlug: String(n.pathSlug || ""),
+            canonicalSubjectId: (n.canonicalSubjectId as string) || null,
+            canonicalKey: String(n.canonicalKey || ""),
+            scope: String(n.scope || "basic"),
+            positionIds: (n.positionIds as never) || [],
+            status: "active",
+            extraction: (n.extraction as never) || { method: "outline", confidence: 0.5 },
+          })),
+        },
+      },
+      include: { positions: true, nodes: true },
+    });
+    return { syllabus };
+  });
+
+  app.get("/internal/syllabus/:examSlug", async (request) => {
+    const params = request.params as { examSlug: string };
+    const syllabus = await prisma.syllabus.findFirst({
+      where: { examSlug: params.examSlug, status: "active" },
+      include: { positions: true, nodes: true },
+      orderBy: { version: "desc" },
+    });
+    return { syllabus };
+  });
+
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/internal/documents/:id/previous-questions",
+    async (request) => {
+      const body = request.body ?? {};
+      const items = (body.items as Array<Record<string, unknown>>) || [];
+      let created = 0;
+      for (const [i, item] of items.entries()) {
+        const prompt = String(item.prompt || item.stem || "");
+        if (!prompt) continue;
+        const fingerprint = `${request.params.id}:${i}:${prompt.slice(0, 80)}`;
+        try {
+          await prisma.previousQuestion.create({
+            data: {
+              fingerprint,
+              documentId: request.params.id,
+              examFamily: String(body.examFamily || ""),
+              number: Number(item.number || i + 1),
+              prompt,
+              options: (item.options as never) || [],
+              correctIndex: item.correctIndex != null ? Number(item.correctIndex) : null,
+              passage: (item.passage as string) || null,
+              subjectHint: (item.subject as string) || null,
+            },
+          });
+          created += 1;
+        } catch {
+          // unique fingerprint
+        }
+      }
+      return { created };
+    },
+  );
+
+  /** Demote legacy generation-origin published items (checklist item 4). */
+  app.post("/internal/admin/demote-legacy-generation", async () => {
+    const result = await prisma.questionItem.updateMany({
+      where: { origin: "generation", status: "published", syllabusNodeId: null },
+      data: { status: "needs_review", publishedAt: null },
+    });
+    return { demoted: result.count };
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/internal/question-items/:id/provenance",
+    async (request) => {
+      const item = await prisma.questionItem.findUnique({
+        where: { id: request.params.id },
+        include: { reviews: true, document: true, generationRun: true },
+      });
+      if (!item) throw Object.assign(new Error("not found"), { statusCode: 404 });
+      const kus = Array.isArray(item.knowledgeUnitIds)
+        ? await prisma.knowledgeUnit.findMany({
+            where: { id: { in: item.knowledgeUnitIds as string[] } },
+          })
+        : [];
+      const node = item.syllabusNodeId
+        ? await prisma.syllabusNode.findUnique({ where: { id: item.syllabusNodeId } })
+        : null;
+      return {
+        item,
+        syllabusNode: node,
+        knowledgeUnits: kus,
+        document: item.document,
+        generationRun: item.generationRun,
+        reviews: item.reviews,
+      };
+    },
+  );
 
   // ── Embeddings ────────────────────────────────────────────────────────────
 
@@ -199,6 +390,133 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
       return { matches };
     },
   );
+
+app.get("/internal/knowledge-units/count", async (request) => {
+    const q = request.query as { syllabusNodeId?: string; canonicalKey?: string };
+    const count = await prisma.knowledgeUnit.count({
+      where: {
+        status: "active",
+        ...(q.syllabusNodeId ? { syllabusNodeId: q.syllabusNodeId } : {}),
+        ...(q.canonicalKey ? { canonicalKey: q.canonicalKey } : {}),
+      },
+    });
+    return { count };
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/internal/knowledge-units", async (request) => {
+    const body = request.body ?? {};
+    const units = (body.units as Array<Record<string, unknown>>) || [];
+    const created: string[] = [];
+    for (const u of units) {
+      const statement = String(u.statement || "").trim();
+      const syllabusNodeId = String(u.syllabusNodeId || body.syllabusNodeId || "");
+      if (!statement || !syllabusNodeId) continue;
+      const row = await prisma.knowledgeUnit.create({
+        data: {
+          syllabusNodeId,
+          canonicalKey: String(u.canonicalKey || body.canonicalKey || ""),
+          kind: String(u.kind || "fact"),
+          statement,
+          example: (u.example as string) || null,
+          qualifiers: (u.qualifiers as never) || [],
+          evidence: (u.evidence as never) || { chunkIds: [] },
+          status: "active",
+          extraction: (u.extraction as never) || { method: "heuristic", confidence: 0.7 },
+        },
+      });
+      created.push(row.id);
+    }
+    return { created: created.length, ids: created };
+  });
+
+  /**
+   * Leaf-level generation queue (§24.1): nodes with enough active KUs and a
+   * published+pending deficit below target.
+   */
+  app.get("/internal/generation/leaf-queue", async (request) => {
+    const q = request.query as { limit?: string; target?: string; minKus?: string };
+    const target = Math.max(1, Number(q.target || 8));
+    const limit = Math.min(20, Number(q.limit || 3));
+    const minKus = Math.max(1, Number(q.minKus || 4));
+
+    const nodes = await prisma.syllabusNode.findMany({
+      where: { status: "active", depth: { gte: 1 } },
+      take: 200,
+      orderBy: { ordinal: "asc" },
+    });
+
+    const items: Array<Record<string, unknown>> = [];
+    for (const node of nodes) {
+      const kus = await prisma.knowledgeUnit.findMany({
+        where: { syllabusNodeId: node.id, status: "active" },
+        take: 24,
+      });
+      if (kus.length < minKus) continue;
+
+      const syllabus = await prisma.syllabus.findUnique({ where: { id: node.syllabusId } });
+      if (!syllabus || syllabus.status !== "active") continue;
+      if (examSlugPriority(syllabus.examSlug) < 0) continue;
+
+      const [published, pending] = await Promise.all([
+        prisma.questionItem.count({
+          where: { syllabusNodeId: node.id, status: "published" },
+        }),
+        prisma.questionItem.count({
+          where: { syllabusNodeId: node.id, status: { in: ["draft", "needs_review"] } },
+        }),
+      ]);
+      const deficit = target - published - pending;
+      if (deficit <= 0) continue;
+
+      const pathParts = node.pathSlug ? node.pathSlug.split("/").filter(Boolean) : [node.title];
+      const styleRow = await prisma.examStyleProfile.findFirst({
+        where: { canonicalSubjectId: node.canonicalSubjectId ?? node.canonicalKey },
+        orderBy: { updatedAt: "desc" },
+      });
+      const styleProfile =
+        styleRow?.profile && typeof styleRow.profile === "object"
+          ? (styleRow.profile as Record<string, unknown>)
+          : null;
+
+      const doc = await prisma.document.findFirst({
+        where: { examSlug: syllabus.examSlug },
+        select: { examTitle: true },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      items.push({
+        examSlug: syllabus.examSlug,
+        examTitle: doc?.examTitle ?? null,
+        syllabusNodeId: node.id,
+        canonicalKey: node.canonicalKey,
+        path: pathParts.length ? pathParts : [node.title],
+        rawText: node.rawText,
+        subject: pathParts[0] ?? node.title,
+        deficit,
+        knowledgeUnits: kus.map((k) => ({
+          id: k.id,
+          kind: k.kind,
+          statement: k.statement,
+          example: k.example,
+          qualifiers: k.qualifiers,
+        })),
+        style: styleProfile
+          ? {
+              optionCount: Number(styleProfile.optionCount ?? 5),
+              stemLengthP50: Number(styleProfile.stemLengthP50 ?? 120),
+              negativeStemRate: Number(styleProfile.negativeStemRate ?? 0.15),
+              commandVerbs: Array.isArray(styleProfile.commandVerbs)
+                ? (styleProfile.commandVerbs as string[])
+                : ["Assinale"],
+              certoErrado: Boolean(styleProfile.certoErrado),
+              difficultyProxy: Number(styleProfile.difficultyProxy ?? 0.5),
+            }
+          : null,
+      });
+      if (items.length >= limit) break;
+    }
+    return { items };
+  });
 
   // ── Generation ────────────────────────────────────────────────────────────
 
@@ -267,9 +585,16 @@ function examSlugPriority(slug: string): number {
   if (s.length >= 12) score += 3;
   return score;
 }
-  app.post<{ Body: { examSlug: string; subject: string; requested?: number; model?: string } }>(
-    "/internal/generation/runs",
-    async (request) => {
+  app.post<{
+    Body: {
+      examSlug: string;
+      subject: string;
+      requested?: number;
+      model?: string;
+      syllabusNodeId?: string;
+      briefKey?: string;
+    };
+  }>("/internal/generation/runs", async (request) => {
       const body = request.body ?? { examSlug: "", subject: "" };
       const run = await prisma.generationRun.create({
         data: {
@@ -278,6 +603,8 @@ function examSlugPriority(slug: string): number {
           status: "running",
           requested: Number(body.requested || 0),
           model: body.model ?? null,
+          syllabusNodeId: body.syllabusNodeId ? String(body.syllabusNodeId) : null,
+          briefKey: body.briefKey ? String(body.briefKey) : null,
         },
       });
       return { run };
@@ -308,9 +635,14 @@ function examSlugPriority(slug: string): number {
    * The only way a QuestionItem enters the system, and it always lands as
    * `draft`. Content cannot publish — that is the Eval stage's decision.
    */
-  app.post<{ Body: DraftQuestionsRequest & { generationRunId?: string } }>(
-    "/internal/question-items/draft",
-    async (request) => {
+  app.post<{
+    Body: DraftQuestionsRequest & {
+      generationRunId?: string;
+      syllabusNodeId?: string;
+      canonicalKey?: string;
+      knowledgeUnitIds?: string[];
+    };
+  }>("/internal/question-items/draft", async (request) => {
       const body = request.body;
       const examSlug = String(body?.examSlug || "").trim();
       if (!examSlug) {
@@ -320,6 +652,9 @@ function examSlugPriority(slug: string): number {
       const slug = toSubjectSlug(subject);
       const ids: string[] = [];
       let skipped = 0;
+      const batchKuIds = Array.isArray(body.knowledgeUnitIds)
+        ? body.knowledgeUnitIds.map(String)
+        : [];
 
       for (const q of body.questions ?? []) {
         if (!q.prompt?.trim()) {
@@ -337,6 +672,11 @@ function examSlugPriority(slug: string): number {
           skipped += 1;
           continue;
         }
+        const perQuestionKus = Array.isArray(
+          (q as unknown as { knowledgeUnitIds?: unknown }).knowledgeUnitIds,
+        )
+          ? ((q as unknown as { knowledgeUnitIds: unknown[] }).knowledgeUnitIds).map(String)
+          : batchKuIds;
         const created = await prisma.questionItem.create({
           data: {
             fingerprint,
@@ -355,6 +695,9 @@ function examSlugPriority(slug: string): number {
             locale: body.locale || "pt",
             documentId: body.documentId ?? null,
             generationRunId: body.generationRunId ?? null,
+            syllabusNodeId: body.syllabusNodeId ? String(body.syllabusNodeId) : null,
+            canonicalKey: body.canonicalKey ? String(body.canonicalKey) : null,
+            knowledgeUnitIds: perQuestionKus,
           },
         });
         ids.push(created.id);
@@ -374,8 +717,15 @@ function examSlugPriority(slug: string): number {
       orderBy: { createdAt: "asc" },
       take: Math.min(50, Number(q.limit || 10)),
     });
-    return {
-      items: items.map((i) => ({
+
+    const enriched = [];
+    for (const i of items) {
+      const kuIds = Array.isArray(i.knowledgeUnitIds) ? (i.knowledgeUnitIds as string[]) : [];
+      const kus =
+        kuIds.length > 0
+          ? await prisma.knowledgeUnit.findMany({ where: { id: { in: kuIds } } })
+          : [];
+      enriched.push({
         id: i.id,
         examSlug: i.examSlug,
         subject: i.subject,
@@ -388,8 +738,12 @@ function examSlugPriority(slug: string): number {
         locale: i.locale,
         origin: i.origin,
         documentId: i.documentId,
-      })),
-    };
+        syllabusNodeId: i.syllabusNodeId,
+        knowledgeUnitIds: kuIds,
+        evidenceTexts: kus.map((k) => `${k.statement}${k.example ? ` ${k.example}` : ""}`),
+      });
+    }
+    return { items: enriched };
   });
 
   /**

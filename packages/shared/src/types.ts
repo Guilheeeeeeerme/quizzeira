@@ -370,7 +370,10 @@ export interface ExamCatalogItemDto {
   title: string;
   org: string | null;
   banca: string | null;
-  emphasis: string[];
+  /** Exam kind after the non-concurso filter; only `concurso`/`oab` are study-eligible. */
+  kind: "concurso" | "oab" | "certification" | "vestibular" | "other";
+  /** Cargos discovered on the detail page or in the syllabus. */
+  positions: string[];
   editalUrl: string | null;
   listingUrl: string | null;
   status: "open" | "unknown";

@@ -22,3 +22,10 @@ apps/*/src/generated/
 .tokensave/
 .windsurf/
 skills-lock.json
+
+# Python (doc-processor)
+**/__pycache__/
+**/*.py[cod]
+apps/doc-processor/.venv/
+*.egg-info/
+.pytest_cache/

@@ -5,6 +5,7 @@
 // as /internal/* — discovery-api is never exposed outside the private network.
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { crawlerSourceId, domainFromUrl } from "@quizzeira/shared";
+import { classifyExamKind, extractPositionsFromText } from "@quizzeira/shared";
 import { env } from "../lib/env";
 import { prisma } from "../lib/prisma";
 import { consumeForceCrawl, requestForceCrawl } from "../lib/force-crawl";
@@ -218,7 +219,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         title: e.title,
         org: e.org,
         banca: e.banca,
-        emphasis: e.emphasis,
+        kind: classifyExamKind(e.title),
+        positions: extractPositionsFromText(e.title),
         editalUrl: e.editalUrl,
         listingUrl: e.listingUrl,
         status: e.status,

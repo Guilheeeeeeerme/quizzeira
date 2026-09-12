@@ -8,14 +8,14 @@ import {
   filterOpenListings,
   parseListingHtml,
   type DiscoveredListing,
-} from "./listing-parse.js";
+} from "./listing.js";
 
 export type { DiscoveredListing };
 export {
   filterOpenListings,
   listingsToOpenRecords,
   parseListingHtml,
-} from "./listing-parse.js";
+} from "./listing.js";
 
 let browser: Browser | null = null;
 
@@ -61,8 +61,6 @@ export async function crawlSourceListings(source: CrawlerSource): Promise<{
 
   try {
     for (const startUrl of source.startUrls.slice(0, 2)) {
-      // Direct PDF start URLs are themselves the artifact/exam — do not scrape
-      // browser chrome / error HTML for random nav links.
       if (/\.pdf(\?|#|$)/i.test(startUrl)) {
         const leaf = decodeURIComponent(
           startUrl.split("/").pop()?.replace(/\.pdf$/i, "") || "edital",
@@ -107,5 +105,5 @@ async function collectHrefs(page: Page, selector: string): Promise<string[]> {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, Math.max(0, ms)));
+  return new Promise((r) => setTimeout(r, ms));
 }

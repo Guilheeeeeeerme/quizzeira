@@ -2,13 +2,19 @@
 //
 // Pure function on purpose: the decision rule is the most consequential logic
 // in the pipeline, so it is testable without a model or a database.
+import type { GroundingResult } from "./grounding.js";
 import type { JudgeVerdict } from "./judge.js";
+import type { RelevanceResult } from "./relevance.js";
 import type { StructuralResult } from "./structural.js";
 
 export type GateDecision = "published" | "failed" | "needs_review";
 
 export interface GateInput {
   structural: StructuralResult;
+  /** Rung 2 (§25.2). Optional so legacy call sites keep working. */
+  relevance?: RelevanceResult | null;
+  /** Rung 3 (§25.3). Optional; when provided and failing, hard-fails before judge. */
+  grounding?: GroundingResult | null;
   /** Null when the judge could not run (no provider, budget hit, outage). */
   judge: JudgeVerdict | null;
   /** The item's own claimed answer, for agreement checking. */
@@ -50,6 +56,41 @@ export function decide(input: GateInput): GateResult {
     };
   }
 
+  // Rung 2: an item about the exam instead of the subject is final too. No
+  // judge score can make "quantas vagas" a study question (§25.5).
+  const relevance = input.relevance ?? null;
+  if (relevance && !relevance.ok) {
+    return {
+      decision: "failed",
+      score: 0,
+      reasons: [...relevance.reasons, ...relevance.reviewReasons],
+      notes: relevance.notes,
+    };
+  }
+
+  // Rung 3: generated items must be supported by cited knowledge evidence.
+  // Extraction items often have no KU citations; skip when grounding is omitted.
+  const grounding = input.grounding ?? null;
+  if (grounding && !grounding.ok) {
+    return {
+      decision: "failed",
+      score: 0,
+      reasons: grounding.reasons,
+      notes: `grounding overlap=${grounding.overlap.toFixed(3)}`,
+    };
+  }
+
+  const review = relevance?.reviewReasons ?? [];
+  const parked = (result: GateResult): GateResult =>
+    review.length && result.decision === "published"
+      ? {
+          decision: "needs_review",
+          score: result.score,
+          reasons: [...result.reasons, ...review],
+          notes: `${result.notes} — ${relevance?.notes ?? ""}`.trim(),
+        }
+      : result;
+
   // Without a judge verdict we refuse to publish, but we also refuse to fail —
   // an infrastructure gap is not the item's fault, so a human decides.
   // Exception: past-exam extraction can opt into structural-only publish when
@@ -59,12 +100,12 @@ export function decide(input: GateInput): GateResult {
       input.publishExtractionWithoutJudge &&
       input.origin === "extraction"
     ) {
-      return {
+      return parked({
         decision: "published",
         score: 1,
         reasons: ["structural_ok", "extraction_without_judge"],
         notes: "published from past-exam extraction; LLM judge unavailable",
-      };
+      });
     }
     return {
       decision: "needs_review",
@@ -95,7 +136,7 @@ export function decide(input: GateInput): GateResult {
   }
 
   if (judge.score >= thresholds.publish) {
-    return { decision: "published", score: judge.score, reasons, notes: judge.notes };
+    return parked({ decision: "published", score: judge.score, reasons, notes: judge.notes });
   }
 
   if (judge.score < thresholds.fail) {

@@ -1,0 +1,32 @@
+{
+  "version": "metadata-logistic-v1",
+  "bias": -2.2,
+  "weights": {
+    "dateDensity": 1.2,
+    "currencyDensity": 1.0,
+    "vacancyStrong": 2.6,
+    "vacancyModerate": 1.2,
+    "candidateImperative": 1.6,
+    "orgDensity": 1.5,
+    "editalReference": 1.4,
+    "contactDensity": 1.0,
+    "syllabusListShape": 2.6,
+    "metadataQuestion": 2.8,
+    "legalCitationDensity": -2.0,
+    "explanatoryMarkers": -1.5,
+    "questionStructure": -0.8
+  },
+  "scales": {
+    "dateDensity": 3,
+    "currencyDensity": 2,
+    "vacancyStrong": 2,
+    "vacancyModerate": 4,
+    "candidateImperative": 2,
+    "orgDensity": 3,
+    "editalReference": 2,
+    "contactDensity": 2,
+    "legalCitationDensity": 4,
+    "explanatoryMarkers": 3,
+    "questionStructure": 2
+  }
+}

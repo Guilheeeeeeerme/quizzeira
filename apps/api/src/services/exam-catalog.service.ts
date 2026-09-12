@@ -15,7 +15,10 @@ const ID_MARKER = "openExamId:";
 export async function listExamCatalog(): Promise<ExamCatalogItemDto[]> {
   const [open, stats] = await Promise.all([fetchOpenExams(100), publishedExamCounts()]);
 
-  const items: ExamCatalogItemDto[] = open.map((o) => {
+  // Certifications, vestibulares and other non-concurso listings never reach
+  // the study catalog (spec §11.2 item 5; screenshots #2 and #6).
+  const studyEligible = open.filter((o) => (o.kind ?? "concurso") === "concurso" || o.kind === "oab");
+  const items: ExamCatalogItemDto[] = studyEligible.map((o) => {
     const published = stats.get(o.examSlug);
     return {
       id: o.id,
@@ -23,7 +26,8 @@ export async function listExamCatalog(): Promise<ExamCatalogItemDto[]> {
       title: o.title,
       org: o.org,
       banca: o.banca,
-      emphasis: o.emphasis,
+      kind: o.kind ?? "concurso",
+      positions: o.positions ?? [],
       editalUrl: o.editalUrl,
       listingUrl: o.listingUrl,
       status: o.status,
@@ -52,7 +56,7 @@ export async function getExamCatalogItem(id: string): Promise<ExamCatalogItemDto
 function buildGuidelines(item: ExamCatalogItemDto, locale: LocaleCode): string {
   const template = getTopicPreset("open_exam")!.guidelinesTemplate[locale];
   const orgLine = item.org ?? item.title;
-  const emphasis = item.emphasis[0] ?? "";
+  const emphasis = item.positions[0] ?? "";
   const banca = item.banca ?? "";
   const filled = template
     .replace(/(Órgão \/ concurso:|Exam \/ agency:).*/i, `$1 ${orgLine}`)

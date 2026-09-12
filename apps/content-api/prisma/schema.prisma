@@ -1,4 +1,5 @@
 // Concept: Question bank + Embeddings (quizzeira_content)
+// Redesign: DocumentRole, Section, Syllabus, KnowledgeUnit, PreviousQuestion (§29.2)
 //
 // Content owns every question that exists. The study API only ever reads rows
 // with status = published, and only the Eval stage (content-quality) may set it.
@@ -19,6 +20,9 @@ enum ExtractionStatus {
   extracting
   extracted
   failed
+  normalizing
+  classifying
+  needs_review
 }
 
 enum DocumentKind {
@@ -27,6 +31,37 @@ enum DocumentKind {
   gabarito
   programa
   other
+}
+
+enum DocumentRole {
+  specification
+  evidence
+  knowledge
+  administrative
+  mixed
+  unknown
+}
+
+enum SectionRole {
+  syllabus
+  vacancies
+  schedule
+  registration
+  exam_structure
+  legal_disposition
+  instructional
+  content
+  legal_article
+  question_block
+  answer_key
+  nav
+  other
+}
+
+enum EligibilityStatus {
+  eligible
+  ineligible
+  parked
 }
 
 enum QuestionItemStatus {
@@ -39,6 +74,7 @@ enum QuestionItemStatus {
 enum QuestionItemOrigin {
   extraction
   generation
+  transcription
 }
 
 enum QuestionItemType {
@@ -62,110 +98,311 @@ model Document {
   examSlug            String
   examTitle           String?
   kind                DocumentKind     @default(other)
+  role                DocumentRole     @default(unknown)
+  roleConfidence      Float?
+  roleMethod          String?
+  subtype             String?
   sourceUrl           String?
   storageKey          String?
   checksum            String?
+  contentHash         String?          @unique
+  textHash            String?
+  simhash             BigInt?
+  nearDuplicateOfId   String?
+  rank                Float?
+  language            String?
+  normalizedKey       String?
+  normalizerVersion   String?
+  stats               Json?
   contentType         String?
   status              ExtractionStatus @default(pending)
   failReason          String?
   attempts            Int              @default(0)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
+  sections            Section[]
   chunks              Chunk[]
   questionItems       QuestionItem[]
+  previousQuestions   PreviousQuestion[]
 
   @@index([status])
   @@index([examSlug])
+  @@index([role, status])
+}
+
+model Section {
+  id         String      @id @default(cuid())
+  documentId String
+  document   Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  ordinal    Int
+  path       Json
+  heading    String?
+  level      Int         @default(1)
+  role       SectionRole @default(other)
+  scores     Json?
+  charCount  Int         @default(0)
+  pageRange  Json?
+  chunks     Chunk[]
+
+  @@unique([documentId, ordinal])
+  @@index([documentId, role])
 }
 
 /// Chunked plain text plus its embedding. Retrieval over these chunks is what
 /// grounds generation — the study runtime never touches them.
 model Chunk {
-  id         String   @id @default(cuid())
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  ordinal    Int
-  text       String
-  tokenCount Int      @default(0)
+  id                String            @id @default(cuid())
+  documentId        String
+  document          Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sectionId         String?
+  section           Section?          @relation(fields: [sectionId], references: [id])
+  ordinal           Int
+  text              String
+  tokenCount        Int               @default(0)
+  contentHash       String            @default("")
+  eligibility       EligibilityStatus @default(parked)
+  eligibilityReason String?
+  duplicateOfId     String?
   /// pgvector column; written and searched through raw SQL because Prisma has
   /// no native vector type. 768 dims matches text-embedding-004 / -3-small@768.
-  embedding  Unsupported("vector(768)")?
-  createdAt  DateTime @default(now())
+  embedding         Unsupported("vector(768)")?
+  createdAt         DateTime          @default(now())
+  syllabusMaps      ChunkSyllabusMap[]
 
   @@unique([documentId, ordinal])
   @@index([documentId])
+  @@index([eligibility])
+  @@index([contentHash])
+}
+
+model Syllabus {
+  id                 String         @id @default(cuid())
+  examSlug           String
+  version            Int
+  sourceDocumentId   String
+  sourceDocumentHash String
+  status             String         @default("active")
+  createdAt          DateTime       @default(now())
+  positions          Position[]
+  nodes              SyllabusNode[]
+
+  @@unique([examSlug, version])
+  @@index([examSlug, status])
+}
+
+model Position {
+  id         String   @id @default(cuid())
+  syllabusId String
+  syllabus   Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+  title      String
+  slug       String
+  implicit   Boolean  @default(false)
+  vacancies  Int?
+
+  @@unique([syllabusId, slug])
+}
+
+model SyllabusNode {
+  id                 String   @id @default(cuid())
+  syllabusId         String
+  syllabus           Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+  parentId           String?
+  depth              Int
+  ordinal            Int
+  title              String
+  rawText            String
+  pathSlug           String
+  canonicalSubjectId String?
+  canonicalKey       String
+  scope              String
+  positionIds        Json
+  questionCount      Int?
+  weight             Float?
+  status             String   @default("active")
+  extraction         Json
+  embedding          Unsupported("vector(768)")?
+
+  @@index([syllabusId, depth])
+  @@index([canonicalKey])
+  @@index([status])
+}
+
+model ChunkSyllabusMap {
+  chunkId        String
+  chunk          Chunk  @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  syllabusNodeId String
+  canonicalKey   String
+  score          Float
+  method         String
+
+  @@id([chunkId, syllabusNodeId])
+  @@index([syllabusNodeId, score])
+  @@index([canonicalKey])
+}
+
+model KnowledgeUnit {
+  id             String   @id @default(cuid())
+  syllabusNodeId String
+  canonicalKey   String
+  kind           String
+  statement      String
+  example        String?
+  qualifiers     Json     @default("[]")
+  evidence       Json
+  quality        Json?
+  status         String   @default("active")
+  mergedIntoId   String?
+  extraction     Json?
+  embedding      Unsupported("vector(768)")?
+  createdAt      DateTime @default(now())
+
+  @@index([syllabusNodeId, status])
+  @@index([canonicalKey, status])
+}
+
+model PreviousQuestion {
+  id             String   @id @default(cuid())
+  fingerprint    String   @unique
+  documentId     String
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  examFamily     String
+  banca          String?
+  year           Int?
+  position       String?
+  phase          String?
+  number         Int
+  bookletType    String?
+  passage        String?
+  prompt         String
+  options        Json
+  correctIndex   Int?
+  status         String   @default("ok")
+  subjectHint    String?
+  syllabusNodeId String?
+  canonicalKey   String?
+  mapScore       Float?
+  embedding      Unsupported("vector(768)")?
+
+  @@index([banca, canonicalKey])
+  @@index([examFamily, year])
+  @@index([documentId])
+}
+
+model ExamStyleProfile {
+  id                 String   @id @default(cuid())
+  banca              String
+  canonicalSubjectId String
+  positionFamily     String   @default("")
+  sampleSize         Int
+  profile            Json
+  updatedAt          DateTime @updatedAt
+
+  @@unique([banca, canonicalSubjectId, positionFamily])
 }
 
 /// The canonical question row. Lifecycle: draft → (Eval) → published | failed,
 /// with needs_review parking borderline items in the HITL queue.
 model QuestionItem {
-  id              String             @id @default(cuid())
+  id                  String             @id @default(cuid())
   /// Stable content hash so re-extraction and re-generation dedupe.
-  fingerprint     String             @unique
-  examSlug        String
-  subject         String
-  subjectSlug     String
-  emphasis        String?
-  origin          QuestionItemOrigin
-  status          QuestionItemStatus @default(draft)
-  type            QuestionItemType
-  prompt          String
-  options         Json?
-  correctIndex    Int?
-  referenceAnswer String?
-  explanation     String?
-  locale          String             @default("pt")
-  documentId      String?
-  document        Document?          @relation(fields: [documentId], references: [id])
-  generationRunId String?
-  generationRun   GenerationRun?     @relation(fields: [generationRunId], references: [id])
-  qualityScore    Float?
-  qualityNotes    String?
-  failReasons     Json               @default("[]")
-  reviewCount     Int                @default(0)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  publishedAt     DateTime?
-  reviews         QualityReview[]
+  fingerprint         String             @unique
+  examSlug            String
+  subject             String
+  subjectSlug         String
+  emphasis            String?
+  origin              QuestionItemOrigin
+  status              QuestionItemStatus @default(draft)
+  type                QuestionItemType
+  prompt              String
+  options             Json?
+  correctIndex        Int?
+  referenceAnswer     String?
+  explanation         String?
+  locale              String             @default("pt")
+  documentId          String?
+  document            Document?          @relation(fields: [documentId], references: [id])
+  generationRunId     String?
+  generationRun       GenerationRun?     @relation(fields: [generationRunId], references: [id])
+  positionId          String?
+  syllabusNodeId      String?
+  canonicalKey        String?
+  passage             String?
+  knowledgeUnitIds    Json               @default("[]")
+  distractorRationale Json?
+  difficulty          Float?
+  empiricalDifficulty Float?
+  previousQuestionId  String?
+  qualityScore        Float?
+  qualityNotes        String?
+  failReasons         Json               @default("[]")
+  reviewCount         Int                @default(0)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  publishedAt         DateTime?
+  reviews             QualityReview[]
 
   @@index([status, examSlug])
   @@index([examSlug, subjectSlug, status])
   @@index([status, createdAt])
+  @@index([syllabusNodeId, status])
 }
 
 /// One Generation pass for an exam/subject pair. Keeps cost and yield visible.
 model GenerationRun {
-  id            String              @id @default(cuid())
-  examSlug      String
-  subject       String
-  status        GenerationRunStatus @default(queued)
-  requested     Int                 @default(0)
-  drafted       Int                 @default(0)
-  chunksUsed    Int                 @default(0)
-  model         String?
-  error         String?
-  startedAt     DateTime            @default(now())
-  finishedAt    DateTime?
-  questionItems QuestionItem[]
+  id             String              @id @default(cuid())
+  examSlug       String
+  subject        String
+  positionId     String?
+  syllabusNodeId String?
+  briefKey       String?
+  promptVersion  String?
+  difficulty     Float?
+  tokensIn       Int?
+  tokensOut      Int?
+  status         GenerationRunStatus @default(queued)
+  requested      Int                 @default(0)
+  drafted        Int                 @default(0)
+  chunksUsed     Int                 @default(0)
+  model          String?
+  error          String?
+  startedAt      DateTime            @default(now())
+  finishedAt     DateTime?
+  questionItems  QuestionItem[]
 
   @@index([status, startedAt])
   @@index([examSlug])
+  @@index([syllabusNodeId])
 }
 
 /// Audit trail for the Eval stage. One row per structural+judge verdict, so a
 /// publish decision is always explainable after the fact.
 model QualityReview {
-  id         String       @id @default(cuid())
-  itemId     String
-  item       QuestionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  stage      String
-  decision   String
-  score      Float
-  notes      String?
-  reasons    Json         @default("[]")
-  model      String?
-  createdAt  DateTime     @default(now())
+  id        String       @id @default(cuid())
+  itemId    String
+  item      QuestionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  stage     String
+  decision  String
+  score     Float
+  notes     String?
+  reasons   Json         @default("[]")
+  model     String?
+  createdAt DateTime     @default(now())
 
   @@index([itemId, createdAt])
   @@index([decision, createdAt])
+}
+
+/// Hourly stage counters for the admin funnel (§31.1).
+model StageMetric {
+  id         String   @id @default(cuid())
+  stage      String
+  bucketHour DateTime
+  decision   String
+  count      Int      @default(0)
+  tokensIn   Int      @default(0)
+  tokensOut  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([stage, bucketHour, decision])
+  @@index([stage, bucketHour])
 }

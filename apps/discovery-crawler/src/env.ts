@@ -21,6 +21,8 @@ export const crawlerEnv = {
   maxArtifactBytes: num("DISCOVERY_CRAWLER_MAX_ARTIFACT_BYTES", 16 * 1024 * 1024),
   /** Editions an oab-fgv pass walks, newest first. */
   maxOabEditionsPerRun: num("DISCOVERY_CRAWLER_MAX_OAB_EDITIONS", 3),
+  maxTopicQueriesPerPass: num("TOPIC_DISCOVERY_MAX_QUERIES_PER_PASS", 8),
+  topicPolitenessMs: num("TOPIC_DISCOVERY_POLITENESS_MS", 1500),
   headless: (process.env.DISCOVERY_CRAWLER_HEADLESS ?? "true") !== "false",
   navigationTimeoutMs: num("DISCOVERY_CRAWLER_NAV_TIMEOUT_MS", 45_000),
 };

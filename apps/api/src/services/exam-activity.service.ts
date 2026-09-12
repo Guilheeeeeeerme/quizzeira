@@ -41,6 +41,7 @@ async function lastCrawlRun(): Promise<CrawlerRunSummary | null> {
       openDiscovered: run.openDiscovered ?? 0,
       proposedSources: run.proposedSources ?? 0,
       artifactsStored: run.artifactsStored ?? 0,
+      topicQueriesRun: run.topicQueriesRun ?? 0,
       errors: run.errors ?? [],
     };
   } catch {
