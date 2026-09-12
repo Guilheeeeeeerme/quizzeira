@@ -1,5 +1,13 @@
 import { workerEnv } from "./env";
 
+/**
+ * Hard ceilings on a single provider call. Without them one request can run
+ * until the provider gives up and can emit unbounded output tokens, which is
+ * the cost-asymmetry half of OWASP LLM06.
+ */
+export const REQUEST_TIMEOUT_MS = 60_000;
+export const MAX_OUTPUT_TOKENS = 8_192;
+
 export function extractJson<T>(text: string): T {
   const trimmed = text.trim();
   const start = trimmed.indexOf("{");
@@ -50,6 +58,7 @@ type GeminiResponse = {
 async function geminiRequest(input: ProviderCompleteInput): Promise<LlmCompletion> {
   const generationConfig: Record<string, unknown> = {
     temperature: input.temperature ?? 0.2,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
   };
   if (!input.grounding) {
     generationConfig.responseMimeType = "application/json";
@@ -72,6 +81,7 @@ async function geminiRequest(input: ProviderCompleteInput): Promise<LlmCompletio
       "x-goog-api-key": workerEnv.geminiApiKey,
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const data = (await res.json()) as GeminiResponse;
   if (!res.ok) {
