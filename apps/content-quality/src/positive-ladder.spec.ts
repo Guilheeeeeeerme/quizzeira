@@ -48,6 +48,7 @@ describe("§41.5 positive ladder POS-001..005", () => {
         distractorRationale: item.distractorRationale,
         requiresPassage: item.requiresPassage ?? false,
         passage: item.passage ?? null,
+        knowledgeUnitIds: item.knowledgeUnitIds,
       });
       assert.equal(structural.ok, true, `${item.id} structural: ${structural.reasons.join(",")}`);
 

@@ -749,7 +749,16 @@ async function ensureOabStaticSyllabus(
     for (const leaf of leaves) {
       const tip = leaf.pathSlug.split("/").pop() ?? leaf.pathSlug;
       map.set(tip, leaf.id);
+      map.set(leaf.pathSlug, leaf.id);
       if (leaf.canonicalKey) map.set(leaf.canonicalKey, leaf.id);
+    }
+    // Ensure blueprint slugs resolve even when API returns nested pathSlugs only.
+    for (const s of OAB_STATIC_SYLLABUS) {
+      const id = map.get(s.slug) ?? map.get(s.pathSlug) ?? map.get(`oab-1-fase/${s.slug}`);
+      if (id) {
+        map.set(s.slug, id);
+        map.set(s.pathSlug, id);
+      }
     }
     return map;
   };

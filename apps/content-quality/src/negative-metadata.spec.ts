@@ -30,6 +30,7 @@ describe("§41.4 negative metadata stems", () => {
         options: OPTIONS,
         correctIndex: 0,
         distractorRationale: RATIONALES,
+        knowledgeUnitIds: ["ku-fake"],
       });
       // Structural may pass; relevance must fail with the expected reason.
       const relevance = validateRelevance({

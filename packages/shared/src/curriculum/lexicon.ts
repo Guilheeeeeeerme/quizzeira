@@ -37,7 +37,14 @@ export const CANONICAL_SUBJECTS: CanonicalSubject[] = [
   {
     id: "matematica",
     title: "Matemática",
-    aliases: ["matemática", "matematica", "raciocínio matemático", "matematica basica"],
+    aliases: [
+      "matemática",
+      "matematica",
+      "matemática financeira",
+      "matematica financeira",
+      "raciocínio matemático",
+      "matematica basica",
+    ],
     conventionalTopics: [
       "Porcentagem",
       "Razão e proporção",
@@ -126,7 +133,7 @@ export const CANONICAL_SUBJECTS: CanonicalSubject[] = [
   {
     id: "contabilidade",
     title: "Contabilidade",
-    aliases: ["contabilidade geral", "contabilidade pública"],
+    aliases: ["contabilidade geral", "contabilidade pública", "contabilidade publica"],
     conventionalTopics: ["Balanço", "Demonstrações", "NBC", "Patrimônio"],
   },
   {

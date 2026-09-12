@@ -8,6 +8,7 @@ import {
   tokenSetRatio,
 } from "@quizzeira/shared";
 import { validateRelevance } from "../relevance.js";
+import { validateStructure } from "../structural.js";
 
 interface RegressionItem {
   id: string;
@@ -31,6 +32,33 @@ const FIXTURE_PATH = resolve(
 function loadFixture(): RegressionFixture {
   return JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as RegressionFixture;
 }
+
+test("REG-001..006 fail structural denylist + KU gate (§25.1 / §43.2.3)", () => {
+  const { items } = loadFixture();
+  assert.equal(items.length, 6);
+
+  for (const item of items) {
+    const structural = validateStructure({
+      type: "MULTIPLE_CHOICE",
+      origin: item.origin,
+      prompt: item.prompt,
+      options: item.options,
+      correctIndex: item.correctIndex,
+      knowledgeUnitIds: item.knowledgeUnitIds,
+      distractorRationale: item.options.slice(1).map((_, i) => `r${i + 1}`),
+    });
+
+    assert.equal(structural.ok, false, `${item.id} should fail structural`);
+    assert.ok(
+      structural.reasons.includes("tests_exam_metadata"),
+      `${item.id} should include tests_exam_metadata, got ${structural.reasons.join(",")}`,
+    );
+    assert.ok(
+      structural.reasons.includes("knowledge_unit_ids_missing"),
+      `${item.id} should include knowledge_unit_ids_missing, got ${structural.reasons.join(",")}`,
+    );
+  }
+});
 
 test("REG-001..006 fail rung 2 with tests_exam_metadata and knowledge_unit_ids_missing", () => {
   const { items } = loadFixture();
