@@ -28,6 +28,11 @@ async function call<T>(
 
 export const discovery = {
   get: <T>(path: string) => call<T>(contentEnv.discoveryApiUrl, contentEnv.discoveryApiKey, path),
+  post: <T>(path: string, body?: unknown) =>
+    call<T>(contentEnv.discoveryApiUrl, contentEnv.discoveryApiKey, path, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
   patch: <T>(path: string, body: unknown) =>
     call<T>(contentEnv.discoveryApiUrl, contentEnv.discoveryApiKey, path, {
       method: "PATCH",

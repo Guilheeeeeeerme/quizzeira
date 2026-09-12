@@ -1,8 +1,4 @@
-// Concept: Embeddings (pgvector reads/writes)
-//
-// Prisma has no vector type, so the embedding column is declared Unsupported in
-// schema.prisma and touched only through the two functions below. Keeping all
-// raw SQL here means the rest of the app never hand-builds a vector literal.
+// Concept: Embeddings (pgvector reads/writes) — eligible knowledge chunks only (§9.4).
 import { Prisma } from "../generated/prisma";
 import { env } from "./env";
 import { prisma } from "./prisma";
@@ -43,20 +39,23 @@ export interface ChunkMatch {
 }
 
 /**
- * Cosine k-NN over chunk embeddings, optionally scoped to one exam. Used to
- * ground Generation; the study runtime never calls this (Study samples finished
- * questions, it does not retrieve context at quiz time).
+ * Cosine k-NN over eligible knowledge-chunk embeddings only (invariant 1).
  */
 export async function searchChunks(input: {
   embedding: number[];
   examSlug?: string | null;
   limit: number;
+  eligibleOnly?: boolean;
 }): Promise<ChunkMatch[]> {
   const literal = toVectorLiteral(input.embedding);
   const limit = Math.max(1, Math.min(input.limit, 50));
   const scope = input.examSlug
     ? Prisma.sql`AND d."examSlug" = ${input.examSlug}`
     : Prisma.empty;
+  const eligibility =
+    input.eligibleOnly === false
+      ? Prisma.empty
+      : Prisma.sql`AND c."eligibility" = 'eligible' AND d."role" = 'knowledge'`;
 
   return prisma.$queryRaw<ChunkMatch[]>`
     SELECT c."id",
@@ -68,21 +67,28 @@ export async function searchChunks(input: {
     FROM "Chunk" c
     JOIN "Document" d ON d."id" = c."documentId"
     WHERE c."embedding" IS NOT NULL
+    ${eligibility}
     ${scope}
     ORDER BY c."embedding" <=> ${literal}::vector
     LIMIT ${limit}
   `;
 }
 
-/** Chunks still waiting for an embedding, oldest first. */
+/** Eligible (or legacy unlabelled) chunks still waiting for an embedding. */
 export async function listUnembeddedChunks(limit: number): Promise<
   Array<{ id: string; text: string; documentId: string }>
 > {
   return prisma.$queryRaw<Array<{ id: string; text: string; documentId: string }>>`
-    SELECT "id", "text", "documentId"
-    FROM "Chunk"
-    WHERE "embedding" IS NULL
-    ORDER BY "createdAt" ASC
+    SELECT c."id", c."text", c."documentId"
+    FROM "Chunk" c
+    JOIN "Document" d ON d."id" = c."documentId"
+    WHERE c."embedding" IS NULL
+      AND (
+        c."eligibility" = 'eligible'
+        OR (c."eligibility" = 'parked' AND d."role" IN ('knowledge', 'unknown') AND c."contentHash" = '')
+      )
+      AND d."role" NOT IN ('administrative', 'specification')
+    ORDER BY c."createdAt" ASC
     LIMIT ${Math.max(1, Math.min(limit, 200))}
   `;
 }
