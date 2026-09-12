@@ -129,6 +129,7 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       passage: item.passage,
       requiresPassage,
       distractorRationale: item.distractorRationale,
+      knowledgeUnitIds: item.knowledgeUnitIds,
     });
     const ctx =
       structural.ok

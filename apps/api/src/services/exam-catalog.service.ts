@@ -25,7 +25,7 @@ export async function listExamCatalog(): Promise<ExamCatalogItemDto[]> {
         title: o.title,
         org: o.org,
         banca: o.banca,
-        emphasis: [],
+        emphasis: o.emphasis ?? [],
         editalUrl: o.editalUrl,
         listingUrl: o.listingUrl,
         status: o.status,

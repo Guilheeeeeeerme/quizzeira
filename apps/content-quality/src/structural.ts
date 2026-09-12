@@ -4,6 +4,7 @@
 // is rejected outright, which keeps LLM-as-judge spend off items that were
 // never going to be usable. Every rejection carries a machine-readable reason
 // so the HITL queue can be filtered and counted.
+import { looksLikeListingTriviaStem } from "@quizzeira/shared";
 export type StructuralReason =
   | "prompt_too_short"
   | "prompt_too_long"
@@ -20,7 +21,9 @@ export type StructuralReason =
   | "missing_reference_answer"
   | "placeholder_text"
   | "passage_required"
-  | "distractor_rationale_missing";
+  | "distractor_rationale_missing"
+  | "knowledge_unit_ids_missing"
+  | "tests_exam_metadata";
 
 export interface StructuralInput {
   type: "MULTIPLE_CHOICE" | "OPEN";
@@ -34,6 +37,8 @@ export interface StructuralInput {
   requiresPassage?: boolean | null;
   passage?: string | null;
   distractorRationale?: string[] | null;
+  /** Generation drafts must cite knowledge units (§25.1). */
+  knowledgeUnitIds?: string[] | null;
 }
 
 export interface StructuralResult {
@@ -72,6 +77,7 @@ const PLACEHOLDER_PATTERNS = [/\blorem\s+ipsum\b/i, /\bTODO\b/, /\bXXX+\b/, /^\s
 export function validateStructure(input: StructuralInput): StructuralResult {
   const reasons: StructuralReason[] = [];
   const prompt = (input.prompt ?? "").trim();
+  const options = (input.options ?? []).map((o) => String(o ?? ""));
 
   if (prompt.length < MIN_PROMPT_CHARS) reasons.push("prompt_too_short");
   if (prompt.length > MAX_PROMPT_CHARS) reasons.push("prompt_too_long");
@@ -80,8 +86,22 @@ export function validateStructure(input: StructuralInput): StructuralResult {
   }
   if (PLACEHOLDER_PATTERNS.some((re) => re.test(prompt))) reasons.push("placeholder_text");
 
+  // §43.2.3 listing-trivia denylist — fail early so Eval never spends on REG stems.
+  if (
+    looksLikeListingTriviaStem(prompt) ||
+    options.some((o) => o.trim() && looksLikeListingTriviaStem(o))
+  ) {
+    reasons.push("tests_exam_metadata");
+  }
+
+  if (input.origin === "generation") {
+    const kuIds = (input.knowledgeUnitIds ?? []).filter(
+      (id) => typeof id === "string" && id.trim().length > 0,
+    );
+    if (kuIds.length === 0) reasons.push("knowledge_unit_ids_missing");
+  }
+
   if (input.type === "MULTIPLE_CHOICE") {
-    const options = input.options ?? [];
     if (options.length === 0) {
       reasons.push("missing_options");
     } else {
@@ -167,6 +187,9 @@ const REASON_TEXT: Record<StructuralReason, string> = {
   placeholder_text: "texto de preenchimento (placeholder) no enunciado",
   passage_required: "subtópico de interpretação exige texto-base (passage)",
   distractor_rationale_missing: "distratores sem justificativa (origem geração)",
+  knowledge_unit_ids_missing: "item gerado sem unidades de conhecimento citadas",
+  tests_exam_metadata:
+    "item testa metadados do concurso (vagas, inscrições, banca) em vez de conhecimento",
 };
 
 export function describe(reasons: StructuralReason[]): string {

@@ -33,7 +33,7 @@ describe("demote-legacy + admin syllabus needs_review + previousQuestionId (§30
   it("generation drafts soft-strip previousQuestionId (§30)", () => {
     assert.match(
       generation,
-      /previousQuestionId is transcription\/OAB provenance only[\s\S]*?origin === "generation"\s*\?\s*null/,
+      /previousQuestionId is transcription\/OAB provenance only[\s\S]*?origin === "transcription"/,
     );
   });
 });

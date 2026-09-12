@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import { isQuestionNearDuplicateStem, tokenSetRatio } from "./fuzzy.js";
 
-const PAIRS_PATH = resolve(process.cwd(), "fixtures/golden/paraphrase-pairs.json");
+const PAIRS_PATH = resolve(__dirname, "../../../fixtures/golden/paraphrase-pairs.json");
 
 interface PairFile {
   pairs: Array<{ id: string; nearDuplicate: boolean; a: string; b: string }>;

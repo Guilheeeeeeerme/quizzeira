@@ -4,6 +4,7 @@
 // can do here is a decision the automated Eval stage deliberately deferred.
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { env } from "../lib/env";
+import { computePipelineMetrics } from "../lib/metrics";
 import { prisma } from "../lib/prisma";
 
 function assertAdmin(request: FastifyRequest): void {
@@ -251,7 +252,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/admin/metrics/pipeline", async (request) => {
     const q = request.query as { hours?: string };
-    const { computePipelineMetrics } = await import("../lib/metrics.js");
     return computePipelineMetrics(prisma, { hours: Number(q.hours || 24) });
   });
 

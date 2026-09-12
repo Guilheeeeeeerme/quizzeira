@@ -134,7 +134,11 @@ export async function registerInternalEvidenceRoutes(app: FastifyInstance): Prom
     const body = request.body ?? {};
     const banca = String(body.banca || "unknown");
     const canonicalSubjectId = String(body.canonicalSubjectId || "geral");
-    const positionFamily = (body.positionFamily as string) ?? null;
+    // Compound unique requires string (Prisma generated type); empty = no family.
+    const positionFamily =
+      body.positionFamily != null && String(body.positionFamily).trim()
+        ? String(body.positionFamily).trim()
+        : "";
     await prisma.examStyleProfile.upsert({
       where: {
         banca_canonicalSubjectId_positionFamily: {

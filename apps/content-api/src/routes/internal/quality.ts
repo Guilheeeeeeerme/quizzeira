@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { QualityVerdict } from "@quizzeira/shared";
+import { computePipelineMetrics } from "../../lib/metrics";
 import { prisma } from "../../lib/prisma";
 import { recordStageMetric } from "../../lib/stage-metrics";
 
@@ -134,7 +135,6 @@ export async function registerInternalQualityRoutes(app: FastifyInstance): Promi
 
   app.get("/internal/metrics/pipeline", async (request) => {
     const q = request.query as { hours?: string };
-    const { computePipelineMetrics } = await import("../../lib/metrics.js");
     return computePipelineMetrics(prisma, { hours: Number(q.hours || 24) });
   });
 }

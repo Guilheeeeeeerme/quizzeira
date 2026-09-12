@@ -4,6 +4,8 @@
 // knowledge (and evidence, indirectly) may feed question generation.
 // Discovery-plane hints (RoleHint, ArtifactKindHint, ExamKind) live in crawler.ts.
 
+import type { ArtifactKindHint, RoleHint } from "../crawler";
+
 export const DOCUMENT_ROLES = [
   "specification",
   "evidence",
@@ -142,8 +144,6 @@ export function isKnowledgeSectionRole(role: SectionRole): boolean {
 export function isGenerationEligibleSection(role: SectionRole): boolean {
   return isKnowledgeSectionRole(role);
 }
-
-import type { ArtifactKindHint, RoleHint } from "../crawler";
 
 /** Map artifact kind hints → document role hints (Tier 0 provenance). */
 export function roleHintFromKindHint(kind: ArtifactKindHint): RoleHint {

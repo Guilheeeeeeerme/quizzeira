@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
-const VECTORS = resolve(process.cwd(), "apps/content-api/src/lib/vectors.ts");
+const VECTORS = resolve(__dirname, "./vectors.ts");
 
 describe("vectors knowledge-index guard", () => {
   const src = readFileSync(VECTORS, "utf8");

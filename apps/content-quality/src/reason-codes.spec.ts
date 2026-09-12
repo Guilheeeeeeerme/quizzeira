@@ -18,6 +18,7 @@ const BASE_MC = {
   explanation: "Explicação suficiente para o item.",
   origin: "generation" as const,
   distractorRationale: ["r1", "r2", "r3"],
+  knowledgeUnitIds: ["ku-1"],
 };
 
 const THRESHOLDS = { publish: 0.75, fail: 0.4 };
@@ -105,12 +106,9 @@ function trigger(code: ReasonCode): string[] {
         distractorRationale: [],
       }).reasons;
     case "knowledge_unit_ids_missing":
-      return validateRelevance({
-        origin: "generation",
-        prompt: BASE_MC.prompt,
+      return validateStructure({
+        ...BASE_MC,
         knowledgeUnitIds: [],
-        syllabusNodeId: "leaf-1",
-        syllabusLeafValid: true,
       }).reasons;
     case "off_syllabus":
       return validateRelevance({
@@ -121,12 +119,9 @@ function trigger(code: ReasonCode): string[] {
         syllabusLeafValid: false,
       }).reasons;
     case "tests_exam_metadata":
-      return validateRelevance({
-        origin: "generation",
-        prompt: "Qual o valor da taxa de inscrição do concurso?",
-        knowledgeUnitIds: ["ku-1"],
-        syllabusNodeId: "leaf-1",
-        syllabusLeafValid: true,
+      return validateStructure({
+        ...BASE_MC,
+        prompt: "O Tribunal de Contas do Estado de Goiás está com inscrições abertas para qual cargo?",
       }).reasons;
     case "tests_syllabus_meta":
       return validateRelevance({

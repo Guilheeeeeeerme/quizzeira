@@ -2559,7 +2559,7 @@ Ordered by dependency and by how much of the observed failure each item removes.
 19. [x] **LLM residue paths** (syllabus structuring, role tier 3, mapping tier 3) with budgets. *(syllabus + role tier-3 `classify-llm.ts` + mapping tier-3 + stage budgets/cache)*
 20. [x] **Web-search provider**, per-stage budgets, model tiers, prompt caching, metrics + alerts. *(SEARCH_API_URL provider + allowlist/fixture; worker-kit tiers/stage budgets/cache; `StageMetric` + `/internal/stage-metrics`)*
 21. [x] **Study UI**: syllabus focus picker, transcription mix cap, exam kind filter. *(web leaf chips + `syllabusNodeIds` on pill start; API `/published/exams/:slug/syllabus`; catalog kind filter)*
-22. [ ] **Delete legacy** (`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`, `listing-parse.ts`, junk regexes, empty app dirs) and remove flags. *(throw-on-import tombstones remain on disk; physical unlink pending shell — CI `pipeline-v2.yml` removes before gates; local `bash scripts/cleanup-and-verify-pipeline-v2.sh`; OAB layout kept)*
+22. [x] **Delete legacy** (`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`, `listing-parse.ts`, junk regexes, empty app dirs) and remove flags. *(legacy modules unlinked; listing junk regexes shrunk to nav/chrome; exam-level/`geral` queue removed; OAB layout kept; CI still idempotently `rm`s before gates)*
 23. [x] **Docs**: update `ai-swe-concepts.md`; add `docs/pipeline-v2.md` runbook (flags, budgets, backfill commands).
 
 ---

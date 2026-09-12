@@ -3,6 +3,7 @@
 import {
   isMetadataHeavy,
   isQuestionNearDuplicateStem,
+  looksLikeListingTriviaStem,
   metadataProbability,
   questionTestsExamMetadata,
   questionTestsSyllabusMeta,
@@ -75,7 +76,15 @@ export function validateRelevance(input: RelevanceInput): RelevanceResult {
   // Score the stem only — options (prices, org names as distractors) must not
   // inflate section-oriented syllabusListShape / currency features.
   const metaP = prompt ? metadataProbability(prompt) : 0;
-  if (metaP > 0.5 || questionTestsExamMetadata(prompt) || isMetadataHeavy(prompt, 0.5)) {
+  const listingTrivia =
+    looksLikeListingTriviaStem(prompt) ||
+    (input.options ?? []).some((o) => looksLikeListingTriviaStem(String(o ?? "")));
+  if (
+    listingTrivia ||
+    metaP > 0.5 ||
+    questionTestsExamMetadata(prompt) ||
+    isMetadataHeavy(prompt, 0.5)
+  ) {
     reasons.push("tests_exam_metadata");
   }
 

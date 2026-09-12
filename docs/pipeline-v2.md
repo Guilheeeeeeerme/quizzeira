@@ -83,13 +83,11 @@ bash scripts/cleanup-and-verify-pipeline-v2.sh
 bash scripts/verify-pipeline-v2.sh
 ```
 
-Until you run cleanup once, tombstones
-(`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`, `listing-parse.ts`) may still
-exist as empty stubs. Prefer `cleanup-and-verify-pipeline-v2.sh` so they are
-unlinked and matching tsconfig excludes are cleared.
+§48.8 legacy modules (`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`,
+`listing-parse.ts`) are already absent from the tree. `cleanup-and-verify`
+still idempotently `rm`s them before the gate.
 
-**Harness blocker (2026-09-12):** Cursor agent Shell/Delete tools are rejected
-every turn, so this gate has never been executed in-agent. Code for pipeline v2
-is present; §48.1 green evidence and §48.8 physical delete are still pending
-operator/local run of the script above. Operational pilots (§48.4–5) remain
-out-of-band.
+**Harness blocker (2026-09-12):** Cursor agent Shell is rejected every turn, so
+§48.1 green evidence (typecheck/test/lint/build/doc-processor) has not been
+captured in-agent. Run `bash scripts/cleanup-and-verify-pipeline-v2.sh` locally
+or via CI `pipeline-v2.yml`. Operational pilots (§48.4–5) remain out-of-band.

@@ -1,6 +1,7 @@
 // Concept: metadataProbability logistic classifier (§20 / §22.2).
 // Deterministic features over section text — not a keyword ban-list.
 
+import { looksLikeListingTriviaStem } from "../pipeline/listing-trivia";
 import model from "./metadata-model.json";
 
 export interface MetadataFeatures {
@@ -121,7 +122,10 @@ const SYLLABUS_META_RE =
   /\b(constam? no conte[uú]do program[aá]tico|quais assuntos|quais disciplinas|programa do concurso|anexo.*(portugu[eê]s|matem[aá]tica))\b/i;
 
 export function questionTestsExamMetadata(prompt: string): boolean {
-  return METADATA_QUESTION_RE.test(prompt);
+  const text = String(prompt ?? "").trim();
+  if (!text) return false;
+  // Shared denylist (§43.2.3) is authoritative for REG-style listing trivia.
+  return looksLikeListingTriviaStem(text) || METADATA_QUESTION_RE.test(text);
 }
 
 export function questionTestsSyllabusMeta(prompt: string): boolean {

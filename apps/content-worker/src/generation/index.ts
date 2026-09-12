@@ -155,7 +155,7 @@ async function generateForLeaf(item: PlannerQueueItem, count: number): Promise<n
     }
 
     // §30: previousQuestionId is transcription/OAB provenance only — never send it
-    // on generation drafts (API also soft-strips any leak).
+    // on generation drafts (API also soft-strips any non-transcription leak).
     const drafted = questions.length
       ? await content.post<{ created: number }>("/internal/question-items/draft", {
           examSlug: item.examSlug,
@@ -166,7 +166,7 @@ async function generateForLeaf(item: PlannerQueueItem, count: number): Promise<n
           knowledgeUnitIds: questions[0]?.knowledgeUnitIds ?? kuIds.slice(0, 3),
           generationRunId: run.id,
           previousQuestionId: null,
-          questions,
+          questions: questions.map((q) => ({ ...q, previousQuestionId: null })),
         })
       : { created: 0 };
 

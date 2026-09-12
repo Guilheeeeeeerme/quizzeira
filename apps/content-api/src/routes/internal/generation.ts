@@ -267,14 +267,14 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
           continue;
         }
 
-        // §30: previousQuestionId is transcription/OAB provenance only — never
-        // attach it to generation drafts (soft-strip; do not abort the batch).
+        // §30: previousQuestionId is transcription/OAB provenance only — soft-strip
+        // on every non-transcription path (generation, extraction, unknown).
         const previousQuestionId =
-          origin === "generation"
-            ? null
-            : (qRec.previousQuestionId && String(qRec.previousQuestionId).trim()) ||
+          origin === "transcription"
+            ? (qRec.previousQuestionId && String(qRec.previousQuestionId).trim()) ||
               (body.previousQuestionId && String(body.previousQuestionId).trim()) ||
-              null;
+              null
+            : null;
 
         const created = await prisma.questionItem.create({
           data: {

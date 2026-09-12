@@ -34,22 +34,6 @@ jobs:
             apps/content-worker/src/extraction/index.ts \
             apps/discovery-crawler/src/listing-parse.ts \
             apps/discovery-crawler/src/listing-parse.spec.ts
-          python3 - <<'PY'
-          from pathlib import Path
-          def strip(path: Path, drop: set[str]) -> None:
-              text = path.read_text(encoding="utf-8")
-              lines = [ln for ln in text.splitlines(True) if not any(d in ln for d in drop)]
-              path.write_text("".join(lines), encoding="utf-8")
-          strip(Path("apps/content-worker/tsconfig.json"), {
-              "src/extraction/pdf-text.ts",
-              "src/extraction/chunk.ts",
-              "src/extraction/index.ts",
-          })
-          strip(Path("apps/discovery-crawler/tsconfig.json"), {
-              "src/listing-parse.ts",
-              "src/listing-parse.spec.ts",
-          })
-          PY
           test ! -e apps/content-worker/src/extraction/pdf-text.ts
           test ! -e apps/discovery-crawler/src/listing-parse.ts
       - run: npm run build -w @quizzeira/shared
@@ -68,11 +52,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r apps/doc-processor/requirements.txt
       - run: npm run test:doc-processor
-      - name: NormalizedDocument schema catalogue drift (§41.2)
-        working-directory: apps/doc-processor
-        run: PYTHONPATH=. python scripts/check_schema_contract.py

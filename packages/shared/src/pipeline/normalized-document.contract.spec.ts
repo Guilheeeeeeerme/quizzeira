@@ -10,8 +10,8 @@ import {
 } from "./normalized-document.js";
 
 const CATALOGUE_PATH = resolve(
-  process.cwd(),
-  "apps/doc-processor/normalized-document.schema.json",
+  __dirname,
+  "../../../../apps/doc-processor/normalized-document.schema.json",
 );
 
 describe("NormalizedDocument contract (§41.2)", () => {

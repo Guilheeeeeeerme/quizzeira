@@ -5,14 +5,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
-const PROVENANCE = resolve(
-  process.cwd(),
-  "apps/content-api/src/routes/internal/provenance.ts",
-);
-const DISCOVERY = resolve(process.cwd(), "apps/content-api/src/lib/discovery-client.ts");
+const PROVENANCE = resolve(__dirname, "./provenance.ts");
+const DISCOVERY = resolve(__dirname, "../../lib/discovery-client.ts");
 const ARTIFACTS = resolve(
-  process.cwd(),
-  "apps/discovery-api/src/routes/internal/artifacts.ts",
+  __dirname,
+  "../../../../discovery-api/src/routes/internal/artifacts.ts",
 );
 
 describe("provenance §30 depth", () => {
