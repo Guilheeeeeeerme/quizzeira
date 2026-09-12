@@ -1,0 +1,120 @@
+{
+  "cookies_ok": true,
+  "force": {
+    "queued": true
+  },
+  "register": [
+    {
+      "name": "PCI Concursos Provas",
+      "url": "https://www.pciconcursos.com.br/provas/",
+      "http": 200,
+      "id": "4c9cebd99ddce547fb86c869",
+      "error": null
+    },
+    {
+      "name": "PCI Concursos Home",
+      "url": "https://www.pciconcursos.com.br/",
+      "http": 200,
+      "id": "3b473f96b6634f7e01972c26",
+      "error": null
+    },
+    {
+      "name": "Cesgranrio Concursos",
+      "url": "https://www.cesgranrio.org.br/concursos/",
+      "http": 200,
+      "id": "ba072ffddfe48bbffc8af001",
+      "error": null
+    },
+    {
+      "name": "FCC Concursos",
+      "url": "https://www.fcc.org.br/concursos/",
+      "http": 200,
+      "id": "97f7a58ba04ea59546fbcbeb",
+      "error": null
+    },
+    {
+      "name": "Cebraspe Concursos",
+      "url": "https://www.cebraspe.org.br/concursos/",
+      "http": 200,
+      "id": "58aef992e785654c6478afba",
+      "error": null
+    },
+    {
+      "name": "FGV Conhecimento",
+      "url": "https://conhecimento.fgv.br/concursos",
+      "http": 200,
+      "id": "b7fcbf32e44d651900b208c1",
+      "error": null
+    },
+    {
+      "name": "IBAMSP Concursos 179",
+      "url": "https://www.ibamsp-concursos.org.br/informacoes/179/",
+      "http": 200,
+      "id": "f1275573d703aaf4edfcaa1e",
+      "error": null
+    },
+    {
+      "name": "Transpetro Selections",
+      "url": "https://transpetro.com.br/",
+      "http": 200,
+      "id": "97aa39f5aa65585d075e4f15",
+      "error": null
+    },
+    {
+      "name": "GovBR Concursos Trabalho",
+      "url": "https://www.gov.br/pt-br/categorias/trabalho-e-previdencia/trabalho/concursos",
+      "http": 200,
+      "id": "d1ed90b4e3c8cfbf715a6f2b",
+      "error": null
+    },
+    {
+      "name": "Cesgranrio Transpetro PSP Terra Edital",
+      "url": "https://www.cesgranrio.org.br/concursos/transpetro-psp-terra/edital.pdf",
+      "http": 200,
+      "id": "fceac79be4b3bf130937cedc",
+      "error": null
+    },
+    {
+      "name": "Cesgranrio BB Escriturario",
+      "url": "https://www.cesgranrio.org.br/concursos/bb-escriturario/",
+      "http": 200,
+      "id": "97772d6733b9057b1376d1b4",
+      "error": null
+    },
+    {
+      "name": "Cesgranrio Caixa Tecnico",
+      "url": "https://www.cesgranrio.org.br/concursos/caixa-tecnico/",
+      "http": 200,
+      "id": "47be74b235e460a129d54698",
+      "error": null
+    },
+    {
+      "name": "Cesgranrio Evento Edital PDF",
+      "url": "https://www.cesgranrio.org.br/concursos/evento/edital.pdf",
+      "http": 200,
+      "id": "d0112d67bb4ce757f15100b7",
+      "error": null
+    },
+    {
+      "name": "Cesgranrio Evento 1",
+      "url": "https://www.cesgranrio.org.br/concursos/evento/1",
+      "http": 200,
+      "id": "283a7e50a927d15884db7d0d",
+      "error": null
+    },
+    {
+      "name": "FCC Arquivo Antigo",
+      "url": "https://www.fcc.org.br/concursos/arquivo-antigo/",
+      "http": 200,
+      "id": "9afbb532b1a6a03019226f5d",
+      "error": null
+    },
+    {
+      "name": "Correios Concursos Edital",
+      "url": "https://www.correios.com.br/sobre-correios/trabalhe-conosco/concursos/edital.pdf",
+      "http": 200,
+      "id": "70459892cc858ef0c174d32a",
+      "error": null
+    }
+  ]
+}

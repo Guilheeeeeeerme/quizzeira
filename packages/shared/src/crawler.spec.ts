@@ -24,6 +24,27 @@ describe("normalizeOpenExam", () => {
     assert.ok(rec.editalUrl?.endsWith(".pdf"));
   });
 
+  it("uses /concurso/ path slug instead of collapsing to org", () => {
+    const rec = normalizeOpenExam({
+      title: "Transpetro 2026",
+      href: "https://www.cesgranrio.org.br/concurso/transpetro-2026/",
+      sourceId: "src1",
+      sourceDomain: "cesgranrio.org.br",
+    });
+    assert.equal(rec.examSlug, "transpetro-2026");
+    assert.equal(rec.status, "open");
+  });
+
+  it("does not slug org-nav pages as the org alone", () => {
+    const rec = normalizeOpenExam({
+      title: "Ouvidoria",
+      href: "https://transpetro.com.br/transpetro-institucional/ouvidoria.htm",
+      sourceId: "src1",
+      sourceDomain: "transpetro.com.br",
+    });
+    assert.equal(rec.examSlug, "ouvidoria");
+    assert.notEqual(rec.examSlug, "transpetro");
+  });
   it("falls back to title slug when org unknown", () => {
     const rec = normalizeOpenExam({
       title: "Concurso Prefeitura Exemplo 2026",

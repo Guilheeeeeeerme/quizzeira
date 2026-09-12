@@ -180,11 +180,15 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
-      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
+      # Quizzeira workers do not use Headroom (Docker cannot reach host :8787
+      # reliably; local Headroom also 401s this stack's Gemini key). Opt out
+      # explicitly — host Cursor tooling can still use Headroom separately.
+      LLM_USE_HEADROOM: "false"
+      GEMINI_BASE_URL: https://generativelanguage.googleapis.com
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,openai}
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      LLM_PROVIDER_ORDER: openai,gemini
       MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
       MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
@@ -274,9 +278,9 @@ services:
       REDIS_URL: redis://redis:6379
       DISCOVERY_CRAWLER_ENABLED: ${DISCOVERY_CRAWLER_ENABLED:-true}
       DISCOVERY_CRAWLER_FIXTURE_MODE: ${DISCOVERY_CRAWLER_FIXTURE_MODE:-false}
-      DISCOVERY_CRAWLER_MAX_SOURCES: ${DISCOVERY_CRAWLER_MAX_SOURCES:-4}
+      DISCOVERY_CRAWLER_MAX_SOURCES: ${DISCOVERY_CRAWLER_MAX_SOURCES:-16}
       DISCOVERY_CRAWLER_MAX_OPEN_PER_SOURCE: ${DISCOVERY_CRAWLER_MAX_OPEN_PER_SOURCE:-8}
-      DISCOVERY_CRAWLER_MAX_ARTIFACTS: ${DISCOVERY_CRAWLER_MAX_ARTIFACTS:-4}
+      DISCOVERY_CRAWLER_MAX_ARTIFACTS: ${DISCOVERY_CRAWLER_MAX_ARTIFACTS:-16}
     volumes:
       - ./apps/discovery-crawler:/app/apps/discovery-crawler
       - ./packages/shared:/app/packages/shared
@@ -309,6 +313,7 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
+      CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-quizzeira}
@@ -359,15 +364,18 @@ services:
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://redis:6379
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
-      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
+      # See quiz-corrector: Quizzeira workers skip Headroom.
+      LLM_USE_HEADROOM: "false"
+      GEMINI_BASE_URL: https://generativelanguage.googleapis.com
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,openai}
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      LLM_PROVIDER_ORDER: openai,gemini
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
+      CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
     volumes:
       - ./apps/content-worker:/app/apps/content-worker
@@ -403,15 +411,19 @@ services:
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://redis:6379
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
-      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
+      # See quiz-corrector: Quizzeira workers skip Headroom.
+      LLM_USE_HEADROOM: "false"
+      GEMINI_BASE_URL: https://generativelanguage.googleapis.com
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,openai}
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      LLM_PROVIDER_ORDER: openai,gemini
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
       CONTENT_QUALITY_ENABLED: ${CONTENT_QUALITY_ENABLED:-true}
+      # Past-exam extraction can publish without LLM when judge/Headroom is down.
+      CONTENT_QUALITY_PUBLISH_EXTRACTION_WITHOUT_JUDGE: "true"
       CONTENT_QUALITY_PUBLISH_THRESHOLD: ${CONTENT_QUALITY_PUBLISH_THRESHOLD:-0.8}
       CONTENT_QUALITY_FAIL_THRESHOLD: ${CONTENT_QUALITY_FAIL_THRESHOLD:-0.5}
     volumes:

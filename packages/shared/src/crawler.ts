@@ -202,9 +202,14 @@ export function normalizeOpenExam(input: {
     extractKnownOrg(input.sourceDomain);
   const banca = input.bancaHint?.trim() || extractKnownBanca(title);
   const slugParts = [org, banca].filter(Boolean).map(String);
-  const examSlug = slugifyKey(
-    slugParts.length > 0 ? slugParts.join(" ") : title.slice(0, 80),
-  );
+  // Prefer /concurso/<slug>/ path identity. Fall back to the listing title —
+  // not org alone — so Transpetro.org nav pages do not all collapse to
+  // examSlug "transpetro" and poison the Content bank.
+  const pathSlug = concursoPathSlug(input.href);
+  const examSlug =
+    pathSlug ||
+    slugifyKey(title.slice(0, 80)) ||
+    slugifyKey(slugParts.join(" ") || "exam");
   const emphasis = extractEmphasisHints(title);
   const editalUrl = /edital|pdf/i.test(input.href) ? input.href : null;
 
@@ -216,10 +221,23 @@ export function normalizeOpenExam(input: {
     emphasis,
     editalUrl,
     listingUrl: input.href,
-    status: looksOpen(title) ? "open" : "unknown",
+    status: looksOpen(title) || looksOpenExamUrl(input.href) ? "open" : "unknown",
     sourceId: input.sourceId,
     sourceDomain: input.sourceDomain,
   };
+}
+
+/** `https://banca/concurso/transpetro-2026/` → `transpetro-2026`. */
+export function concursoPathSlug(href: string): string | null {
+  try {
+    const path = new URL(href).pathname;
+    const m = path.match(/\/concurso\/([^/]+)\/?$/i);
+    if (!m?.[1]) return null;
+    const raw = decodeURIComponent(m[1]).replace(/[-_]+/g, " ").trim();
+    return raw ? slugifyKey(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 const ORG_RE =
@@ -243,6 +261,15 @@ export function extractKnownBanca(text: string): string | null {
 
 export function looksOpen(text: string): boolean {
   return OPEN_RE.test(text);
+}
+
+/** Banca detail pages like /concurso/transpetro-2026/ for a recent year. */
+export function looksOpenExamUrl(href: string): boolean {
+  const m = href.match(/\/concurso\/[^/?#]+-(20\d{2})(?:\/|$)/i);
+  if (!m?.[1]) return false;
+  const year = Number(m[1]);
+  const current = new Date().getUTCFullYear();
+  return year >= current - 1 && year <= current + 1;
 }
 
 export function extractEmphasisHints(text: string): string[] {

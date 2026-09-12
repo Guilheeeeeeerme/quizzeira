@@ -16,6 +16,13 @@ export const qualityEnv = {
   /** Publish/fail thresholds for the judge score; see gate.ts. */
   publishThreshold: num("CONTENT_QUALITY_PUBLISH_THRESHOLD", 0.8),
   failThreshold: num("CONTENT_QUALITY_FAIL_THRESHOLD", 0.5),
+  /**
+   * When the LLM judge cannot run, still publish `origin=extraction` items that
+   * pass structural checks. Use when Headroom/provider auth is broken and past
+   * exams are the content source. Generation-origin items still need a judge.
+   */
+  publishExtractionWithoutJudge:
+    (process.env.CONTENT_QUALITY_PUBLISH_EXTRACTION_WITHOUT_JUDGE ?? "false") === "true",
   contentApiUrl: (process.env.CONTENT_API_URL ?? "http://content-api:3020").replace(/\/$/, ""),
   contentApiKey:
     process.env.INTERNAL_API_KEY_CONTENT || process.env.INTERNAL_API_KEY || "dev-content-key",

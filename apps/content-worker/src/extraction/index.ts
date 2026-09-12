@@ -187,7 +187,15 @@ async function documentText(document: QueuedDocument): Promise<string> {
       `/internal/documents/${document.id}/bytes`,
     );
     const buffer = Buffer.from(bytes.base64, "base64");
-    if (/html/i.test(bytes.contentType)) return extractHtmlText(buffer.toString("utf8"));
+    const contentType = bytes.contentType || document.contentType || "";
+    if (/html/i.test(contentType)) return extractHtmlText(buffer.toString("utf8"));
+    if (/text\/plain|charset=utf-8|^text\//i.test(contentType) || !/pdf/i.test(contentType)) {
+      // Prova/gabarito fixtures and crawler HTML-adjacent blobs often land as
+      // text/plain; forcing them through the PDF reader yields empty text.
+      if (!buffer.slice(0, 5).toString("latin1").startsWith("%PDF")) {
+        return buffer.toString("utf8");
+      }
+    }
     return extractPdfText(buffer).text;
   }
 
@@ -200,6 +208,9 @@ async function documentText(document: QueuedDocument): Promise<string> {
     const contentType = res.headers.get("content-type") ?? "";
     const buffer = Buffer.from(await res.arrayBuffer());
     if (/html/i.test(contentType)) return extractHtmlText(buffer.toString("utf8"));
+    if (/text\/plain|^text\//i.test(contentType) && !buffer.slice(0, 5).toString("latin1").startsWith("%PDF")) {
+      return buffer.toString("utf8");
+    }
     return extractPdfText(buffer).text;
   }
 

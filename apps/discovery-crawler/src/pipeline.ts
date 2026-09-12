@@ -58,7 +58,7 @@ export async function runDiscoveryPipeline(
           `/internal/sources/${source.id}/listing-fingerprint`,
         );
 
-        if (previous.fingerprint === fingerprint) {
+        if (!onlySourceId && previous.fingerprint === fingerprint) {
           await dmzPost(`/internal/sources/${source.id}/health`, { ok: true });
           summary.sourcesOk += 1;
           summary.sourcesSkipped += 1;
@@ -72,17 +72,23 @@ export async function runDiscoveryPipeline(
             changed: boolean;
           }>("/internal/open-exams", open);
 
-          if (!upserted.changed) continue;
-          summary.openDiscovered += 1;
+          if (upserted.changed) summary.openDiscovered += 1;
 
-          // Pull the edital into the Document store so Content has bytes to
-          // extract from. URL-only artifacts are still recorded as references.
-          if (open.editalUrl) {
+          // Skip artifact download for unknown nav/chrome rows — they flood
+          // Content with junk examSlugs (certificacao, voltar-para-home, …).
+          if (upserted.record.status !== "open") continue;
+
+          // Prefer an edital/PDF URL; otherwise keep the listing page so Content
+          // still has HTML to extract while the board has not published a PDF.
+          // Store even when the exam row is unchanged — first successful crawl
+          // may have discovered the listing before artifact download existed.
+          const artifactUrl = open.editalUrl || open.listingUrl;
+          if (artifactUrl && artifactBudget > 0) {
             const stored = await storeArtifact({
               examId: upserted.record.id,
               sourceId: source.id,
-              url: open.editalUrl,
-              withBytes: artifactBudget > 0,
+              url: artifactUrl,
+              withBytes: true,
             });
             if (stored) {
               summary.artifactsStored += 1;
@@ -112,6 +118,17 @@ export async function runDiscoveryPipeline(
         summary.sourcesOk += 1;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        // Compose restarts / shared rebuilds close Playwright mid-pass; do not
+        // mark the Source broken or the next force crawl is skipped (active-only).
+        if (/Target .+ closed|browser has been closed|browserContext\.close/i.test(message)) {
+          logInfo("crawl interrupted (browser closed)", {
+            worker: NAME,
+            runId,
+            sourceId: source.id,
+            error: message.slice(0, 160),
+          });
+          continue;
+        }
         summary.sourcesFailed += 1;
         summary.errors.push(`${source.domain}: ${message.slice(0, 160)}`);
         await dmzPost(`/internal/sources/${source.id}/health`, {
@@ -167,7 +184,8 @@ async function storeArtifact(input: {
         signal: AbortSignal.timeout(crawlerEnv.navigationTimeoutMs),
       });
       contentType = res.headers.get("content-type") ?? undefined;
-      if (res.ok && /pdf/i.test(contentType ?? "")) {
+      const okType = /pdf|html|text\/plain/i.test(contentType ?? "");
+      if (res.ok && okType) {
         const buf = Buffer.from(await res.arrayBuffer());
         if (buf.byteLength <= crawlerEnv.maxArtifactBytes) {
           base64 = buf.toString("base64");
@@ -178,13 +196,20 @@ async function storeArtifact(input: {
     }
   }
 
+  const inferredKind =
+    /edital/i.test(input.url) || /pdf/i.test(contentType ?? "")
+      ? kind
+      : /html/i.test(contentType ?? "")
+        ? "other"
+        : kind;
+
   try {
     await dmzPost("/internal/artifacts", {
       examId: input.examId,
       sourceId: input.sourceId,
-      kind,
+      kind: inferredKind,
       url: input.url,
-      contentType: contentType ?? "application/pdf",
+      contentType: contentType ?? "application/octet-stream",
       base64,
     });
     return { downloaded: Boolean(base64) };
