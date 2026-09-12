@@ -7,7 +7,7 @@ export const MINHASH_BANDS = 32;
 export const MINHASH_ROWS_PER_BAND = MINHASH_PERMUTATIONS / MINHASH_BANDS;
 export const MINHASH_DUPLICATE_JACCARD = 0.85;
 
-const MERSENNE_PRIME = 4294967311; // first prime > 2^32
+const MERSENNE_PRIME = 4294967311n; // first prime > 2^32
 const MAX_HASH = 0xffffffff;
 
 // Fixed (a, b) coefficients derived from a seeded LCG so signatures are stable
@@ -27,7 +27,7 @@ function coefficients(): Array<[number, number]> {
   return out;
 }
 
-const COEFFICIENTS = coefficients();
+const COEFFICIENTS = coefficients().map(([a, b]) => [BigInt(a), BigInt(b)] as const);
 
 export function shingleSet(text: string, n = 5): Set<string> {
   const tokens = tokenize(normalizeForKey(text, { digitsToZero: true }));
@@ -39,12 +39,12 @@ export function minhashSignature(text: string, n = 5): Uint32Array {
   const sig = new Uint32Array(MINHASH_PERMUTATIONS).fill(MAX_HASH);
   if (grams.size === 0) return sig;
   for (const gram of grams) {
-    const base = fnv1a32(gram);
+    const base = BigInt(fnv1a32(gram));
     for (let i = 0; i < MINHASH_PERMUTATIONS; i += 1) {
       const [a, b] = COEFFICIENTS[i];
-      // (a * x + b) mod p, computed in floating point safely below 2^53.
-      const h = (a * base + b) % MERSENNE_PRIME;
-      const v = h & MAX_HASH;
+      // (a * x + b) mod p exceeds 2^53, so it is computed in BigInt and the
+      // result is folded to 32 bits (p < 2^32 + 16, so this is near-exact).
+      const v = Number((a * base + b) % MERSENNE_PRIME) >>> 0;
       if (v < sig[i]) sig[i] = v;
     }
   }

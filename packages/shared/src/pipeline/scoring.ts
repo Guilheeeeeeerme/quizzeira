@@ -42,17 +42,19 @@ export interface SectionScoreInput {
   glyphNoiseShare?: number;
 }
 
+// `\b` is ASCII-only in JS, so accented words use explicit letter look-arounds.
 const DEFINITION_RE =
-  /\b[ée]\s+(?:o|a|um|uma)\s+[^.]{3,60}?\s+que\b|\bdefine-se\b|\bconsiste\s+em\b|\bentende-se\s+por\b|\bdenomina-se\b|\bchama-se\b|\b[ée]\s+(?:a|o)\s+(?:rela[çc][ãa]o|conjunto|processo|ato|instrumento|modalidade)\b/gi;
+  /(?<!\p{L})[ée]\s+(?:o|a|um|uma)\s+[^.]{3,60}?\s+que\b|\bdefine-se\b|\bconsiste\s+em\b|\bentende-se\s+por\b|\bdenomina-se\b|\bchama-se\b|(?<!\p{L})[ée]\s+(?:a|o)\s+(?:rela[çc][ãa]o|conjunto|processo|ato|instrumento|modalidade)\b/giu;
 const EXAMPLE_RE = /\bpor\s+exemplo\b|\bex\.\s*:|\bexemplo\s*:|\bcomo\s+em\b|\ba\s+exemplo\s+de\b/gi;
 const RULE_RE = /\bregra\b|\bdeve(?:m|r[áa])?\b|\bsempre\b|\bnunca\b|\bexce[çc][ãa]o\b|\bobrigat[óo]ri[oa]\b|\bproibid[oa]\b|\bpermitid[oa]\b|\bsalvo\b/gi;
 const WORKED_PROBLEM_RE = /\d[\d.,]*\s*(?:[+\-×x*/÷]|%)\s*\d|=\s*\d/g;
 const ENUMERATION_RE = /(?:^|\n)\s*(?:[a-e]\)|[•\-–]|\d{1,2}[.)])\s+\S/g;
 const HEDGE_RE = /\bpode\s+ser\b|\bgeralmente\b|\btalvez\b|\bpossivelmente\b|\bem\s+geral\b|\bcostuma\b/gi;
-const SPECIFIC_CLAIM_RE = /\d|\b[\p{Lu}][\p{Ll}]+\s+[\p{Lu}][\p{Ll}]+\b|\bdeve|\bé\b|\bsão\b|\bnão\s+pode|\bproib|\bobrigat|\bpermit|\bsempre\b|\bnunca\b/u;
+const SPECIFIC_CLAIM_RE =
+  /\d|(?<!\p{L})[\p{Lu}][\p{Ll}]+\s+[\p{Lu}][\p{Ll}]+(?!\p{L})|\bdeve|(?<!\p{L})(?:é|são|não\s+pode)(?!\p{L})|\bproib|\bobrigat|\bpermit|\bsempre\b|\bnunca\b/u;
 
 function paragraphStats(input: SectionScoreInput): { paragraphShare: number; avgParagraphChars: number } {
-  const blocks = input.blocks?.filter((b) => b.text.trim()) ?? [];
+  const blocks = input.blocks?.filter((b) => b.text.trim() && b.type !== "heading") ?? [];
   if (blocks.length === 0) {
     const paragraphs = input.text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
     const avg = paragraphs.length

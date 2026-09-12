@@ -1,7 +1,7 @@
 // Concept: Subject canonicalisation (§15.5). Raw edital wording is kept on the
 // node; the canonical id is what the knowledge index and the style profile key on.
 import { slugifyKey } from "../slug";
-import { tokenSetRatio } from "../fuzzy";
+import { tokenSortRatio } from "../fuzzy";
 import { foldAccents } from "../dedup/text-normalize";
 import { CANONICAL_SUBJECTS, LEGAL_SUBJECT_IDS, type CanonicalSubject } from "./subjects";
 
@@ -23,6 +23,15 @@ function clean(name: string): string {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function tokenJaccard(a: string, b: string): number {
+  const ta = new Set(a.split(" ").filter(Boolean));
+  const tb = new Set(b.split(" ").filter(Boolean));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter += 1;
+  return inter / (ta.size + tb.size - inter);
 }
 
 const EXACT_INDEX: Map<string, CanonicalSubject> = (() => {
@@ -55,14 +64,24 @@ export function canonicalizeSubject(raw: string): CanonicalizedSubject | null {
       method: clean(exact.canonical) === key ? "exact" : "alias",
     };
   }
+  // "TI", "RH": too short to fuzzy-match anything safely; aliases cover them.
+  if (key.length < 4) return null;
   let best: CanonicalizedSubject | null = null;
   for (const subject of CANONICAL_SUBJECTS) {
     const candidates = [subject.canonical, ...subject.aliases];
     for (const candidate of candidates) {
-      const score = tokenSetRatio(name, candidate);
-      // Guard against short tokens like "TI" matching everything.
+      const candidateKey = clean(candidate);
+      // Guard against short tokens like "TI" matching everything. Scoring is
+      // token-*sort* (no subset shortcut) over stopword-stripped strings: with
+      // token-set, "Legislação" or "Legislação do SUS" would swallow
+      // "Legislação do TCE-GO", which must stay a raw subject of its own.
+      if (candidateKey.length < 4) continue;
+      // Character ratios are lenient on long shared prefixes ("legislacao tce
+      // go" vs "legislacao sus" scores 81), so at least half of the token
+      // union must agree as well.
+      if (tokenJaccard(key, candidateKey) < 0.5) continue;
+      const score = tokenSortRatio(key, candidateKey);
       if (score >= SUBJECT_MATCH_THRESHOLD && (best === null || score > best.score)) {
-        if (clean(candidate).length < 4 && clean(candidate) !== key) continue;
         best = { id: subject.id, canonical: subject.canonical, score, method: "fuzzy" };
       }
     }

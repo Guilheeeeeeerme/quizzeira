@@ -64,13 +64,20 @@ export function detectHeading(block: Block, bodyFontSize: number | null): Headin
   return null;
 }
 
+/** Body font = char-weighted median, so a few large headings cannot shift it. */
 function medianFontSize(blocks: readonly Block[]): number | null {
-  const sizes = blocks
+  const sized = blocks
     .filter((b) => b.type === "paragraph" && b.fontStats?.size != null)
-    .map((b) => b.fontStats!.size as number)
-    .sort((a, b) => a - b);
-  if (sizes.length === 0) return null;
-  return sizes[Math.floor(sizes.length / 2)];
+    .map((b) => ({ size: b.fontStats!.size as number, chars: Math.max(1, b.text.length) }))
+    .sort((a, b) => a.size - b.size);
+  if (sized.length === 0) return null;
+  const total = sized.reduce((sum, b) => sum + b.chars, 0);
+  let acc = 0;
+  for (const block of sized) {
+    acc += block.chars;
+    if (acc * 2 >= total) return block.size;
+  }
+  return sized[sized.length - 1].size;
 }
 
 export function renderTableMarkdown(rows: readonly (readonly string[])[]): string {

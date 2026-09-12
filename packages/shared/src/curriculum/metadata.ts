@@ -90,11 +90,17 @@ export function testsSyllabusMeta(text: string): boolean {
   return SYLLABUS_META_RE.test(text);
 }
 
-/** Item-level convenience: stem + options + explanation joined. */
+/**
+ * Item-level convenience: stem + options + explanation. Options are joined on
+ * one line: four short capitalised lines would otherwise look like a programa
+ * to `syllabusListShape`, which is a section feature, not an item feature.
+ */
 export function itemText(input: {
   prompt: string;
   options?: readonly string[] | null;
   explanation?: string | null;
 }): string {
-  return [input.prompt, ...(input.options ?? []), input.explanation ?? ""].join("\n");
+  return [input.prompt, (input.options ?? []).join(" / "), input.explanation ?? ""]
+    .filter(Boolean)
+    .join("\n");
 }

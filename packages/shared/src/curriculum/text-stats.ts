@@ -21,7 +21,7 @@ export const VACANCY_MODERATE_RE =
   /\bcargos?\b|\bconcursos?\b|\bedital\b|\binscri[çc][ãa]o\b|\binscri[çc][õo]es\b|\bcandidat[oa]s?\b|\binstitui[çc][ãa]o\b|\bassocia[çc][ãa]o\b|\bcertame\b|\bprova\s+objetiva\b|\bprova\s+discursiva\b|\bquest[õo]es\s+ter[áa]\b|\bbanca\b|\bselecionad[oa]s?\b|\bprocesso\s+seletivo\b/gi;
 
 export const CANDIDATE_IMPERATIVE_RE =
-  /\bo\s+candidato\s+(?:dever[áa]|deve|n[ãa]o\s+poder[áa]|poder[áa])\b|\b[ée]\s+vedad[oa]\b|\bser[áa]\s+eliminad[oa]\b|\bser[ãa]o\s+eliminad[oa]s\b|\bdever[áa]\s+(?:comparecer|apresentar|preencher|efetuar|acessar)\b|\bcabe\s+ao\s+candidato\b|\b[ée]\s+de\s+responsabilidade\s+do\s+candidato\b/gi;
+  /\bo\s+candidato\s+(?:dever[áa]|deve|n[ãa]o\s+poder[áa]|poder[áa])\b|(?<!\p{L})[ée]\s+vedad[oa]\b|\bser[áa]\s+eliminad[oa]\b|\bser[ãa]o\s+eliminad[oa]s\b|\bdever[áa]\s+(?:comparecer|apresentar|preencher|efetuar|acessar)\b|\bcabe\s+ao\s+candidato\b|(?<!\p{L})[ée]\s+de\s+responsabilidade\s+do\s+candidato\b/giu;
 
 export const ORG_RE =
   /\btribunal\s+(?:de\s+contas|regional|de\s+justi[çc]a|superior)\b|\bsecretaria\s+(?:de\s+estado|municipal|da\s+fazenda)\b|\bprefeitura\b|\bc[âa]mara\s+municipal\b|\bassembleia\s+legislativa\b|\bminist[ée]rio\s+p[úu]blico\b|\bdefensoria\b|\buniversidade\s+(?:federal|estadual)\b|\bassocia[çc][ãa]o\s+brasileira\b|\bfunda[çc][ãa]o\b|\bbanco\s+do\s+brasil\b|\bcaixa\s+econ[ôo]mica\b|\bpetrobras\b|\btranspetro\b|\bcorreios\b|\binss\b|\bcesgranrio\b|\bcebraspe\b|\bcespe\b|\bfgv\b|\bvunesp\b|\bfcc\b|\bibfc\b|\biades\b|\bfundatec\b|\bidecan\b|\baocp\b|\bquadrix\b|\bconsulplan\b|\b[A-Z]{2,5}-[A-Z]{2}\b|\b(?:TCU|TCE|TCM|TRT|TRF|TRE|TJ|MPU|MPE|MPF|STF|STJ|TST|PGE|PGM|CVM|ANBIMA|PLANEJAR|MANAUSPREV|FDSBC|SEFAZ|SEF)\b/g;

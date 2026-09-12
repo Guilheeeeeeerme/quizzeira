@@ -89,6 +89,9 @@ function subtypeFor(role: DocumentRole, evidence: string, kindHint: string | nul
   const text = evidence.toLowerCase();
   if (role === "specification") {
     if (/retifica/.test(text) || kindHint === "retificacao") return "edital_retificacao";
+    // A full edital usually carries the programa as an annex; the annex is a
+    // subtype only when the document is *just* the annex.
+    if (/\bedital\b/.test(text) && /abertura|n[ºo°.]?\s*\d{1,4}\s*\/\s*20\d{2}/.test(text)) return "edital_abertura";
     if (/anexo/.test(text) && /program/.test(text)) return "conteudo_programatico_anexo";
     if (kindHint === "programa") return "programa_oficial";
     return "edital_abertura";
@@ -101,8 +104,10 @@ function subtypeFor(role: DocumentRole, evidence: string, kindHint: string | nul
     return "prova_objetiva";
   }
   if (role === "knowledge") {
-    if (kindHint === "lei" || /\blei\s+n/.test(text)) return "lei";
-    if (/decreto/.test(text)) return "decreto";
+    // planalto.gov.br paths (/lei/l14133.htm, /decreto/d9203.htm) are the
+    // most reliable signal; a law's body mentions decretos constantly.
+    if (kindHint === "lei" || /\/leis?\/|\blei\s+(?:complementar\s+)?n/.test(text)) return "lei";
+    if (/\/decretos?\/|\bdecreto(?:-lei)?\s+n/.test(text)) return "decreto";
     if (/s[úu]mula/.test(text)) return "sumula";
     if (kindHint === "manual" || /manual/.test(text)) return "manual";
     if (kindHint === "apostila" || /apostila/.test(text)) return "apostila";

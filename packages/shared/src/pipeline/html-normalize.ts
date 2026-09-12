@@ -3,7 +3,7 @@
 // fallback when the Python doc-processor is not configured. PDFs never come
 // through here.
 import { sha256Hex } from "../sha256";
-import { guessLanguage } from "../curriculum/text-stats";
+import { guessLanguage, uppercaseShare } from "../curriculum/text-stats";
 import {
   NORMALIZED_DOCUMENT_SCHEMA_VERSION,
   type Block,
@@ -277,7 +277,11 @@ export function normalizePlainText(input: {
       // Single-line paragraphs are common in fixtures; keep line breaks inside
       // a block so outline items stay recognisable to the sectioner.
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-      if (lines.length > 1 && lines.every((l) => l.length <= 120)) {
+      const looksStructured =
+        lines.length > 1 &&
+        (lines.every((l) => l.length <= 120) ||
+          lines.some((l) => /^\d{1,2}(?:\.\d{1,2})*[.)]?\s+\S/.test(l) || (l.length <= 80 && uppercaseShare(l) >= 0.8)));
+      if (looksStructured) {
         for (const line of lines) blocks.push({ type: "paragraph", text: line });
       } else blocks.push({ type: "paragraph", text: text.replace(/\s*\n\s*/g, " ") });
     }

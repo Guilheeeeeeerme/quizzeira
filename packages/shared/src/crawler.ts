@@ -304,7 +304,7 @@ function toIsoDate(day: string, month: string, year: string): string | null {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-const DATE_TOKEN = String.raw`(\d{1,2})\s*(?:\/|de\s+)\s*(\d{1,2}|janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*(?:\/|de\s+)\s*(\d{2,4})`;
+const DATE_TOKEN = String.raw`(\d{1,2})[ºo°]?\s*(?:\/|de\s+)\s*(\d{1,2}|janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*(?:\/|de\s+)\s*(\d{2,4})`;
 const WINDOW_RE = new RegExp(
   String.raw`inscri[çc][õo]es?[^.\n]{0,80}?(?:de|entre|per[íi]odo:?|a\s+partir\s+de)?\s*${DATE_TOKEN}\s*(?:a|at[ée]|e|até\s+o\s+dia)\s*(?:o\s+dia\s+)?${DATE_TOKEN}`,
   "i",
@@ -436,6 +436,9 @@ export function concursoPathSlug(href: string): string | null {
     if (!m?.[1]) return null;
     const raw = decodeURIComponent(m[1]).replace(/[-_]+/g, " ").trim();
     if (!raw || /\.(pdf|html?)$/i.test(raw)) return null;
+    // A bare id ("/concursos/1") or a two-letter code is not an identity; fall
+    // back to (org, edition) so unrelated portals never share an examSlug.
+    if (!/\p{L}/u.test(raw) || raw.length < 3) return null;
     return slugifyKey(raw);
   } catch {
     return null;

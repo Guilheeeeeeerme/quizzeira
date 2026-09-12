@@ -41,7 +41,8 @@ export function classifySection(
   const text = section.text;
   const chars = Math.max(1, text.length);
   const signals: string[] = [];
-  const own = blocks.filter((b) => b.text.trim());
+  // The section's own heading block is structure, not body.
+  const own = blocks.filter((b) => b.text.trim() && b.type !== "heading");
   const linkChars = own.reduce((s, b) => s + (b.linkChars ?? 0), 0);
   const nonWs = own.reduce((s, b) => s + b.text.replace(/\s+/g, "").length, 0);
   const linkDensity = nonWs > 0 ? linkChars / nonWs : section.flags.includes("boilerplate") ? 1 : 0;
@@ -66,12 +67,16 @@ export function classifySection(
   if (VACANCY_TABLE_RE.test(text.slice(0, 600)) && /\|/.test(text)) {
     return { role: "vacancies", confidence: 0.85, signals: ["vacancy_table"] };
   }
-  const dateDensity = per500(countMatches(DATE_RE, text), chars);
-  if (SCHEDULE_HEADING_RE.test(heading) || dateDensity >= 3) {
-    return { role: "schedule", confidence: 0.8, signals: ["dates"] };
+  if (SCHEDULE_HEADING_RE.test(heading)) {
+    return { role: "schedule", confidence: 0.85, signals: ["schedule_heading"] };
   }
+  // "Das Inscrições" is date-dense too; the heading wins over date density.
   if (REGISTRATION_HEADING_RE.test(heading) && REGISTRATION_BODY_RE.test(text)) {
     return { role: "registration", confidence: 0.85, signals: ["registration"] };
+  }
+  const dateDensity = per500(countMatches(DATE_RE, text), chars);
+  if (dateDensity >= 3) {
+    return { role: "schedule", confidence: 0.8, signals: ["dates"] };
   }
   if (EXAM_STRUCTURE_HEADING_RE.test(heading) && EXAM_STRUCTURE_BODY_RE.test(text)) {
     return { role: "exam_structure", confidence: 0.8, signals: ["exam_structure"] };
