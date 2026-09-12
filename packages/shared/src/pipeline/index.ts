@@ -2,6 +2,7 @@ export * from "./roles";
 export * from "./reasons";
 export * from "./normalized-document";
 export * from "./sectioner";
+export * from "./html-decode";
 export * from "./html-normalize";
 export * from "./scoring";
 export * from "./section-classifier";
