@@ -59,6 +59,8 @@ describe("normalizeOpenExam", () => {
 describe("crawler helpers", () => {
   it("detects open copy and domains", () => {
     assert.equal(looksOpen("Inscrições abertas até 30/09"), true);
+    assert.equal(looksOpen("Concurso Público para a Prefeitura"), true);
+    assert.equal(looksOpen("01- Edital de Abertura"), true);
     assert.equal(looksOpen("Resultado final homologado"), false);
     assert.equal(domainFromUrl("https://www.FCC.org.br/path"), "fcc.org.br");
     assert.equal(crawlerSourceId("a.com", "A"), crawlerSourceId("a.com", "A"));
