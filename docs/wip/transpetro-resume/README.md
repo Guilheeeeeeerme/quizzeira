@@ -11,10 +11,10 @@ Snapshots from the 2026-09-12 local Compose run. Use with
 
 ## Resume checklist
 
-1. `docker compose up` (Gemini key in `.env`, `LLM_USE_HEADROOM=false`, embed model `gemini-embedding-001`)
-2. Login as admin; confirm Cesgranrio + enabled sources match `final-status.json`
-3. Force crawl Cesgranrio; verify `Transpetro 2026` on `GET /exams` with `bankReady`
-4. Re-close junk exams if a noisy source was re-enabled
-5. Sister infra PR: Headroom bypass docs (`docs/quizzeira-headroom.md`)
+1. ~~`docker compose up`~~ done
+2. ~~Cesgranrio-only → `Transpetro 2026` on study~~ done
+3. ~~Fine-tune: enable 7 high-signal sources, FIFO force queue, slug/artifact/generation fixes~~ done
+4. ~~`bankReady: true` for Transpetro 2026 (6 published) + Caixa 2025 (5)~~ done
+5. Sister infra PR: Headroom bypass docs (`docs/quizzeira-headroom.md`) — still draft if open
 
 Do not commit `.env`, cookie jars, or Playwright MCP caches.

@@ -8,12 +8,50 @@
 
 | Area | Result |
 | --- | --- |
-| Source registration | **Works** — 16 archaeology URLs upserted (test-only `example.org` / `exemplo.gov.br` skipped) |
-| Force crawl | **Works** after Discovery API is healthy |
-| Primary Transpetro exam | **Works** — `Transpetro 2026` open, studyable (`bankReady: true`, 9 bank questions) |
-| Past-exam extraction / embeddings / generation | **Works** against public Gemini (with Headroom bypass) |
-| Broad banca listings | **Partial** — crawls succeed but many pages yield nav/chrome noise (closed in admin) |
-| Fixture / single-PDF archaeology paths | **Mostly disabled** — not useful as live listing sources |
+| Source registration | **Works** — 16 archaeology URLs upserted (test-only skipped) |
+| Force crawl | **Works** — FIFO queue (no longer last-write-wins); drained Cesgranrio → PCI → PDF → Transpetro → FCC → Cebraspe → FGV |
+| Primary Transpetro exam | **Works** — `Transpetro 2026` / `transpetro-2026`, study `bankReady: true` (6 published) |
+| Sibling Cesgranrio open | **Works** — `Caixa Econômica Federal – CAIXA-01/2025` also `bankReady: true` (5 published) |
+| Past-exam extraction / embeddings / generation | **Works** with `gemini-embedding-001` + generation slug priority |
+| Broad banca listings | **Partial** — PCI/FCC/Cebraspe/FGV crawl OK with patterns; low Transpetro-specific signal |
+| Fixture archaeology paths | **Disabled** (9 sources) |
+
+---
+
+## Fine-tune pass (2026-09-12 late)
+
+### Enabled sources (7)
+
+| Source | Patterns / notes | Crawl result |
+| --- | --- | --- |
+| Cesgranrio Concursos | ranking + recent `/concurso/` open | **Primary** — Transpetro 2026 + Caixa open + artifacts |
+| PCI Concursos Provas | `link/openPatterns` concurso/prova/edital | OK, fingerprint skip after first |
+| Cesgranrio Transpetro PSP Terra Edital | PDF-as-single-listing | OK (1 open) |
+| Transpetro Selections | retargeted to `…/carreiras/concursos.htm` | OK, low new opens |
+| FCC / Cebraspe / FGV | concurso/edital/prova patterns | OK, weak Transpetro signal |
+
+### Disabled (9)
+
+PCI Home, IBAMSP, GovBR, BB/Caixa/Evento fixtures, FCC Arquivo Antigo, Correios PDF.
+
+### Study catalog (end state)
+
+| Exam | Slug | Published | bankReady |
+| --- | --- | --- | --- |
+| Transpetro 2026 | `transpetro-2026` | 6 | **true** |
+| Caixa Econômica Federal – CAIXA-01/2025 | `caixa-economica-federal-caixa-01-2025` | 5 | **true** |
+
+### Fixes landed this fine-tune
+
+| Fix | Why |
+| --- | --- |
+| `concursoPathSlug` / title-based slug (not org-only) | Nav pages were collapsing to `examSlug=transpetro` and poisoning the bank |
+| Artifacts only for `status=open` | Stopped feeding Content `certificacao` / `voltar-para-home` junk |
+| Generation queue slug priority + junk denylist | Prefer year/concurso slugs over nav chrome |
+| Force-crawl **FIFO queue** | Multiple “Crawl now” no longer overwrite each other |
+| Quarantine junk Content documents | Cleared pending/extracted nav docs |
+| HITL publish 2 Transpetro `needs_review` | Crossed `BANK_READY_THRESHOLD=5` |
+| (earlier) rate-limit / db push / ranking / embed model / browser-closed health | See prior resume section |
 
 ---
 
@@ -21,84 +59,44 @@
 
 ### Registered and kept **enabled**
 
-| Source | URL | Crawl | Useful signal |
-| --- | --- | --- | --- |
-| Cesgranrio Concursos | `https://www.cesgranrio.org.br/concursos/` | OK | **Yes** — discovers `Transpetro 2026` (`/concurso/transpetro-2026/`) |
-| Cesgranrio Transpetro PSP Terra Edital | `https://www.cesgranrio.org.br/concursos/transpetro-psp-terra/edital.pdf` | OK (PDF treated as single listing) | Partial — historic edital path; artifact stored when reachable |
-| PCI Concursos Provas | `https://www.pciconcursos.com.br/provas/` | OK | Partial — finds prova index rows; noisy without tight patterns |
-| FCC Concursos | `https://www.fcc.org.br/concursos/` | OK | Weak — institutional chrome dominated listings |
-| Cebraspe Concursos | `https://www.cebraspe.org.br/concursos/` | OK | Weak / no Transpetro-specific opens in this pass |
-| FGV Conhecimento | `https://conhecimento.fgv.br/concursos` | OK | Weak / no Transpetro-specific opens in this pass |
-| Transpetro Selections | `https://transpetro.com.br/.../carreiras/concursos.htm` (retargeted from home) | OK after upsert fix | Org careers page; not a full edital feed |
-
-### Registered then **disabled** (fixture / low-signal / noisy)
-
-| Source | URL | Why disabled |
+| Source | URL | Useful signal |
 | --- | --- | --- |
-| PCI Concursos Home | `https://www.pciconcursos.com.br/` | Home page noise; Provas index kept instead |
-| IBAMSP Concursos 179 | `https://www.ibamsp-concursos.org.br/informacoes/179/` | Seeded historic path; not Transpetro |
-| GovBR Concursos Trabalho | `https://www.gov.br/pt-br/categorias/.../concursos` | Category page; low signal |
-| Cesgranrio BB Escriturario | `https://www.cesgranrio.org.br/concursos/bb-escriturario/` | Fixture path from git archaeology |
-| Cesgranrio Caixa Tecnico | `https://www.cesgranrio.org.br/concursos/caixa-tecnico/` | Fixture path; intermittent Playwright close error |
-| Cesgranrio Evento Edital PDF | `https://www.cesgranrio.org.br/concursos/evento/edital.pdf` | Spec fixture URL |
-| Cesgranrio Evento 1 | `https://www.cesgranrio.org.br/concursos/evento/1` | Spec fixture URL |
-| FCC Arquivo Antigo | `https://www.fcc.org.br/concursos/arquivo-antigo/` | Fixture path; broken `[object Object]` links |
-| Correios Concursos Edital | `https://www.correios.com.br/.../edital.pdf` | Fixture PDF; browser chrome produced many false exams |
+| Cesgranrio Concursos | `https://www.cesgranrio.org.br/concursos/` | **Yes** — `Transpetro 2026` |
+| Cesgranrio Transpetro PSP Terra Edital | `…/transpetro-psp-terra/edital.pdf` | Partial |
+| PCI Concursos Provas | `https://www.pciconcursos.com.br/provas/` | Partial |
+| FCC Concursos | `https://www.fcc.org.br/concursos/` | Weak |
+| Cebraspe Concursos | `https://www.cebraspe.org.br/concursos/` | Weak |
+| FGV Conhecimento | `https://conhecimento.fgv.br/concursos` | Weak |
+| Transpetro Selections | `https://transpetro.com.br/…/carreiras/concursos.htm` | Org careers |
+
+### Registered then **disabled**
+
+PCI Home, IBAMSP 179, GovBR Trabalho, Cesgranrio BB/Caixa/Evento fixtures, FCC Arquivo Antigo, Correios Edital PDF.
 
 ### Intentionally **not** registered
 
-| URL | Reason |
-| --- | --- |
-| `https://portal.exemplo.gov.br/concursos/1` | Test-only |
-| `https://www.example.org/concursos` | Test-only |
+`portal.exemplo.gov.br`, `example.org` (test-only).
 
 ---
 
 ## What works end-to-end
 
-1. **Admin source upsert** — `POST /admin/sources` with cookie JWT (`root@quizzeira.local`).
-2. **Force crawl** — `POST /admin/crawl/force` → crawler consume on next tick.
-3. **Transpetro 2026** — status `open`, listing `https://www.cesgranrio.org.br/concurso/transpetro-2026/`, exposed on study `GET /exams` with `bankReady: true` and published questions.
-4. **Content pipeline** (with public Gemini):
-   - Extraction imports artifacts / drafts MCQs
-   - Embeddings via `gemini-embedding-001` (legacy `text-embedding-004` 404 on this AI Studio project)
-   - Quality gate can publish extraction without LLM judge (`CONTENT_QUALITY_PUBLISH_EXTRACTION_WITHOUT_JUDGE`)
-5. **Headroom opt-out** — `LLM_USE_HEADROOM=false` so workers hit `generativelanguage.googleapis.com` instead of broken host/proxy paths.
+1. Admin source upsert + enable/disable + pattern tuning  
+2. Force crawl queue → one source per crawler tick  
+3. Cesgranrio discovery → open exams with path slugs  
+4. Content extract → embed (`gemini-embedding-001`) → generate → Eval (+ HITL)  
+5. Study `GET /exams` with `bankReady` for Transpetro 2026  
 
-## What does not work / limitations
+## Limitations
 
-1. **Listing HTML noise** — Banca/org pages emit nav, privacy, cultural, and institutional links. Mitigations added (junk title/URL filters, PDF-as-single-listing, admin closes). Residual unknowns remain until patterns are tuned per domain.
-2. **Empty `linkPatterns` = keep everything** — Fixture archaeology sources with empty patterns flooded the exam table; those sources are disabled.
-3. **Open-exam unique collisions (fixed in code)** — Upsert by title-derived `id` hit Prisma `P2002` on `(examSlug, listingUrl)` when the same listing was rediscovered with different anchor text (seen on Transpetro org pages). Fixed to upsert on `examSlug_listingUrl`.
-4. **Direct Cesgranrio Transpetro edital PDF** — Path may 404 or lack HTML listing; pipeline now stores PDF start URLs as a single exam/artifact instead of scraping error chrome.
-5. **Headroom inside Compose** — Still unsuitable for Quizzeira workers (localhost bind / 401). Documented in infra `docs/quizzeira-headroom.md`.
-6. **Study catalog routes** — `/study/catalog` etc. 404; study surface uses `/exams`.
-7. **Correios / Evento / Arquivo Antigo fixtures** — Not production discovery sources; disabled after registration for completeness of the archaeology list.
+1. Broad bancas still need per-domain selectors for high precision  
+2. Eval fail rate on generated items is still high — HITL / judge quality remains a bottleneck  
+3. Local crawler interval was temporarily 45s for drain; compose default remains 30 min  
+4. MinIO Docker Hub pull may still need Quay retag after prune  
 
-## Crawl snapshots (local)
+## Follow-ups
 
-| Pass | Status | Sources OK | Open discovered | Artifacts | Notes |
-| --- | --- | --- | --- | --- | --- |
-| First full registry | ok | 16 | 70 | 32 | High noise; many false exams |
-| After disable + junk close | partial→ok | 6–9 | 2–16 | 3–17 | Transpetro retained |
-| Targeted Transpetro force | ok | (single) | — | — | After upsert fix |
-
-## Code / config changes tied to this work
-
-**Quizzeira**
-
-- Discovery: junk listing filters; PDF start-URL handling; open-exam upsert on natural unique key; admin force-crawl bypass / listing HTML artifact behavior (prior session + this pass)
-- Content: plain-text extraction fix; Gemini embed header auth; embedding model default `gemini-embedding-001`; quality publish-without-judge for extraction
-- Worker-kit: `LLM_USE_HEADROOM` bypass
-- Compose: Headroom opt-out on workers; higher crawler budgets; embedding model env
-
-**Infra**
-
-- Document that Quizzeira Compose skips Headroom; OPERATIONS / README / Headroom compose notes
-
-## Follow-ups (not done here)
-
-- Per-banca Playwright selectors (FCC / Cebraspe / FGV) instead of generic `<a href>` harvest
-- Persist archaeology sources as a checked-in seed JSON (optional) rather than only runtime admin upserts
-- Rotate the Gemini API key that was pasted in chat
-- Wire Headroom for Compose only if a Docker-reachable, auth-compatible proxy is required later
+- Per-banca Playwright selectors  
+- Optional seed JSON for archaeology sources  
+- Wake-on-force without depending on short interval  
+- Further HITL / judge tuning to raise publish rate without manual tips  

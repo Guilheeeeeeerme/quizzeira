@@ -74,6 +74,10 @@ export async function runDiscoveryPipeline(
 
           if (upserted.changed) summary.openDiscovered += 1;
 
+          // Skip artifact download for unknown nav/chrome rows — they flood
+          // Content with junk examSlugs (certificacao, voltar-para-home, …).
+          if (upserted.record.status !== "open") continue;
+
           // Prefer an edital/PDF URL; otherwise keep the listing page so Content
           // still has HTML to extract while the board has not published a PDF.
           // Store even when the exam row is unchanged — first successful crawl
@@ -114,6 +118,17 @@ export async function runDiscoveryPipeline(
         summary.sourcesOk += 1;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        // Compose restarts / shared rebuilds close Playwright mid-pass; do not
+        // mark the Source broken or the next force crawl is skipped (active-only).
+        if (/Target .+ closed|browser has been closed|browserContext\.close/i.test(message)) {
+          logInfo("crawl interrupted (browser closed)", {
+            worker: NAME,
+            runId,
+            sourceId: source.id,
+            error: message.slice(0, 160),
+          });
+          continue;
+        }
         summary.sourcesFailed += 1;
         summary.errors.push(`${source.domain}: ${message.slice(0, 160)}`);
         await dmzPost(`/internal/sources/${source.id}/health`, {

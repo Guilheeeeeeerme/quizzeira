@@ -185,7 +185,7 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
       select: { examSlug: true, examTitle: true },
       distinct: ["examSlug"],
       orderBy: { updatedAt: "desc" },
-      take: 50,
+      take: 80,
     });
 
     const items: Array<{
@@ -196,7 +196,12 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
       deficit: number;
     }> = [];
 
-    for (const doc of documents) {
+    const ranked = [...documents].sort(
+      (a, b) => examSlugPriority(b.examSlug) - examSlugPriority(a.examSlug),
+    );
+
+    for (const doc of ranked) {
+      if (examSlugPriority(doc.examSlug) < 0) continue;
       const [published, pending] = await Promise.all([
         prisma.questionItem.count({ where: { examSlug: doc.examSlug, status: "published" } }),
         prisma.questionItem.count({
@@ -215,6 +220,22 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
     return { items };
   });
 
+/** Prefer year/concurso-like slugs; negative = nav chrome — never generate. */
+function examSlugPriority(slug: string): number {
+  const s = slug.toLowerCase();
+  if (
+    /^(noticias|resultados|certificacao|concluidos|em-andamento|voltar-para-home|informe-de-rendimentos|codigo-de-etica(?:-e-conduta)?|pisa-para-escolas|politica-de-integridade|portal-do-colaborador)$/i.test(
+      s,
+    )
+  ) {
+    return -100;
+  }
+  let score = 0;
+  if (/20\d{2}/.test(s)) score += 20;
+  if (/transpetro|cesgranrio|caixa|banco|prefeitura|concurso/.test(s)) score += 10;
+  if (s.length >= 12) score += 3;
+  return score;
+}
   app.post<{ Body: { examSlug: string; subject: string; requested?: number; model?: string } }>(
     "/internal/generation/runs",
     async (request) => {
