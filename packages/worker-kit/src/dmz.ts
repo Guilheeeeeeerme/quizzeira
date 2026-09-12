@@ -1,12 +1,15 @@
 import { workerEnv } from "./env";
+import { currentRunId } from "./run-id";
 
 export async function dmzFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const hasBody = init?.body != null && init.body !== "";
+  const runId = currentRunId();
   const res = await fetch(`${workerEnv.internalApiUrl}${path}`, {
     ...init,
     headers: {
       ...(hasBody ? { "content-type": "application/json" } : {}),
       "x-internal-key": workerEnv.internalApiKey,
+      ...(runId ? { "x-run-id": runId } : {}),
       ...(init?.headers ?? {}),
     },
   });

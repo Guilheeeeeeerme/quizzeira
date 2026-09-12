@@ -1,8 +1,6 @@
-// Concept: Generation (grounded draft questions from retrieved chunks)
-//
-// Retrieval here is genuine RAG: embed a subject query, k-NN over chunk vectors,
-// feed the hits to the model. Note this is the *only* place retrieval happens —
-// the study runtime samples finished questions and never retrieves.
+// Concept: Generation — syllabus-leaf unit of work (§24).
+// Exam-level subject="geral" generation has been removed (§48.8).
+
 import {
   generateJson,
   hasLlmProvider,
@@ -11,21 +9,22 @@ import {
   logWarn,
   screenModelStrings,
 } from "@quizzeira/worker-kit";
-import type { GeneratedQuestionInput } from "@quizzeira/shared";
+import { parseGeneratedQuestionsV2 } from "@quizzeira/shared";
 import { content } from "../clients.js";
 import { contentEnv } from "../env.js";
-import { embedText } from "../embeddings/index.js";
-import {
-  buildGenerationPrompt,
-  GENERATION_SYSTEM_PROMPT,
-  type RetrievedChunk,
-} from "./prompt.js";
+import { buildGenerationBrief } from "./brief.js";
+import { buildGenerationPromptV2, GENERATION_SYSTEM_PROMPT_V2 } from "./prompt.js";
 
 const NAME = "content-worker/generation";
 
-interface QueueItem {
+interface PlannerQueueItem {
   examSlug: string;
   examTitle: string | null;
+  syllabusNodeId: string;
+  subject: string;
+  pathSlug: string;
+  rawText: string;
+  path: string[];
   deficit: number;
 }
 
@@ -42,152 +41,190 @@ export async function runGenerationPass(): Promise<GenerationPassResult> {
     return result;
   }
 
-  const { items } = await content.get<{ items: QueueItem[] }>(
-    `/internal/generation/queue?limit=${contentEnv.examsPerGenerationPass}` +
-      `&target=${contentEnv.publishedTargetPerExam}`,
+  const { items } = await content.get<{ items: PlannerQueueItem[] }>(
+    `/internal/generation/planner-queue?limit=${contentEnv.examsPerGenerationPass}` +
+      `&target=${contentEnv.publishedTargetPerExam}&minKu=4`,
   );
 
   for (const item of items) {
     const count = Math.min(contentEnv.questionsPerGenerationRun, item.deficit);
-    if (count <= 0) continue;
+    if (count <= 0 || !item.syllabusNodeId) continue;
+    if (!item.subject?.trim() || item.subject.trim().toLowerCase() === "geral") continue;
     result.runs += 1;
     try {
-      const drafted = await generateForExam(item, count);
-      result.drafted += drafted;
+      result.drafted += await generateForLeaf(item, count);
     } catch (err) {
       result.failed += 1;
       logWarn("generation run failed", {
         worker: NAME,
         examSlug: item.examSlug,
+        syllabusNodeId: item.syllabusNodeId,
         code: llmErrorCode(err),
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
-  if (result.runs) logInfo("generation pass", { worker: NAME, ...result });
+  if (result.runs) logInfo("generation pass v2", { worker: NAME, ...result });
   return result;
 }
 
-async function generateForExam(item: QueueItem, count: number): Promise<number> {
-  const subject = "geral";
+async function generateForLeaf(item: PlannerQueueItem, count: number): Promise<number> {
   const { run } = await content.post<{ run: { id: string } }>("/internal/generation/runs", {
     examSlug: item.examSlug,
-    subject,
+    subject: item.subject,
+    syllabusNodeId: item.syllabusNodeId,
     requested: count,
+    promptVersion: "generation.v2",
   });
 
   try {
-    const chunks = await retrieveChunks(item, subject);
-    if (chunks.length === 0) {
-      // No embedded material yet: the embedding pass has not caught up. Not an
-      // error — the run closes empty and the queue will offer it again.
-      await content.patch(`/internal/generation/runs/${run.id}`, {
-        status: "ok",
-        drafted: 0,
-        chunksUsed: 0,
-        finishedAt: new Date().toISOString(),
-      });
+    const { units } = await content.get<{
+      units: Array<{
+        id: string;
+        kind: string;
+        statement: string;
+        example: string | null;
+        qualifiers: string[];
+        sourceDomain?: string | null;
+      }>;
+    }>(
+      `/internal/knowledge-units?syllabusNodeId=${encodeURIComponent(item.syllabusNodeId)}&limit=24`,
+    );
+
+    if (units.length === 0) {
+      await finishRun(run.id, 0, 0, "partial");
       return 0;
     }
 
-    const prompt = buildGenerationPrompt({
+    const { stems } = await content.get<{ stems: string[] }>(
+      `/internal/question-items/stems?syllabusNodeId=${encodeURIComponent(item.syllabusNodeId)}&limit=20`,
+    );
+
+    const subjectKey = item.path?.[0] || item.subject;
+    const [{ profile }, { exemplars }] = await Promise.all([
+      content
+        .get<{ profile: Record<string, unknown> | null }>(
+          `/internal/style-profiles?examSlug=${encodeURIComponent(item.examSlug)}` +
+            `&canonicalSubjectId=${encodeURIComponent(subjectKey)}`,
+        )
+        .catch(() => ({ profile: null })),
+      content
+        .get<{
+          exemplars: Array<{
+            id?: string;
+            stem: string;
+            options: string[];
+            note: "formato apenas";
+          }>;
+        }>(
+          `/internal/previous-questions/stems?examFamily=${encodeURIComponent(item.examSlug)}` +
+            `&syllabusNodeId=${encodeURIComponent(item.syllabusNodeId)}&limit=10`,
+        )
+        .catch(() => ({ exemplars: [] })),
+    ]);
+
+    const brief = buildGenerationBrief({
+      examTitle: item.examTitle ?? item.examSlug,
       examSlug: item.examSlug,
-      examTitle: item.examTitle,
-      subject,
-      locale: "pt",
+      syllabusNodeId: item.syllabusNodeId,
+      path: item.path,
+      rawText: item.rawText,
+      knowledgeUnits: units,
+      existingStems: stems,
       count,
-      chunks,
+      style: profile as never,
+      exemplars,
     });
 
-    const response = await generateJson<{ questions: unknown }>(
-      GENERATION_SYSTEM_PROMPT,
-      prompt,
-      { temperature: 0.4, requiredKeys: ["questions"] },
-    );
-    const questions = normalizeQuestions(response.questions);
+    await content
+      .put(`/internal/generation/runs/${run.id}/brief`, { brief })
+      .catch(() => undefined);
 
-    // Output-side guardrail (OWASP LLM10) before anything is persisted.
+    const prompt = buildGenerationPromptV2(brief);
+    const kuIds = brief.knowledge.map((u) => u.id);
+
+    let questions = await generateAndParse(prompt, item.syllabusNodeId, kuIds, 0, "mid");
+    // §24.7: shape failure → one retry at next model tier.
+    if (questions.length === 0) {
+      questions = await generateAndParse(prompt, item.syllabusNodeId, kuIds, 1, "strong");
+    }
+
     for (const q of questions) {
       screenModelStrings(q.prompt, q.explanation, ...(q.options ?? []));
     }
 
+    // §30: previousQuestionId is transcription/OAB provenance only — not style exemplars.
     const drafted = questions.length
       ? await content.post<{ created: number }>("/internal/question-items/draft", {
           examSlug: item.examSlug,
-          subject,
+          subject: item.subject,
           locale: "pt",
           origin: "generation",
+          syllabusNodeId: item.syllabusNodeId,
+          knowledgeUnitIds: questions[0]?.knowledgeUnitIds ?? kuIds.slice(0, 3),
           generationRunId: run.id,
           questions,
         })
       : { created: 0 };
 
-    await content.patch(`/internal/generation/runs/${run.id}`, {
-      status: drafted.created > 0 ? "ok" : "partial",
-      drafted: drafted.created,
-      chunksUsed: chunks.length,
-      finishedAt: new Date().toISOString(),
-    });
+    // §24.7: if shape retry still yields nothing, flag cited KUs as suspect.
+    if (questions.length === 0 && kuIds.length > 0) {
+      await content
+        .post("/internal/knowledge-units/flag-suspect", { ids: kuIds, reason: "ku_suspect" })
+        .catch(() => undefined);
+    }
+
+    await finishRun(run.id, drafted.created, units.length, drafted.created > 0 ? "ok" : "partial");
     return drafted.created;
   } catch (err) {
-    await content
-      .patch(`/internal/generation/runs/${run.id}`, {
-        status: "failed",
-        error: err instanceof Error ? err.message : String(err),
-        finishedAt: new Date().toISOString(),
-      })
-      .catch(() => undefined);
+    await finishRun(run.id, 0, 0, "failed", err instanceof Error ? err.message : String(err));
     throw err;
   }
 }
 
-async function retrieveChunks(item: QueueItem, subject: string): Promise<RetrievedChunk[]> {
-  const query = [item.examTitle ?? item.examSlug, subject, "conteúdo programático e requisitos"]
-    .filter(Boolean)
-    .join(" — ");
-  const embedding = await embedText(query);
-  const { matches } = await content.post<{ matches: RetrievedChunk[] }>(
-    "/internal/chunks/search",
-    { embedding, examSlug: item.examSlug, limit: contentEnv.retrievalTopK },
+async function generateAndParse(
+  prompt: string,
+  syllabusNodeId: string,
+  kuIds: string[],
+  attempt: number,
+  tier: "mid" | "strong",
+) {
+  const response = await generateJson<{ questions: unknown }>(
+    GENERATION_SYSTEM_PROMPT_V2,
+    prompt,
+    {
+      temperature: 0.4,
+      requiredKeys: ["questions"],
+      tier,
+      attempt,
+      stage: "generation",
+    },
   );
-  return matches;
+  return normalizeQuestionsV2(response.questions, syllabusNodeId, kuIds);
 }
 
-/**
- * Model output is untrusted shape-wise too: drop anything that is not a
- * well-formed multiple-choice item rather than letting Eval reject it later.
- */
-export function normalizeQuestions(raw: unknown): GeneratedQuestionInput[] {
-  if (!Array.isArray(raw)) return [];
-  const out: GeneratedQuestionInput[] = [];
+async function finishRun(
+  runId: string,
+  drafted: number,
+  chunksUsed: number,
+  status: string,
+  error?: string,
+): Promise<void> {
+  await content.patch(`/internal/generation/runs/${runId}`, {
+    status,
+    drafted,
+    chunksUsed,
+    error: error?.slice(0, 500),
+    finishedAt: new Date().toISOString(),
+  });
+}
 
-  for (const entry of raw) {
-    if (!entry || typeof entry !== "object") continue;
-    const record = entry as Record<string, unknown>;
-    const prompt = typeof record.prompt === "string" ? record.prompt.trim() : "";
-    if (prompt.length < 20) continue;
-
-    const options = Array.isArray(record.options)
-      ? record.options.map((o) => String(o).trim()).filter(Boolean)
-      : [];
-    if (options.length < 2) continue;
-
-    const correctIndex = Number(record.correctIndex);
-    if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) {
-      continue;
-    }
-
-    out.push({
-      type: "MULTIPLE_CHOICE",
-      prompt,
-      options,
-      correctIndex,
-      referenceAnswer: null,
-      explanation:
-        typeof record.explanation === "string" ? record.explanation.trim() || null : null,
-    });
-  }
-
-  return out;
+/** @deprecated Prefer parseGeneratedQuestionsV2 from @quizzeira/shared. */
+export function normalizeQuestionsV2(
+  raw: unknown,
+  syllabusNodeId: string,
+  allowedKuIds: string[],
+) {
+  return parseGeneratedQuestionsV2(raw, syllabusNodeId, allowedKuIds);
 }

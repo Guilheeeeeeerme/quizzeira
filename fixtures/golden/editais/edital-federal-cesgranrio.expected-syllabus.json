@@ -1,0 +1,45 @@
+{
+  "fixtureId": "EDT-001",
+  "banco": "Cesgranrio",
+  "positions": [
+    {
+      "title": "Analista Judiciário — Área Administrativa",
+      "subjects": [
+        {
+          "name": "Língua Portuguesa",
+          "topics": [
+            { "name": "Compreensão textual", "subtopics": ["Compreensão e interpretação de textos"] },
+            { "name": "Ortografia", "subtopics": ["Ortografia oficial"] },
+            { "name": "Sintaxe", "subtopics": ["Concordância verbal e nominal", "Regência verbal e nominal"] }
+          ]
+        },
+        {
+          "name": "Raciocínio Lógico",
+          "topics": [
+            { "name": "Lógica proposicional", "subtopics": ["Proposições e conectivos", "Diagramas lógicos"] },
+            { "name": "Sequências", "subtopics": ["Sequências numéricas"] }
+          ]
+        },
+        {
+          "name": "Noções de Direito Administrativo",
+          "topics": [
+            { "name": "Fundamentos", "subtopics": ["Princípios da Administração Pública", "Atos administrativos"] },
+            { "name": "Licitações", "subtopics": ["Licitações (Lei 14.133/2021)"] }
+          ]
+        }
+      ],
+      "leaves": [
+        "Língua Portuguesa ▸ Compreensão textual ▸ Compreensão e interpretação de textos",
+        "Língua Portuguesa ▸ Ortografia ▸ Ortografia oficial",
+        "Língua Portuguesa ▸ Sintaxe ▸ Concordância verbal e nominal",
+        "Língua Portuguesa ▸ Sintaxe ▸ Regência verbal e nominal",
+        "Raciocínio Lógico ▸ Lógica proposicional ▸ Proposições e conectivos",
+        "Raciocínio Lógico ▸ Lógica proposicional ▸ Diagramas lógicos",
+        "Raciocínio Lógico ▸ Sequências ▸ Sequências numéricas",
+        "Noções de Direito Administrativo ▸ Fundamentos ▸ Princípios da Administração Pública",
+        "Noções de Direito Administrativo ▸ Fundamentos ▸ Atos administrativos",
+        "Noções de Direito Administrativo ▸ Licitações ▸ Licitações (Lei 14.133/2021)"
+      ]
+    }
+  ]
+}

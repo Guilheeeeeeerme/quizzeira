@@ -16,6 +16,7 @@ import {
 import styles from "./ExamsPage.module.css";
 
 type BankFilter = "all" | "ready" | "building" | "empty";
+type KindFilter = "all" | "concurso" | "oab";
 type SortKey = "questions" | "title" | "org" | "status";
 
 const PAGE_SIZE = 10;
@@ -49,6 +50,7 @@ export function ExamsPage() {
   const [preparingId, setPreparingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [bankFilter, setBankFilter] = useState<BankFilter>("all");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("questions");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export function ExamsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let rows = items.filter((item) => {
+      if (kindFilter !== "all" && (item.kind ?? "concurso") !== kindFilter) return false;
       if (bankFilter === "ready" && !item.bankReady) return false;
       if (bankFilter === "building" && (item.bankQuestionCount <= 0 || item.bankReady)) {
         return false;
@@ -146,7 +149,7 @@ export function ExamsPage() {
     });
 
     return rows;
-  }, [items, query, bankFilter, sortKey]);
+  }, [items, query, bankFilter, kindFilter, sortKey]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -156,7 +159,7 @@ export function ExamsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, bankFilter, sortKey]);
+  }, [query, bankFilter, kindFilter, sortKey]);
 
   async function openStudy(item: ExamCatalogItemDto) {
     setPreparingId(item.id);
@@ -195,6 +198,7 @@ export function ExamsPage() {
   function clearControls() {
     setQuery("");
     setBankFilter("all");
+    setKindFilter("all");
     setSortKey("questions");
     setPage(1);
   }
@@ -272,6 +276,16 @@ export function ExamsPage() {
           onChange={(event) => setQuery(event.target.value)}
         />
         <SegmentedControl
+          ariaLabel={t("Filter by exam kind")}
+          value={kindFilter}
+          onChange={setKindFilter}
+          options={[
+            { value: "all", label: t("All kinds") },
+            { value: "concurso", label: t("Concurso") },
+            { value: "oab", label: t("OAB") },
+          ]}
+        />
+        <SegmentedControl
           ariaLabel={t("Filter by question bank")}
           value={bankFilter}
           onChange={setBankFilter}
@@ -309,7 +323,7 @@ export function ExamsPage() {
                 total: items.length,
               })}
         </Text>
-        {query || bankFilter !== "all" || sortKey !== "questions" ? (
+        {query || bankFilter !== "all" || kindFilter !== "all" || sortKey !== "questions" ? (
           <Button size="sm" variant="ghost" onClick={clearControls}>
             {t("Clear filters")}
           </Button>
@@ -368,6 +382,9 @@ export function ExamsPage() {
                         {item.banca ? <span>· {item.banca}</span> : null}
                         <Badge tone={item.status === "open" ? "success" : "neutral"}>
                           {item.status === "open" ? t("Open") : t("Unknown")}
+                        </Badge>
+                        <Badge tone="neutral">
+                          {(item.kind ?? "concurso") === "oab" ? t("OAB") : t("Concurso")}
                         </Badge>
                         {item.emphasis.length > 0 ? (
                           <span>{item.emphasis.slice(0, 3).join(" · ")}</span>

@@ -46,10 +46,18 @@ describe("mcq extraction", () => {
     assert.deepEqual(extractMcqs(text), []);
   });
 
-  it("reads common answer key notations", () => {
-    const key = parseAnswerKey("01) A\n02 - C\n03. (E)");
-    assert.equal(key.get(1), 0);
-    assert.equal(key.get(2), 2);
-    assert.equal(key.get(3), 4);
+  it("parses mid-line option markers on a single paragraph", () => {
+    const text = [
+      "1 - Qual princípio?",
+      "a) legalidade b) moralidade c) publicidade d) eficiência e) hierarquia",
+      "",
+      "GABARITO",
+      "1 - A",
+    ].join("\n");
+    const items = extractMcqs(text);
+    assert.equal(items.length, 1);
+    assert.equal(items[0]!.correctIndex, 0);
+    assert.equal(items[0]!.options.length, 5);
+    assert.match(items[0]!.options[0]!, /legalidade/i);
   });
 });

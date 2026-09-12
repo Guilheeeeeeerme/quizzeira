@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "threshold": 0.35,
+  "bias": -1.2,
+  "weights": {
+    "dateDensity": 1.4,
+    "currencyDensity": 1.6,
+    "vacancyLexicon": 2.2,
+    "candidateImperative": 1.8,
+    "orgDensity": 1.1,
+    "editalReference": 1.5,
+    "contactDensity": 1.3,
+    "syllabusListShape": 1.7,
+    "legalCitationDensity": -1.4,
+    "explanatoryMarkers": -1.6,
+    "questionStructure": -0.4
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "fixtureId": "EDT-004",
+  "banco": "Cebraspe",
+  "positions": [
+    {
+      "title": "Auditor Federal de Finanças e Controle",
+      "subjects": [
+        {
+          "name": "Língua Portuguesa",
+          "topics": [
+            { "name": "Gramática", "subtopics": ["Morfossintaxe", "Pontuação"] },
+            { "name": "Texto", "subtopics": ["Coesão e coerência"] }
+          ]
+        },
+        {
+          "name": "Direito Constitucional",
+          "topics": [
+            { "name": "Fundamentos", "subtopics": ["Princípios fundamentais", "Organização do Estado"] },
+            { "name": "Controle", "subtopics": ["Controle de constitucionalidade"] }
+          ]
+        },
+        {
+          "name": "Contabilidade Pública",
+          "topics": [
+            { "name": "Normas", "subtopics": ["Plano de contas aplicado ao setor público", "NBC TSP"] },
+            { "name": "Demonstrações", "subtopics": ["Demonstrações contábeis"] }
+          ]
+        }
+      ],
+      "leaves": [
+        "Língua Portuguesa ▸ Gramática ▸ Morfossintaxe",
+        "Língua Portuguesa ▸ Gramática ▸ Pontuação",
+        "Língua Portuguesa ▸ Texto ▸ Coesão e coerência",
+        "Direito Constitucional ▸ Fundamentos ▸ Princípios fundamentais",
+        "Direito Constitucional ▸ Fundamentos ▸ Organização do Estado",
+        "Direito Constitucional ▸ Controle ▸ Controle de constitucionalidade",
+        "Contabilidade Pública ▸ Normas ▸ Plano de contas aplicado ao setor público",
+        "Contabilidade Pública ▸ Normas ▸ NBC TSP",
+        "Contabilidade Pública ▸ Demonstrações ▸ Demonstrações contábeis"
+      ]
+    }
+  ]
+}

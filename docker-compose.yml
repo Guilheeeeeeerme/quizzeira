@@ -299,6 +299,23 @@ services:
 
   # ── Content plane (Extraction, Generation, Eval) ──────────────────────────
 
+  doc-processor:
+    build:
+      context: ./apps/doc-processor
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3030:3030"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3030/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - private
+      - dmz
+
   content-api:
     build:
       context: .
@@ -377,6 +394,7 @@ services:
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
       CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
+      DOC_PROCESSOR_URL: http://doc-processor:3030
     volumes:
       - ./apps/content-worker:/app/apps/content-worker
       - ./packages/shared:/app/packages/shared
@@ -387,6 +405,8 @@ services:
       content-api:
         condition: service_healthy
       discovery-api:
+        condition: service_healthy
+      doc-processor:
         condition: service_healthy
       redis:
         condition: service_healthy

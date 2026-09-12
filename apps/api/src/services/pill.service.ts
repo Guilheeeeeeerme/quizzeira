@@ -54,6 +54,7 @@ export async function startPill(
     examSlug,
     locale,
     limit: budget.maxQuestions,
+    syllabusNodeIds: input.syllabusNodeIds?.filter(Boolean) ?? [],
   });
   if (sampled.length === 0) {
     throw Object.assign(new Error(BANK_EMPTY_MESSAGE), { statusCode: 409 });

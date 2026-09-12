@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isLengthOutlier, validateStructure } from "./structural";
+import { isLengthOutlier, isLengthRatioFail, validateStructure } from "./structural";
 
 const valid = {
   type: "MULTIPLE_CHOICE" as const,
@@ -97,6 +97,11 @@ test("placeholder text is rejected", () => {
     prompt: "TODO escrever o enunciado desta questão sobre estágio probatório federal",
   });
   assert.ok(result.reasons.includes("placeholder_text"));
+});
+
+test("option_length_ratio fails when max/min > 2", () => {
+  assert.equal(isLengthRatioFail(["ab", "abcdefghijklmnop", "cd", "ef"]), true);
+  assert.equal(isLengthRatioFail(["12 meses", "24 meses", "36 meses", "48 meses"]), false);
 });
 
 test("a giveaway-length correct option is flagged", () => {

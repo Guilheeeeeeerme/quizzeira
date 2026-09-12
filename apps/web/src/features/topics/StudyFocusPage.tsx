@@ -22,6 +22,21 @@ import {
 import { storeQuizSession } from "../quiz/QuizPage";
 import styles from "./Topics.module.css";
 
+interface SyllabusNodeDto {
+  id: string;
+  parentId: string | null;
+  depth: number;
+  title: string;
+  pathSlug: string;
+  scope: string | null;
+}
+
+interface SyllabusResponse {
+  examSlug: string | null;
+  syllabus: { id: string; version: number; status: string } | null;
+  nodes: SyllabusNodeDto[];
+}
+
 export function StudyFocusPage() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
@@ -30,6 +45,8 @@ export function StudyFocusPage() {
   const t = useT();
   const { locale } = useLocale();
   const [topic, setTopic] = useState<TopicDto | null>(null);
+  const [syllabus, setSyllabus] = useState<SyllabusResponse | null>(null);
+  const [selectedLeaves, setSelectedLeaves] = useState<string[]>([]);
   const [focusText, setFocusText] = useState("");
   const [durationMinutes, setDurationMinutes] = useState<SessionDurationMinutes | null>(null);
   const [booting, setBooting] = useState(true);
@@ -41,7 +58,12 @@ export function StudyFocusPage() {
     if (!topicId) return;
     void (async () => {
       try {
-        setTopic(await api<TopicDto>(`/topics/${topicId}`));
+        const [topicDto, syllabusDto] = await Promise.all([
+          api<TopicDto>(`/topics/${topicId}`),
+          api<SyllabusResponse>(`/topics/${topicId}/syllabus`).catch(() => null),
+        ]);
+        setTopic(topicDto);
+        setSyllabus(syllabusDto);
       } catch (err) {
         setError(localizeApiError(err instanceof Error ? err.message : "Failed to load", t));
       } finally {
@@ -54,6 +76,18 @@ export function StudyFocusPage() {
     if (!topic?.presetSlug) return [];
     return TOPIC_PRESETS.find((p) => p.slug === topic.presetSlug)?.focusExamples[locale] ?? [];
   }, [topic, locale]);
+
+  const leaves = useMemo(() => {
+    const nodes = syllabus?.nodes ?? [];
+    const parentIds = new Set(nodes.map((n) => n.parentId).filter(Boolean));
+    return nodes.filter((n) => !parentIds.has(n.id));
+  }, [syllabus]);
+
+  function toggleLeaf(id: string) {
+    setSelectedLeaves((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
 
   function appendExample(example: string) {
     setFocusText((prev) => {
@@ -73,6 +107,7 @@ export function StudyFocusPage() {
         method: "POST",
         body: JSON.stringify({
           focusText: withFocus ? focusText.trim() || null : null,
+          syllabusNodeIds: selectedLeaves,
           durationMinutes,
           locale,
         }),
@@ -169,6 +204,26 @@ export function StudyFocusPage() {
           ))}
         </div>
       </Field>
+
+      {leaves.length > 0 ? (
+        <Field label={t("Syllabus focus")}>
+          <Text size="caption" tone="tertiary">
+            {t("Pick syllabus leaves to sample from, or leave empty for the full bank.")}
+          </Text>
+          <div className={styles.chipRow}>
+            {leaves.slice(0, 40).map((leaf) => (
+              <button
+                key={leaf.id}
+                type="button"
+                className={`${styles.chip} ${selectedLeaves.includes(leaf.id) ? styles.chipActive : ""}`}
+                onClick={() => toggleLeaf(leaf.id)}
+              >
+                {leaf.title}
+              </button>
+            ))}
+          </div>
+        </Field>
+      ) : null}
 
       <Field label={t("Today's focus")}>
         <Textarea

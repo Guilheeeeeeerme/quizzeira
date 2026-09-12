@@ -2,8 +2,10 @@
 import { llmErrorCode, logInfo, logWarn } from "@quizzeira/worker-kit";
 import { contentApi } from "./client.js";
 import { qualityEnv } from "./env.js";
+import { validateGrounding } from "./grounding.js";
 import { decide } from "./gate.js";
 import { judgeItem, type JudgeVerdict } from "./judge.js";
+import { validateRelevance } from "./relevance.js";
 import { validateStructure } from "./structural.js";
 
 const NAME = "content-quality";
@@ -18,7 +20,11 @@ interface PendingItem {
   correctIndex: number | null;
   referenceAnswer: string | null;
   explanation: string | null;
-  origin?: "extraction" | "generation" | string | null;
+  origin?: "extraction" | "generation" | "transcription" | string | null;
+  knowledgeUnitIds?: string[] | null;
+  syllabusNodeId?: string | null;
+  passage?: string | null;
+  distractorRationale?: string[] | null;
 }
 
 export interface EvalPassResult {
@@ -26,6 +32,86 @@ export interface EvalPassResult {
   published: number;
   failed: number;
   needsReview: number;
+}
+
+function ladderStage(
+  structuralOk: boolean,
+  relevanceOk: boolean | null,
+  groundingOk: boolean | null,
+  judge: JudgeVerdict | null,
+): string {
+  if (judge) return "structural+relevance+grounding+judge";
+  if (!structuralOk) return "structural";
+  if (relevanceOk === false) return "structural+relevance";
+  if (groundingOk === false) return "structural+relevance+grounding";
+  return "structural+relevance+grounding";
+}
+
+async function loadGroundingContext(item: PendingItem): Promise<{
+  statements: string[];
+  allowedIds: string[];
+  path: string[];
+  leafValid: boolean | null;
+  previousStems: string[];
+  leafStems: string[];
+}> {
+  const kuIds = (item.knowledgeUnitIds ?? []).filter(Boolean);
+  let statements: string[] = [];
+  let allowedIds: string[] = [];
+  let path: string[] = [];
+  let leafValid: boolean | null = null;
+  let previousStems: string[] = [];
+  let leafStems: string[] = [];
+
+  if (item.syllabusNodeId) {
+    try {
+      const nodeInfo = await contentApi.get<{
+        node: { id: string } | null;
+        isLeaf: boolean;
+        path: string[];
+      }>(`/internal/syllabus-nodes/${encodeURIComponent(item.syllabusNodeId)}`);
+      leafValid = Boolean(nodeInfo.node && nodeInfo.isLeaf);
+      path = nodeInfo.path ?? [];
+      const { units } = await contentApi.get<{
+        units: Array<{ id: string; statement: string }>;
+      }>(
+        `/internal/knowledge-units?syllabusNodeId=${encodeURIComponent(item.syllabusNodeId)}&limit=50`,
+      );
+      allowedIds = units.map((u) => u.id);
+    } catch {
+      leafValid = false;
+    }
+    try {
+      const { stems } = await contentApi.get<{ stems: string[] }>(
+        `/internal/question-items/stems?syllabusNodeId=${encodeURIComponent(item.syllabusNodeId)}&limit=40`,
+      );
+      leafStems = (stems ?? []).filter((s) => s && s !== item.prompt);
+    } catch {
+      leafStems = [];
+    }
+  }
+
+  try {
+    const { stems } = await contentApi.get<{ stems: string[] }>(
+      `/internal/previous-questions/stems?examFamily=${encodeURIComponent(item.examSlug)}&limit=40`,
+    );
+    previousStems = stems ?? [];
+  } catch {
+    previousStems = [];
+  }
+
+  if (kuIds.length > 0) {
+    try {
+      const { units } = await contentApi.get<{
+        units: Array<{ id: string; statement: string }>;
+      }>(`/internal/knowledge-units?ids=${kuIds.map(encodeURIComponent).join(",")}`);
+      statements = units.map((u) => u.statement).filter(Boolean);
+    } catch {
+      statements = [];
+    }
+  }
+
+  return { statements, allowedIds, path, leafValid, previousStems, leafStems };
 }
 
 export async function runEvalPass(): Promise<EvalPassResult> {
@@ -36,11 +122,55 @@ export async function runEvalPass(): Promise<EvalPassResult> {
   );
 
   for (const item of items) {
-    const structural = validateStructure(item);
+    const requiresPassage = /interpreta[cç][aã]o|compreens[aã]o de texto/i.test(item.subject);
+    const structural = validateStructure({
+      ...item,
+      origin: item.origin,
+      passage: item.passage,
+      requiresPassage,
+      distractorRationale: item.distractorRationale,
+    });
+    const ctx =
+      structural.ok
+        ? await loadGroundingContext(item)
+        : {
+            statements: [],
+            allowedIds: [],
+            path: [] as string[],
+            leafValid: null as boolean | null,
+            previousStems: [] as string[],
+            leafStems: [] as string[],
+          };
 
-    // Only items that survived the deterministic gate cost a model call.
+    const relevance = structural.ok
+      ? validateRelevance({
+          origin: item.origin,
+          prompt: item.prompt,
+          options: item.options,
+          explanation: item.explanation,
+          knowledgeUnitIds: item.knowledgeUnitIds,
+          syllabusNodeId: item.syllabusNodeId,
+          syllabusLeafValid: ctx.leafValid,
+          previousQuestionStems: ctx.previousStems,
+          leafStems: ctx.leafStems,
+        })
+      : null;
+
+    const grounding =
+      structural.ok && relevance?.ok
+        ? validateGrounding({
+            origin: item.origin,
+            knowledgeUnitIds: item.knowledgeUnitIds,
+            allowedKnowledgeUnitIds: ctx.allowedIds.length ? ctx.allowedIds : null,
+            knowledgeUnitStatements: ctx.statements,
+            prompt: item.prompt,
+            options: item.options,
+            correctIndex: item.correctIndex,
+          })
+        : null;
+
     let judge: JudgeVerdict | null = null;
-    if (structural.ok) {
+    if (structural.ok && relevance?.ok && grounding?.ok) {
       try {
         judge = await judgeItem({
           examSlug: item.examSlug,
@@ -51,18 +181,20 @@ export async function runEvalPass(): Promise<EvalPassResult> {
           correctIndex: item.correctIndex,
           referenceAnswer: item.referenceAnswer,
           explanation: item.explanation,
+          syllabusPath: ctx.path.length ? ctx.path : null,
+          knowledgeUnitStatements: ctx.statements.length ? ctx.statements : null,
         });
       } catch (err) {
         const code = llmErrorCode(err);
         logWarn("judge unavailable", { worker: NAME, itemId: item.id, code });
-        // Budget exhaustion means every remaining item would park in
-        // needs_review; stop instead of flooding the HITL queue.
         if (code === "llm_budget_exceeded") break;
       }
     }
 
-    const verdict = decide({
+    let verdict = decide({
       structural,
+      relevance,
+      grounding,
       judge,
       correctIndex: item.correctIndex,
       thresholds: {
@@ -73,17 +205,32 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       origin: item.origin,
     });
 
+    // Soft temporal flags → needs_review rather than publish (§25.2).
+    if (
+      verdict.decision === "published" &&
+      relevance?.reviewReasons?.includes("temporally_dependent")
+    ) {
+      verdict = {
+        decision: "needs_review",
+        score: verdict.score,
+        reasons: [...verdict.reasons, "temporally_dependent"],
+        notes: "temporal dependence without stable legal citation",
+      };
+    }
+
     await contentApi.post("/internal/question-items/verdict", {
       itemId: item.id,
       decision: verdict.decision,
       score: verdict.score,
       notes: verdict.notes,
       reasons: verdict.reasons,
-      stage: judge
-        ? "structural+judge"
-        : verdict.decision === "published"
-          ? "structural+extraction"
-          : "structural",
+      stage:
+        verdict.decision === "published" &&
+        !judge &&
+        qualityEnv.publishExtractionWithoutJudge &&
+        (item.origin === "extraction" || item.origin === "transcription")
+          ? "structural+relevance+grounding+extraction"
+          : ladderStage(structural.ok, relevance?.ok ?? null, grounding?.ok ?? null, judge),
       model: judge?.model ?? null,
     });
 

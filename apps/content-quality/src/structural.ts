@@ -16,8 +16,11 @@ export type StructuralReason =
   | "correct_index_out_of_range"
   | "banned_option_phrase"
   | "option_length_outlier"
+  | "option_length_ratio"
   | "missing_reference_answer"
-  | "placeholder_text";
+  | "placeholder_text"
+  | "passage_required"
+  | "distractor_rationale_missing";
 
 export interface StructuralInput {
   type: "MULTIPLE_CHOICE" | "OPEN";
@@ -26,6 +29,11 @@ export interface StructuralInput {
   correctIndex?: number | null;
   referenceAnswer?: string | null;
   explanation?: string | null;
+  origin?: "extraction" | "generation" | "transcription" | string | null;
+  /** Interpretation / reading-comprehension leaf → passage required. */
+  requiresPassage?: boolean | null;
+  passage?: string | null;
+  distractorRationale?: string[] | null;
 }
 
 export interface StructuralResult {
@@ -87,14 +95,27 @@ export function validateStructure(input: StructuralInput): StructuralResult {
         reasons.push("banned_option_phrase");
       }
       if (isLengthOutlier(options)) reasons.push("option_length_outlier");
+      if (isLengthRatioFail(options)) reasons.push("option_length_ratio");
 
       const index = input.correctIndex;
       if (index == null || !Number.isInteger(index) || index < 0 || index >= options.length) {
         reasons.push("correct_index_out_of_range");
       }
+
+      if (input.origin === "generation") {
+        const rationales = (input.distractorRationale ?? []).filter((r) => String(r || "").trim());
+        const needed = Math.max(0, options.length - 1);
+        if (rationales.length < needed) {
+          reasons.push("distractor_rationale_missing");
+        }
+      }
     }
   } else if (!input.referenceAnswer?.trim()) {
     reasons.push("missing_reference_answer");
+  }
+
+  if (input.requiresPassage && !String(input.passage ?? "").trim()) {
+    reasons.push("passage_required");
   }
 
   return {
@@ -107,7 +128,7 @@ export function validateStructure(input: StructuralInput): StructuralResult {
 /**
  * A correct answer that is far longer than every distractor is a giveaway —
  * test-takers pick the long one without reading. Flags a >2.5x ratio against
- * the mean of the others.
+ * the mean of the others (legacy).
  */
 export function isLengthOutlier(options: string[]): boolean {
   if (options.length < 3) return false;
@@ -117,6 +138,16 @@ export function isLengthOutlier(options: string[]): boolean {
   if (others.length === 0) return false;
   const mean = others.reduce((a, b) => a + b, 0) / others.length;
   return mean > 0 && longest / mean > 2.5;
+}
+
+/** Spec §25.1: option_length_ratio > 2.0 fails (tightened). */
+export function isLengthRatioFail(options: string[]): boolean {
+  if (options.length < 3) return false;
+  const lengths = options.map((o) => o.trim().length).filter((l) => l > 0);
+  if (lengths.length < 3) return false;
+  const max = Math.max(...lengths);
+  const min = Math.min(...lengths);
+  return min > 0 && max / min > 2.0;
 }
 
 const REASON_TEXT: Record<StructuralReason, string> = {
@@ -131,8 +162,11 @@ const REASON_TEXT: Record<StructuralReason, string> = {
   correct_index_out_of_range: "índice da alternativa correta inválido",
   banned_option_phrase: "alternativa do tipo 'todas/nenhuma das anteriores'",
   option_length_outlier: "alternativa correta muito mais longa que as demais",
+  option_length_ratio: "razão de comprimento entre alternativas acima do limite",
   missing_reference_answer: "questão aberta sem resposta de referência",
   placeholder_text: "texto de preenchimento (placeholder) no enunciado",
+  passage_required: "subtópico de interpretação exige texto-base (passage)",
+  distractor_rationale_missing: "distratores sem justificativa (origem geração)",
 };
 
 export function describe(reasons: StructuralReason[]): string {

@@ -1,14 +1,16 @@
 // Concept: Ingestion (one crawl pass over the enabled Source registry)
-//
-// Every write goes to discovery-api. The crawler has no knowledge of topics,
-// quizzes, or the question bank — turning a PDF into questions is Content's job.
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
-import { listingsFingerprint, oabEditionPageUrl } from "@quizzeira/shared";
-import { dmzGet, dmzPost, dmzPut, logError, logInfo } from "@quizzeira/worker-kit";
+import { concursoPathSlug, listingsFingerprint, oabEditionPageUrl } from "@quizzeira/shared";
+import { dmzGet, dmzPost, dmzPut, logError, logInfo, withRunIdAsync } from "@quizzeira/worker-kit";
 import { closeBrowser, crawlSourceListings, listingsToOpenRecords } from "./browser.js";
+import { detailFromPdfListing, parseDetailHtml } from "./detail.js";
+import { crawlDirectSource } from "./direct.js";
 import { crawlerEnv } from "./env.js";
+import { fetchPage } from "./fetch.js";
 import { crawlOabSource, type OabExamGroup } from "./oab-fgv.js";
+import { storeArtifact, storeSourceListingArtifact } from "./store.js";
+import { crawlTopicQueries } from "./topic.js";
 
 const NAME = "discovery-crawler";
 
@@ -16,6 +18,7 @@ export async function runDiscoveryPipeline(
   onlySourceId?: string | null,
 ): Promise<CrawlerRunSummary> {
   const runId = randomUUID().slice(0, 12);
+  return withRunIdAsync(runId, async () => {
   const summary: CrawlerRunSummary = {
     runId,
     startedAt: new Date().toISOString(),
@@ -39,8 +42,6 @@ export async function runDiscoveryPipeline(
       "/internal/sources?status=active",
     );
 
-    // An empty registry is the normal first-boot state: nothing is seeded, an
-    // admin adds the first Source through the Admin UI.
     if (sources.length === 0) {
       logInfo("source registry empty", { worker: NAME, runId });
       summary.status = "ok";
@@ -53,87 +54,11 @@ export async function runDiscoveryPipeline(
 
     for (const source of selected) {
       try {
-        if (source.strategy === "oab-fgv") {
-          // No fixture exercises an ASP.NET postback, and the generic fixture
-          // would file its listing under OAB exam slugs. Skip instead.
-          if (crawlerEnv.fixtureMode) {
-            summary.sourcesSkipped += 1;
-            continue;
-          }
-          artifactBudget = await crawlOab(source, summary, artifactBudget);
-          await dmzPost(`/internal/sources/${source.id}/health`, { ok: true });
-          summary.sourcesOk += 1;
-          continue;
-        }
-
-        const { listings, outboundDomains } = await crawlSourceListings(source);
-        const fingerprint = listingsFingerprint(listings);
-        const previous = await dmzGet<{ fingerprint: string | null }>(
-          `/internal/sources/${source.id}/listing-fingerprint`,
-        );
-
-        if (!onlySourceId && previous.fingerprint === fingerprint) {
-          await dmzPost(`/internal/sources/${source.id}/health`, { ok: true });
-          summary.sourcesOk += 1;
-          summary.sourcesSkipped += 1;
-          continue;
-        }
-
-        for (const open of listingsToOpenRecords(listings, source)) {
-          const upserted = await dmzPost<{
-            record: OpenExamRecord;
-            created: boolean;
-            changed: boolean;
-          }>("/internal/open-exams", open);
-
-          if (upserted.changed) summary.openDiscovered += 1;
-
-          // Skip artifact download for unknown nav/chrome rows — they flood
-          // Content with junk examSlugs (certificacao, voltar-para-home, …).
-          if (upserted.record.status !== "open") continue;
-
-          // Prefer an edital/PDF URL; otherwise keep the listing page so Content
-          // still has HTML to extract while the board has not published a PDF.
-          // Store even when the exam row is unchanged — first successful crawl
-          // may have discovered the listing before artifact download existed.
-          const artifactUrl = open.editalUrl || open.listingUrl;
-          if (artifactUrl && artifactBudget > 0) {
-            const stored = await storeArtifact({
-              examId: upserted.record.id,
-              sourceId: source.id,
-              url: artifactUrl,
-              withBytes: true,
-            });
-            if (stored) {
-              summary.artifactsStored += 1;
-              if (stored.downloaded) artifactBudget -= 1;
-            }
-          }
-        }
-
-        await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
-          fingerprint,
-          listingCount: listings.length,
-        });
-
-        // Adaptive reach, gated: at most 2 proposals per source per pass, and
-        // proposals are inert until an admin approves them.
-        for (const domain of outboundDomains.slice(0, 2)) {
-          const proposed = await dmzPost<{ proposed?: boolean }>("/internal/sources/propose", {
-            url: `https://${domain}/`,
-            domain,
-            name: domain,
-            notes: `Discovered from outbound links on ${source.domain}`,
-          });
-          if (proposed.proposed) summary.proposedSources += 1;
-        }
-
+        artifactBudget = await crawlSource(source, summary, artifactBudget, onlySourceId);
         await dmzPost(`/internal/sources/${source.id}/health`, { ok: true });
         summary.sourcesOk += 1;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // Compose restarts / shared rebuilds close Playwright mid-pass; do not
-        // mark the Source broken or the next force crawl is skipped (active-only).
         if (/Target .+ closed|browser has been closed|browserContext\.close/i.test(message)) {
           logInfo("crawl interrupted (browser closed)", {
             worker: NAME,
@@ -162,6 +87,159 @@ export async function runDiscoveryPipeline(
   }
 
   return finish(summary);
+  });
+}
+
+async function crawlSource(
+  source: CrawlerSource,
+  summary: CrawlerRunSummary,
+  budget: number,
+  onlySourceId?: string | null,
+): Promise<number> {
+  if (source.strategy === "oab-fgv") {
+    if (crawlerEnv.fixtureMode) {
+      summary.sourcesSkipped += 1;
+      return budget;
+    }
+    return crawlOab(source, summary, budget);
+  }
+
+  const discoveryMode = source.discoveryMode;
+  if (discoveryMode === "topic_query") {
+    return crawlTopicQueries(source, summary, budget);
+  }
+  if (discoveryMode === "direct") {
+    return crawlDirectSource(source, summary, budget);
+  }
+
+  return crawlListingMode(source, summary, budget, onlySourceId);
+}
+
+async function crawlListingMode(
+  source: CrawlerSource,
+  summary: CrawlerRunSummary,
+  budget: number,
+  onlySourceId?: string | null,
+): Promise<number> {
+  const { listings, outboundDomains, listingPageHtml, listingPageUrl } =
+    await crawlSourceListings(source);
+  const fingerprint = listingsFingerprint(listings);
+  const previous = await dmzGet<{ fingerprint: string | null }>(
+    `/internal/sources/${source.id}/listing-fingerprint`,
+  );
+
+  if (!onlySourceId && previous.fingerprint === fingerprint) {
+    summary.sourcesSkipped += 1;
+    return budget;
+  }
+
+  // Listing page → Source artifact only (administrative), never exam content (RC-2).
+  if (listingPageHtml && listingPageUrl && budget > 0) {
+    const stored = await storeSourceListingArtifact({
+      sourceId: source.id,
+      url: listingPageUrl,
+      html: listingPageHtml,
+    });
+    if (stored) {
+      summary.artifactsStored += 1;
+      if (stored.downloaded) budget -= 1;
+    }
+  }
+
+  let remaining = budget;
+  const openRecords = listingsToOpenRecords(listings, source);
+
+  for (let i = 0; i < listings.length; i++) {
+    const listing = listings[i]!;
+    const baseOpen = openRecords[i]!;
+
+    const isPdf = /\.pdf(\?|#|$)/i.test(listing.href);
+    const detail = isPdf
+      ? detailFromPdfListing(listing.title, listing.href, listing.title)
+      : parseDetailHtml(
+          (await fetchPage(listing.href, source)).html,
+          listing.href,
+          listing.title,
+        );
+
+    const examSlug =
+      detail.examSlug ||
+      baseOpen.examSlug ||
+      concursoPathSlug(listing.href) ||
+      baseOpen.examSlug;
+
+    const openPayload = {
+      ...baseOpen,
+      examSlug,
+      title: detail.title || baseOpen.title,
+      org: detail.org ?? baseOpen.org,
+      banca: detail.banca ?? baseOpen.banca,
+      emphasis: detail.emphasis.length > 0 ? detail.emphasis : baseOpen.emphasis,
+      editalUrl: detail.editalUrl ?? baseOpen.editalUrl,
+      listingUrl: listing.href,
+      status: detail.status,
+      kind: detail.kind,
+      editionKey: detail.editionKey,
+      detailUrl: isPdf ? listing.href : detail.detailUrl,
+      registrationEnd: detail.registrationEnd?.toISOString() ?? null,
+      statusSource: detail.statusSource,
+      positions: detail.positions,
+    };
+
+    const upserted = await dmzPost<{
+      record: OpenExamRecord;
+      created: boolean;
+      changed: boolean;
+    }>("/internal/open-exams", openPayload);
+
+    await dmzPost(`/internal/exams/${upserted.record.id}/detail`, {
+      editionKey: detail.editionKey,
+      detailUrl: openPayload.detailUrl,
+      registrationEnd: openPayload.registrationEnd,
+      statusSource: detail.statusSource,
+      positions: detail.positions,
+      kind: detail.kind,
+    }).catch(() => undefined);
+
+    if (upserted.changed) summary.openDiscovered += 1;
+
+    if (upserted.record.status !== "open") continue;
+
+    // Store ONLY document links from the detail page — never the listing URL (RC-2).
+    for (const doc of detail.documentLinks) {
+      if (remaining <= 0) break;
+      const stored = await storeArtifact({
+        examId: upserted.record.id,
+        sourceId: source.id,
+        url: doc.url,
+        withBytes: true,
+        kindHint: doc.kindHint,
+        roleHint: doc.roleHint,
+        anchorLabel: doc.anchorLabel,
+      });
+      if (stored) {
+        summary.artifactsStored += 1;
+        if (stored.downloaded) remaining -= 1;
+      }
+    }
+  }
+
+  await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
+    fingerprint,
+    listingCount: listings.length,
+  });
+
+  for (const domain of outboundDomains.slice(0, 2)) {
+    const proposed = await dmzPost<{ proposed?: boolean }>("/internal/sources/propose", {
+      url: `https://${domain}/`,
+      domain,
+      name: domain,
+      notes: `Discovered from outbound links on ${source.domain}`,
+    });
+    if (proposed.proposed) summary.proposedSources += 1;
+  }
+
+  return remaining;
 }
 
 async function finish(summary: CrawlerRunSummary): Promise<CrawlerRunSummary> {
@@ -181,14 +259,6 @@ async function finish(summary: CrawlerRunSummary): Promise<CrawlerRunSummary> {
   return summary;
 }
 
-/**
- * Ingests the OAB portal. Unlike a listing source, the exams are known in
- * advance: the crawl produces one open-exam row per edition and phase, and
- * every document it carries is stored with the kind the label taxonomy gave it
- * — which is what lets Extraction pair a caderno with its gabarito.
- *
- * Returns the remaining artifact budget.
- */
 async function crawlOab(
   source: CrawlerSource,
   summary: CrawlerRunSummary,
@@ -255,67 +325,9 @@ function oabOpenExamRecord(source: CrawlerSource, group: OabExamGroup) {
     emphasis: [],
     editalUrl: edital?.url ?? null,
     listingUrl: oabEditionPageUrl(group.edition.fgvKey),
-    // The Exame de Ordem runs about three times a year: an edition page is
-    // never "closed" material the way a one-off concurso is.
+    kind: "oab" as const,
     status: "open" as const,
     sourceId: source.id,
     sourceDomain: source.domain,
   };
 }
-
-async function storeArtifact(input: {
-  examId: string;
-  sourceId: string;
-  url: string;
-  withBytes: boolean;
-  /** Set by sources that classify their own documents (oab-fgv). */
-  kind?: string;
-}): Promise<{ downloaded: boolean } | null> {
-  const kind = input.kind ?? (/edital/i.test(input.url) ? "edital" : "other");
-  let base64: string | undefined;
-  let contentType: string | undefined;
-
-  if (input.withBytes) {
-    try {
-      const res = await fetch(input.url, {
-        headers: { "user-agent": USER_AGENT },
-        signal: AbortSignal.timeout(crawlerEnv.navigationTimeoutMs),
-      });
-      contentType = res.headers.get("content-type") ?? undefined;
-      const okType = /pdf|html|text\/plain/i.test(contentType ?? "");
-      if (res.ok && okType) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.byteLength <= crawlerEnv.maxArtifactBytes) {
-          base64 = buf.toString("base64");
-        }
-      }
-    } catch {
-      // Fall through and record the URL reference only.
-    }
-  }
-
-  const inferredKind =
-    input.kind ??
-    (/edital/i.test(input.url) || /pdf/i.test(contentType ?? "")
-      ? kind
-      : /html/i.test(contentType ?? "")
-        ? "other"
-        : kind);
-
-  try {
-    await dmzPost("/internal/artifacts", {
-      examId: input.examId,
-      sourceId: input.sourceId,
-      kind: inferredKind,
-      url: input.url,
-      contentType: contentType ?? "application/octet-stream",
-      base64,
-    });
-    return { downloaded: Boolean(base64) };
-  } catch {
-    return null;
-  }
-}
-
-const USER_AGENT =
-  "QuizzeiraDiscoveryCrawler/0.1 (+https://quizzeira.local; research; polite)";

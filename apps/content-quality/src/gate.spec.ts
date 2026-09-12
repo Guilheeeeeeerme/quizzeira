@@ -13,7 +13,17 @@ const structuralBad: StructuralResult = {
 };
 
 function judge(overrides: Partial<JudgeVerdict> = {}): JudgeVerdict {
-  return { score: 0.9, answerIndex: 2, reasons: [], notes: "boa questão", model: null, ...overrides };
+  return {
+    score: 0.9,
+    answerIndex: 2,
+    relevance: 0.9,
+    durability: 0.9,
+    grounding: 0.9,
+    reasons: [],
+    notes: "boa questão",
+    model: null,
+    ...overrides,
+  };
 }
 
 test("structural failure fails regardless of judge score", () => {
@@ -56,6 +66,49 @@ test("generation still needs a judge even with the extraction escape hatch", () 
     origin: "generation",
   });
   assert.equal(result.decision, "needs_review");
+});
+
+test("transcription can publish without judge when the escape hatch is on", () => {
+  const result = decide({
+    structural: structuralOk,
+    judge: null,
+    correctIndex: 2,
+    thresholds,
+    publishExtractionWithoutJudge: true,
+    origin: "transcription",
+  });
+  assert.equal(result.decision, "published");
+});
+
+test("relevance hard failures fail before the judge", () => {
+  const result = decide({
+    structural: structuralOk,
+    relevance: {
+      ok: false,
+      reasons: ["tests_exam_metadata", "knowledge_unit_ids_missing"],
+      reviewReasons: [],
+      notes: "metadata",
+    },
+    grounding: null,
+    judge: null,
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "failed");
+  assert.ok(result.reasons.includes("tests_exam_metadata"));
+});
+
+test("grounding hard failures fail before the judge", () => {
+  const result = decide({
+    structural: structuralOk,
+    relevance: { ok: true, reasons: [], reviewReasons: [], notes: "ok" },
+    grounding: { ok: false, reasons: ["ungrounded_citation"], notes: "no citations" },
+    judge: null,
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "failed");
+  assert.ok(result.reasons.includes("ungrounded_citation"));
 });
 
 test("a high-scoring item with judge agreement publishes", () => {
@@ -116,6 +169,28 @@ test("open questions cannot mismatch on answer index", () => {
     thresholds,
   });
   assert.equal(result.decision, "published");
+});
+
+test("judge low durability hard-fails even with a high score", () => {
+  const result = decide({
+    structural: structuralOk,
+    judge: judge({ score: 0.95, durability: 0.2 }),
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "failed");
+  assert.ok(result.reasons.includes("judge_low_durability"));
+});
+
+test("judge low grounding parks for review", () => {
+  const result = decide({
+    structural: structuralOk,
+    judge: judge({ score: 0.95, grounding: 0.2 }),
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "needs_review");
+  assert.ok(result.reasons.includes("judge_low_grounding"));
 });
 
 test("judge reasons are carried into the verdict", () => {

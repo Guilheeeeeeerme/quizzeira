@@ -219,6 +219,21 @@ export const OAB_OBJECTIVE_BLUEPRINT: readonly OabSubject[] = [
   { name: "Direito Previdenciário", slug: "direito-previdenciario", from: 79, to: 80 },
 ];
 
+/** Static syllabus leaves for OAB 1ª fase (§47) — mirrors the objective blueprint. */
+export const OAB_STATIC_SYLLABUS: readonly {
+  subject: string;
+  slug: string;
+  pathSlug: string;
+  from: number;
+  to: number;
+}[] = OAB_OBJECTIVE_BLUEPRINT.map((s) => ({
+  subject: s.name,
+  slug: s.slug,
+  pathSlug: s.slug,
+  from: s.from,
+  to: s.to,
+}));
+
 export interface OabSubjectGuess {
   name: string;
   slug: string;

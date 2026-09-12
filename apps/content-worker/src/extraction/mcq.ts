@@ -75,12 +75,19 @@ export function parseQuestionBlocks(body: string): QuestionBlock[] {
 }
 
 function parseOptions(block: string): { prompt: string; options: string[] } | null {
-  const marker = /(?:^|\n)\s*\(?([A-Ea-e])\)\s*|(?:^|\n)\s*([A-Ea-e])\s*[-.)]\s+/g;
+  // Allow mid-line markers (golden HTML often puts a)… b)… on one <p>).
+  const marker =
+    /(?:^|[\n\s])\(?([A-Ea-e])\)\s+|(?:^|[\n\s])([A-Ea-e])\s*[-.)]\s+/g;
   const found: Array<{ label: string; at: number; length: number }> = [];
   for (const match of block.matchAll(marker)) {
     if (match.index == null) continue;
     const label = (match[1] ?? match[2] ?? "").toLowerCase();
-    if (label) found.push({ label, at: match.index, length: match[0].length });
+    if (!label) continue;
+    // Skip leading whitespace captured by the lookbehind-style prefix so the
+    // option text starts at the label, not the preceding space.
+    const raw = match[0];
+    const lead = raw.match(/^\s*/)?.[0].length ?? 0;
+    found.push({ label, at: match.index + lead, length: raw.length - lead });
   }
   // Option markers must run a, b, c, d… in order. Anything else is prose that
   // happens to contain a parenthesised letter.
@@ -98,7 +105,7 @@ function parseOptions(block: string): { prompt: string; options: string[] } | nu
     if (!value) return null;
     options.push(value);
   }
-  return { prompt, options: options.slice(0, MIN_OPTIONS) };
+  return { prompt, options: options.slice(0, Math.max(MIN_OPTIONS, ordered.length)) };
 }
 
 /**

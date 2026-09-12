@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 import {
   crawlerSourceId,
   domainFromUrl,
+  inferExamKind,
   listingsFingerprint,
+  looksLikelyOpen,
   looksOpen,
   normalizeOpenExam,
   openExamFingerprint,
+  parseRegistrationWindow,
 } from "./crawler.js";
 
 describe("normalizeOpenExam", () => {
@@ -56,12 +59,56 @@ describe("normalizeOpenExam", () => {
   });
 });
 
+describe("parseRegistrationWindow", () => {
+  it("parses de/até date ranges", () => {
+    const window = parseRegistrationWindow(
+      "Inscrições de 01/03/2026 a 30/03/2026 para o concurso público.",
+    );
+    assert.ok(window);
+    assert.equal(window!.start, "2026-03-01");
+    assert.equal(window!.end, "2026-03-30");
+  });
+
+  it("parses inscrições abertas até", () => {
+    const window = parseRegistrationWindow("Inscrições abertas até 15/04/2026");
+    assert.ok(window);
+    assert.equal(window!.end, "2026-04-15");
+  });
+
+  it("returns null when no dates found", () => {
+    assert.equal(parseRegistrationWindow("Resultado final homologado"), null);
+  });
+});
+
+describe("normalizeOpenExam registration status", () => {
+  it("uses registration dates over regex open hint when past", () => {
+    const rec = normalizeOpenExam({
+      title: "TCE-GO — Inscrições abertas",
+      href: "https://portal.example.gov.br/concurso/tce-go-2020/",
+      sourceId: "src1",
+      sourceDomain: "portal.example.gov.br",
+      detailText: "Inscrições de 01/01/2020 a 31/01/2020",
+    });
+    assert.equal(rec.status, "unknown");
+    assert.equal(rec.statusSource, "date");
+    assert.equal(rec.registrationEnd, "2020-01-31");
+  });
+});
+
+describe("exam kind", () => {
+  it("classifies non-concurso titles", () => {
+    assert.equal(inferExamKind("54º Exame para Certificação — CFP®"), "other");
+    assert.equal(inferExamKind("Concurso Público TCE-GO"), "concurso");
+  });
+});
+
 describe("crawler helpers", () => {
   it("detects open copy and domains", () => {
+    assert.equal(looksLikelyOpen("Inscrições abertas até 30/09"), true);
     assert.equal(looksOpen("Inscrições abertas até 30/09"), true);
-    assert.equal(looksOpen("Concurso Público para a Prefeitura"), true);
-    assert.equal(looksOpen("01- Edital de Abertura"), true);
-    assert.equal(looksOpen("Resultado final homologado"), false);
+    assert.equal(looksLikelyOpen("Concurso Público para a Prefeitura"), true);
+    assert.equal(looksLikelyOpen("01- Edital de Abertura"), true);
+    assert.equal(looksLikelyOpen("Resultado final homologado"), false);
     assert.equal(domainFromUrl("https://www.FCC.org.br/path"), "fcc.org.br");
     assert.equal(crawlerSourceId("a.com", "A"), crawlerSourceId("a.com", "A"));
   });

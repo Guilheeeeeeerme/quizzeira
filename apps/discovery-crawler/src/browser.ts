@@ -8,14 +8,14 @@ import {
   filterOpenListings,
   parseListingHtml,
   type DiscoveredListing,
-} from "./listing-parse.js";
+} from "./listing.js";
 
 export type { DiscoveredListing };
 export {
   filterOpenListings,
   listingsToOpenRecords,
   parseListingHtml,
-} from "./listing-parse.js";
+} from "./listing.js";
 
 let browser: Browser | null = null;
 
@@ -35,16 +35,25 @@ export async function closeBrowser(): Promise<void> {
 export async function crawlSourceListings(source: CrawlerSource): Promise<{
   listings: DiscoveredListing[];
   outboundDomains: string[];
+  listingPageHtml: string | null;
+  listingPageUrl: string | null;
 }> {
+  const startUrl = source.startUrls[0] ?? `https://${source.domain}/`;
+
   if (source.strategy === "fixture" || crawlerEnv.fixtureMode) {
     const fixturePath = resolve(__dirname, "../fixtures/open-listing.html");
     const html = await readFile(fixturePath, "utf8");
-    const base = source.startUrls[0] ?? "https://fixture.local/";
+    const base = startUrl;
     const listings = filterOpenListings(
       parseListingHtml(html, base, source),
       source.openPatterns,
     );
-    return { listings, outboundDomains: [] };
+    return {
+      listings,
+      outboundDomains: [],
+      listingPageHtml: html,
+      listingPageUrl: base,
+    };
   }
 
   const b = await getBrowser();
@@ -58,33 +67,37 @@ export async function crawlSourceListings(source: CrawlerSource): Promise<{
 
   const all: DiscoveredListing[] = [];
   const outbound = new Set<string>();
+  let listingPageHtml: string | null = null;
+  let listingPageUrl: string | null = null;
 
   try {
-    for (const startUrl of source.startUrls.slice(0, 2)) {
-      // Direct PDF start URLs are themselves the artifact/exam — do not scrape
-      // browser chrome / error HTML for random nav links.
-      if (/\.pdf(\?|#|$)/i.test(startUrl)) {
+    for (const url of source.startUrls.slice(0, 2)) {
+      if (/\.pdf(\?|#|$)/i.test(url)) {
         const leaf = decodeURIComponent(
-          startUrl.split("/").pop()?.replace(/\.pdf$/i, "") || "edital",
+          url.split("/").pop()?.replace(/\.pdf$/i, "") || "edital",
         ).replace(/[-_]+/g, " ");
         all.push({
           title: leaf.length >= 8 ? leaf : `Edital ${source.name || source.domain}`,
-          href: startUrl,
-          textBlob: `${leaf} ${startUrl}`,
+          href: url,
+          textBlob: `${leaf} ${url}`,
         });
         continue;
       }
 
       await sleep(source.politenessMs);
-      await page.goto(startUrl, { waitUntil: "domcontentloaded" });
+      await page.goto(url, { waitUntil: "domcontentloaded" });
       const html = await page.content();
-      const parsed = parseListingHtml(html, startUrl, source);
+      if (!listingPageHtml) {
+        listingPageHtml = html;
+        listingPageUrl = url;
+      }
+      const parsed = parseListingHtml(html, url, source);
       for (const item of parsed) all.push(item);
 
       const hrefs = await collectHrefs(page, source.linkSelector ?? "a[href]");
       for (const href of hrefs) {
-        const domain = domainFromUrl(href);
-        if (domain && domain !== source.domain) outbound.add(domain);
+        const d = domainFromUrl(href);
+        if (d && d !== source.domain) outbound.add(d);
       }
     }
   } finally {
@@ -95,7 +108,33 @@ export async function crawlSourceListings(source: CrawlerSource): Promise<{
     0,
     crawlerEnv.maxOpenPerSource,
   );
-  return { listings, outboundDomains: [...outbound].slice(0, 10) };
+  return {
+    listings,
+    outboundDomains: [...outbound].slice(0, 10),
+    listingPageHtml,
+    listingPageUrl,
+  };
+}
+
+export async function fetchWithPlaywright(
+  url: string,
+  politenessMs: number,
+): Promise<{ html: string }> {
+  const b = await getBrowser();
+  const context = await b.newContext({
+    userAgent:
+      "QuizzeiraExamCrawler/0.1 (+https://quizzeira.local; research; polite)",
+    locale: "pt-BR",
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(crawlerEnv.navigationTimeoutMs);
+  try {
+    await sleep(politenessMs);
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+    return { html: await page.content() };
+  } finally {
+    await context.close();
+  }
 }
 
 async function collectHrefs(page: Page, selector: string): Promise<string[]> {

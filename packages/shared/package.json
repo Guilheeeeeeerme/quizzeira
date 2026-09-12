@@ -5,8 +5,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/curriculum && cp -f src/curriculum/metadata-model.json dist/curriculum/ && (test -f src/curriculum/subjects.yaml && cp -f src/curriculum/subjects.yaml dist/curriculum/ || true)",
     "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

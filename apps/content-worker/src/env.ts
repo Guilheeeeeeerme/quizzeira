@@ -10,16 +10,34 @@ function num(key: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function flag(key: string, defaultTrue = true): boolean {
+  const raw = process.env[key];
+  if (raw == null || raw === "") return defaultTrue;
+  return raw !== "false" && raw !== "0";
+}
+
 export const contentEnv = {
-  extractionEnabled: (process.env.CONTENT_EXTRACTION_ENABLED ?? "true") !== "false",
-  generationEnabled: (process.env.CONTENT_GENERATION_ENABLED ?? "true") !== "false",
-  embeddingsEnabled: (process.env.CONTENT_EMBEDDINGS_ENABLED ?? "true") !== "false",
+  extractionEnabled: flag("CONTENT_EXTRACTION_ENABLED"),
+  generationEnabled: flag("CONTENT_GENERATION_ENABLED"),
+  embeddingsEnabled: flag("CONTENT_EMBEDDINGS_ENABLED"),
+
+  stageImportEnabled: flag("CONTENT_STAGE_IMPORT", true),
+  stageNormalizeEnabled: flag("CONTENT_STAGE_NORMALIZE", true),
+  stageClassifyEnabled: flag("CONTENT_STAGE_CLASSIFY", true),
+  stageSyllabusEnabled: flag("CONTENT_STAGE_SYLLABUS", true),
+  stageEvidenceEnabled: flag("CONTENT_STAGE_EVIDENCE", true),
+  stageKnowledgeEnabled: flag("CONTENT_STAGE_KNOWLEDGE", true),
+  stagePlannerEnabled: flag("CONTENT_STAGE_PLANNER", true),
+
+  docProcessorUrl: (process.env.DOC_PROCESSOR_URL ?? "http://doc-processor:3030").replace(
+    /\/$/,
+    "",
+  ),
 
   docsPerPass: num("CONTENT_DOCS_PER_PASS", 3),
   chunksPerEmbedPass: num("CONTENT_CHUNKS_PER_EMBED_PASS", 32),
   examsPerGenerationPass: num("CONTENT_EXAMS_PER_GENERATION_PASS", 2),
   questionsPerGenerationRun: num("CONTENT_QUESTIONS_PER_RUN", 6),
-  /** Published-question target per exam; the queue stops asking above this. */
   publishedTargetPerExam: num("CONTENT_PUBLISHED_TARGET", 40),
   retrievalTopK: num("CONTENT_RETRIEVAL_TOP_K", 8),
 
@@ -37,8 +55,6 @@ export const contentEnv = {
   ),
   discoveryApiKey:
     process.env.INTERNAL_API_KEY_DISCOVERY || process.env.INTERNAL_API_KEY || "dev-discovery-key",
-  // INTERNAL_API_URL is accepted as a fallback so the worker keeps working with
-  // the generic worker env block used by the other services in compose.
   contentApiUrl: (
     process.env.CONTENT_API_URL ||
     process.env.INTERNAL_API_URL ||

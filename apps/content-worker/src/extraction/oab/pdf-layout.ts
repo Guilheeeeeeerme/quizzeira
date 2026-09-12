@@ -1,14 +1,11 @@
 // Concept: Extraction (PDF → text that preserves reading order)
 //
-// The platform's general reader (../pdf-text.ts) concatenates text operators in
-// stream order and throws away position. That is fine for an edital, but an OAB
-// caderno is printed in two columns: without geometry, question 1 comes back
-// spliced into question 3 and every prompt is nonsense.
+// General PDFs go through apps/doc-processor. OAB cadernos are two-column and
+// need geometry here: without it, question 1 splices into question 3.
 //
-// So this reader keeps the text matrix. It walks the same inflated content
-// streams, tracks Tm/Td/TD/T*, and emits positioned fragments; those are then
-// grouped into lines by y and into columns by x, and read column by column.
-// Still dependency-free — no poppler, no pdf.js in the worker image.
+// This reader keeps the text matrix. It walks inflated content streams, tracks
+// Tm/Td/TD/T*, and emits positioned fragments; those are grouped into lines by
+// y and columns by x, then read column by column.
 import { inflateSync, unzipSync } from "node:zlib";
 import { buildFontMap, decodeWithCMap, type FontMap } from "./cmap.js";
 

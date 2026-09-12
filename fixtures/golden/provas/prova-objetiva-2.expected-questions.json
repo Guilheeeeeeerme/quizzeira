@@ -1,0 +1,16 @@
+{
+  "questions": [
+    {
+      "number": 1,
+      "prompt": "Assinale a alternativa em que a concordância verbal está correta.",
+      "options": ["Fazem dois anos que ele chegou.", "Faz dois anos que ele chegou.", "Houveram muitos problemas.", "Existe muitas dúvidas."],
+      "correctIndex": 1
+    },
+    {
+      "number": 2,
+      "prompt": "Em licitações, a modalidade pregão é disciplinada principalmente pela:",
+      "options": ["Lei 8.666/1993 apenas", "Lei 14.133/2021", "CF/88 art. 5º", "Código Civil"],
+      "correctIndex": 1
+    }
+  ]
+}

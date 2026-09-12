@@ -20,4 +20,6 @@ export {
   screenModelStrings,
   fenceUntrusted,
 } from "./guardrails";
-export { rankFor } from "./model-rank";
+export { rankFor, rankForTier, type ModelTier } from "./model-rank";
+export { fixtureProvider, createFixtureProvider, fixturePayloadKey, type FixtureTurn } from "./providers/fixture";
+export { currentRunId, withRunId, withRunIdAsync, newRunId } from "./run-id";

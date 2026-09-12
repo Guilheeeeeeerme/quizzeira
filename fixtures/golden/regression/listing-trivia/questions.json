@@ -1,0 +1,78 @@
+{
+  "description": "Screenshot regression items REG-001..006 (§43). syllabusNodeId set to prove link alone is insufficient.",
+  "syllabusNodeIdFixture": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+  "items": [
+    {
+      "id": "REG-001",
+      "prompt": "O Tribunal de Contas do Estado de Goiás está com inscrições abertas para qual cargo?",
+      "options": [
+        "Técnico de Controle Externo",
+        "Auditor Estadual de Finanças Públicas",
+        "Analista de Sistemas",
+        "Procurador",
+        "Contador"
+      ],
+      "correctIndex": 0,
+      "syllabusNodeId": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+      "knowledgeUnitIds": [],
+      "origin": "generation"
+    },
+    {
+      "id": "REG-002",
+      "prompt": "Qual associação oferece o 54º Exame para Certificação — CFP®?",
+      "options": ["PLANEJAR", "ANBIMA", "CFA Institute", "APIMEC", "ABRAPP"],
+      "correctIndex": 0,
+      "syllabusNodeId": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+      "knowledgeUnitIds": [],
+      "origin": "generation"
+    },
+    {
+      "id": "REG-003",
+      "prompt": "Qual cargo está sendo oferecido pela Secretaria de Estado da Fazenda de Santa Catarina?",
+      "options": [
+        "Auditor Estadual de Finanças Públicas",
+        "Técnico de Controle Externo",
+        "Analista de Sistemas",
+        "Procurador",
+        "Contador"
+      ],
+      "correctIndex": 0,
+      "syllabusNodeId": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+      "knowledgeUnitIds": [],
+      "origin": "generation"
+    },
+    {
+      "id": "REG-004",
+      "prompt": "O cargo de Técnico de Controle Externo é oferecido por qual instituição?",
+      "options": ["TCE-GO", "SEF-SC", "TCU", "CGU", "INSS"],
+      "correctIndex": 0,
+      "syllabusNodeId": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+      "knowledgeUnitIds": [],
+      "origin": "generation"
+    },
+    {
+      "id": "REG-005",
+      "prompt": "Qual o nome da associação que realiza o 54º Exame para Certificação — CFP®?",
+      "options": ["PLANEJAR", "ANBIMA", "CFA Institute", "APIMEC", "ABRAPP"],
+      "correctIndex": 0,
+      "syllabusNodeId": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+      "knowledgeUnitIds": [],
+      "origin": "generation"
+    },
+    {
+      "id": "REG-006",
+      "prompt": "O que a PLANEJAR — Associação Brasileira de Planejamento Financeiro está promovendo?",
+      "options": [
+        "54º Exame para Certificação — CFP®",
+        "Concurso público federal",
+        "Curso de pós-graduação",
+        "Vestibular",
+        "Processo seletivo de estágio"
+      ],
+      "correctIndex": 0,
+      "syllabusNodeId": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+      "knowledgeUnitIds": [],
+      "origin": "generation"
+    }
+  ]
+}

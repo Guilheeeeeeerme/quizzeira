@@ -58,6 +58,12 @@ export const workerEnv = {
   llmDailyBudget: num("LLM_DAILY_BUDGET", 500),
   /** Hard daily token halt (OWASP LLM06). Default ~2M tokens/day. */
   llmDailyTokenBudget: num("LLM_DAILY_TOKEN_BUDGET", 2_000_000),
+  /** Per-stage daily token budgets (§27.4). 0 = unlimited within global budget. */
+  llmBudgetKuTokens: num("LLM_BUDGET_KU_TOKENS", 500_000),
+  llmBudgetGenerationTokens: num("LLM_BUDGET_GENERATION_TOKENS", 800_000),
+  llmBudgetJudgeTokens: num("LLM_BUDGET_JUDGE_TOKENS", 400_000),
+  llmBudgetResidueTokens: num("LLM_BUDGET_RESIDUE_TOKENS", 200_000),
+  llmCacheTtlDays: num("LLM_CACHE_TTL_DAYS", 90),
   /** Allow in-process budgets only under test runners. */
   allowMemoryBudget:
     process.env.VITEST === "true" ||

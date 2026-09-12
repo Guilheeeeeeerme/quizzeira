@@ -15,24 +15,27 @@ const ID_MARKER = "openExamId:";
 export async function listExamCatalog(): Promise<ExamCatalogItemDto[]> {
   const [open, stats] = await Promise.all([fetchOpenExams(100), publishedExamCounts()]);
 
-  const items: ExamCatalogItemDto[] = open.map((o) => {
-    const published = stats.get(o.examSlug);
-    return {
-      id: o.id,
-      examSlug: o.examSlug,
-      title: o.title,
-      org: o.org,
-      banca: o.banca,
-      emphasis: o.emphasis,
-      editalUrl: o.editalUrl,
-      listingUrl: o.listingUrl,
-      status: o.status,
-      sourceDomain: o.sourceDomain,
-      placeholder: false,
-      bankQuestionCount: published?.publishedCount ?? 0,
-      bankReady: published?.bankReady ?? false,
-    };
-  });
+  const items: ExamCatalogItemDto[] = open
+    .filter((o) => (o.kind ?? "concurso") === "concurso" || o.kind === "oab")
+    .map((o) => {
+      const published = stats.get(o.examSlug);
+      return {
+        id: o.id,
+        examSlug: o.examSlug,
+        title: o.title,
+        org: o.org,
+        banca: o.banca,
+        emphasis: [],
+        editalUrl: o.editalUrl,
+        listingUrl: o.listingUrl,
+        status: o.status,
+        sourceDomain: o.sourceDomain,
+        kind: o.kind ?? "concurso",
+        placeholder: false,
+        bankQuestionCount: published?.publishedCount ?? 0,
+        bankReady: published?.bankReady ?? false,
+      };
+    });
 
   return items.sort((a, b) => {
     if (a.bankReady !== b.bankReady) return a.bankReady ? -1 : 1;
@@ -52,13 +55,12 @@ export async function getExamCatalogItem(id: string): Promise<ExamCatalogItemDto
 function buildGuidelines(item: ExamCatalogItemDto, locale: LocaleCode): string {
   const template = getTopicPreset("open_exam")!.guidelinesTemplate[locale];
   const orgLine = item.org ?? item.title;
-  const emphasis = item.emphasis[0] ?? "";
   const banca = item.banca ?? "";
   const filled = template
     .replace(/(Órgão \/ concurso:|Exam \/ agency:).*/i, `$1 ${orgLine}`)
     .replace(
       /(Cargo \/ vaga \/ ênfase[^:]*:|Target role \/ vacancy \/ emphasis[^:]*:).*/i,
-      `$1 ${emphasis}`,
+      `$1 (use Study Focus syllabus leaves)`,
     )
     .replace(/(Estilo da banca:|Bank \/ exam style notes:).*/i, `$1 ${banca}`);
   return [
