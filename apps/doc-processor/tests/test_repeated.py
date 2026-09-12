@@ -5,9 +5,12 @@ from app.schema import Block
 def test_repeated_block_removal_after_three_docs():
     reset_domain_shingle_cache()
     shared = Block(type="paragraph", text="Rodapé institucional da banca — todos os direitos reservados 2026.")
-    unique = Block(type="paragraph", text="A concordância verbal exige que o verbo concorde com o sujeito em número.")
 
     for doc_id in ("d1", "d2", "d3"):
+        unique = Block(
+            type="paragraph",
+            text=f"A concordância verbal exige que o verbo concorde com o sujeito em número ({doc_id}).",
+        )
         kept, entry = strip_repeated_blocks(
             [shared, unique],
             domain="example.gov.br",
@@ -16,8 +19,12 @@ def test_repeated_block_removal_after_three_docs():
         assert entry.removed == 0
         assert len(kept) == 2
 
+    unique4 = Block(
+        type="paragraph",
+        text="A concordância verbal exige que o verbo concorde com o sujeito em número (d4).",
+    )
     kept4, entry4 = strip_repeated_blocks(
-        [shared, unique],
+        [shared, unique4],
         domain="example.gov.br",
         document_id="d4",
     )

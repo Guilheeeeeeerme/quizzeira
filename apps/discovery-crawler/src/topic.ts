@@ -79,6 +79,8 @@ export async function crawlTopicQueries(
           anchorLabel: candidate.title,
           topicQueryId: row.id,
           withBytes: true,
+          domain: domain ?? undefined,
+          politenessMs: source.politenessMs,
           fetchSignals: {
             provider: provider.constructor.name,
             rank: candidate.rank,

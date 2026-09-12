@@ -3,17 +3,19 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { parseGeneratedQuestionsV2 } from "@quizzeira/shared";
-import { generateJson, resetBudgetForTests } from "@quizzeira/worker-kit";
+import { generateJson, resetBudgetForTests, workerEnv } from "@quizzeira/worker-kit";
 import { buildGenerationBrief, looksLikeListingTriviaStem } from "./brief.js";
 import { buildGenerationPromptV2, GENERATION_SYSTEM_PROMPT_V2 } from "./prompt.js";
 
 describe("generation fixture harness (§41.3)", () => {
   const prevProvider = process.env.LLM_PROVIDER;
   const prevOrder = process.env.LLM_PROVIDER_ORDER;
+  const prevMem = workerEnv.allowMemoryBudget;
 
   before(() => {
     process.env.LLM_PROVIDER = "fixture";
     process.env.LLM_PROVIDER_ORDER = "fixture";
+    workerEnv.allowMemoryBudget = true;
     resetBudgetForTests();
   });
 
@@ -22,6 +24,7 @@ describe("generation fixture harness (§41.3)", () => {
     else process.env.LLM_PROVIDER = prevProvider;
     if (prevOrder === undefined) delete process.env.LLM_PROVIDER_ORDER;
     else process.env.LLM_PROVIDER_ORDER = prevOrder;
+    workerEnv.allowMemoryBudget = prevMem;
   });
 
   it("Concordância verbal brief yields denylist-clean MCQ via fixture LLM", async () => {

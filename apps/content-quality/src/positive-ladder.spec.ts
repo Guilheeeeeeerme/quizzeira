@@ -1,4 +1,4 @@
-// Concept: §41.5 positive ladder — POS items pass rungs 1–3.
+// Concept: §41.5 positive ladder — POS items pass rungs 1–3, then decide()→published.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -9,7 +9,7 @@ import { decide } from "./gate.js";
 import { validateRelevance } from "./relevance.js";
 import { validateStructure } from "./structural.js";
 
-const FIXTURE = resolve(process.cwd(), "fixtures/golden/positive/pos-items.json");
+const FIXTURE = resolve(__dirname, "../../../fixtures/golden/positive/pos-items.json");
 
 interface PosItem {
   id: string;
@@ -37,7 +37,7 @@ describe("§41.5 positive ladder POS-001..005", () => {
   });
 
   for (const item of file.items) {
-    it(`${item.id} passes structural + relevance + grounding`, () => {
+    it(`${item.id} rungs 1–3 + fixture judge → published`, () => {
       const structural = validateStructure({
         type: "MULTIPLE_CHOICE",
         origin: "generation",
@@ -73,6 +73,7 @@ describe("§41.5 positive ladder POS-001..005", () => {
       });
       assert.equal(grounding.ok, true, `${item.id} grounding: ${grounding.reasons.join(",")}`);
 
+      // Fixture-judge path (§41.5): canned judge scores + agreement → published.
       const gate = decide({
         structural,
         relevance,

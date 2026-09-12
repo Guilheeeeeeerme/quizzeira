@@ -8,12 +8,12 @@ import { questionTestsExamMetadata } from "@quizzeira/shared";
 import { validateRelevance } from "./relevance.js";
 
 const LISTING_QUESTIONS = resolve(
-  process.cwd(),
-  "fixtures/golden/regression/listing-trivia/questions.json",
+  __dirname,
+  "../../../fixtures/golden/regression/listing-trivia/questions.json",
 );
 const GENERATION_PROMPT = resolve(
-  process.cwd(),
-  "apps/content-worker/src/generation/prompt.ts",
+  __dirname,
+  "../../content-worker/src/generation/prompt.ts",
 );
 
 describe("generation metadata guard (§43.2)", () => {

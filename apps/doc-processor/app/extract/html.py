@@ -35,28 +35,44 @@ def extract_html(data: bytes, url: str | None = None) -> HtmlExtractResult:
 def _extract_trafilatura(html: str, url: str | None) -> HtmlExtractResult:
     import trafilatura
 
-    result = trafilatura.bare_extraction(
+    def _as_dict(result: object) -> dict:
+        if result is None:
+            return {}
+        if isinstance(result, dict):
+            return result
+        # trafilatura ≥2 returns a Document dataclass / SimpleNamespace
+        return {
+            "text": getattr(result, "text", None) or getattr(result, "raw_text", None),
+            "title": getattr(result, "title", None),
+            "author": getattr(result, "author", None),
+            "date": getattr(result, "date", None),
+            "sitename": getattr(result, "sitename", None),
+        }
+
+    raw = trafilatura.bare_extraction(
         html,
         url=url,
         favor_precision=True,
         include_tables=True,
         with_metadata=True,
     )
-    if not result or not result.get("text"):
-        result = trafilatura.bare_extraction(
+    result = _as_dict(raw)
+    if not result.get("text"):
+        raw = trafilatura.bare_extraction(
             html,
             url=url,
             favor_recall=True,
             include_tables=True,
             with_metadata=True,
         )
+        result = _as_dict(raw)
 
-    text = (result or {}).get("text") or ""
+    text = result.get("text") or ""
     metadata = Metadata(
-        title=(result or {}).get("title"),
-        author=(result or {}).get("author"),
-        date=(result or {}).get("date"),
-        sitename=(result or {}).get("sitename"),
+        title=result.get("title"),
+        author=result.get("author"),
+        date=result.get("date"),
+        sitename=result.get("sitename"),
     )
     blocks = _text_and_headings_to_blocks(text, html)
     tables = _extract_tables_from_html(html)

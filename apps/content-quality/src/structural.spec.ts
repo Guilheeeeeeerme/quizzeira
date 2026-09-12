@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isLengthOutlier, isLengthRatioFail, validateStructure } from "./structural";
+import { isLengthOutlier, isLengthRatioFail, validateStructure } from "./structural.js";
 
 const valid = {
   type: "MULTIPLE_CHOICE" as const,

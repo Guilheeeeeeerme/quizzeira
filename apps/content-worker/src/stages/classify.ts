@@ -167,7 +167,14 @@ function classifySectionRole(section: NormalizedSection, docLinkDensity: number)
   const text = section.text;
   const combined = `${heading}\n${text}`;
 
-  if (/conte[úu]do\s+program[áa]tico|programa|disciplinas|conhecimentos\s+(b[áa]sicos|gerais|espec[íi]ficos)/i.test(combined)) {
+  // Syllabus role from heading (not body): body mentions of "conteúdo programático"
+  // in retificação notes must not steal the only syllabus slot from subject sections.
+  if (
+    /conte[úu]do\s+program[áa]tico|disciplinas|conhecimentos\s+(b[áa]sicos|gerais|espec[íi]ficos)/i.test(
+      heading,
+    ) ||
+    (/^programa\b/i.test(heading) && !/programador/i.test(heading))
+  ) {
     return "syllabus";
   }
   if (/cargo|vagas|requisitos|remunera[cç][ãa]o|carga hor[aá]ria/i.test(combined) && /\|/.test(text)) {

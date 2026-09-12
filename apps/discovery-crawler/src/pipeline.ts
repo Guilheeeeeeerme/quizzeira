@@ -216,6 +216,8 @@ async function crawlListingMode(
         kindHint: doc.kindHint,
         roleHint: doc.roleHint,
         anchorLabel: doc.anchorLabel,
+        domain: source.domain,
+        politenessMs: source.politenessMs,
       });
       if (stored) {
         summary.artifactsStored += 1;
@@ -299,6 +301,8 @@ async function crawlOab(
         url: doc.url,
         kind: doc.kind,
         withBytes: true,
+        domain: source.domain,
+        politenessMs: source.politenessMs,
       });
       if (stored) {
         summary.artifactsStored += 1;

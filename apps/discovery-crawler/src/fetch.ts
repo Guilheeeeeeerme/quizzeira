@@ -120,6 +120,11 @@ export async function fetchBytes(
   lastModified: Date | null;
   contentHash: string;
 }> {
+  const allowed = await isAllowedByRobots(url, source.domain);
+  if (!allowed) {
+    throw new Error(`robots.txt disallows ${url}`);
+  }
+
   await waitForDomain(source.domain, source.politenessMs);
   const res = await fetch(url, {
     headers: { "user-agent": USER_AGENT },

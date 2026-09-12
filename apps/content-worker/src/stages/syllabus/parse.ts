@@ -54,10 +54,11 @@ function splitOutlineItems(body: string): string[] {
   if (items.length > 0) return items;
 
   // Prefer newline-separated list items (HTML <li>) over semicolon mash.
+  // Min length 4 keeps short tips ("Crase", "NBC TSP") while dropping junk.
   if (/\n/.test(body)) {
     for (const part of body.split(/\n+/)) {
       const item = normalizeItem(part.replace(/^[•\-*–—]\s*/, ""));
-      if (item.length >= 8 && item.length <= 200 && !ADMIN_ITEM_RE.test(item)) {
+      if (item.length >= 4 && item.length <= 200 && !ADMIN_ITEM_RE.test(item)) {
         items.push(item);
       }
     }
@@ -66,7 +67,7 @@ function splitOutlineItems(body: string): string[] {
 
   for (const part of body.split(/[;]\s+/)) {
     const item = normalizeItem(part);
-    if (item.length >= 8 && item.length <= 200 && !ADMIN_ITEM_RE.test(item)) {
+    if (item.length >= 4 && item.length <= 200 && !ADMIN_ITEM_RE.test(item)) {
       items.push(item);
     }
   }
@@ -82,22 +83,47 @@ function subjectFromLine(line: string): { title: string; canonicalId: string | n
     const canonical = canonicalizeSubject(title);
     return { title: canonical?.title ?? title, canonicalId: canonical?.id ?? null };
   }
-  // Heading-style: short title ending with colon, or known subject exact title.
   const bare = trimmed.replace(/:$/, "").trim();
   if (bare.length < 4 || bare.length > 80) return null;
   if (!/:$/.test(trimmed) && !/^[A-ZÁÉÍÓÚÃÕÇ]/.test(bare)) return null;
   const canonical = canonicalizeSubject(bare);
   if (!canonical) return null;
-  // Require near-exact title match to avoid alias collisions ("Atos administrativos").
+
   const norm = (s: string) =>
     s
       .normalize("NFD")
       .replace(/\p{M}/gu, "")
-      .toLowerCase();
-  if (norm(canonical.title) !== norm(bare) && !norm(bare).startsWith(norm(canonical.title))) {
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  const normBare = norm(bare);
+  const normTitle = norm(canonical.title);
+  const aliasHit = (canonical.aliases ?? []).some((a) => norm(a) === normBare);
+  // Accept exact title, alias, or heading that contains the canonical title
+  // ("Noções de Direito Administrativo"). Reject tip collisions where a short
+  // alias is a mere substring of a longer tip ("Atos administrativos").
+  if (normTitle === normBare || aliasHit) {
+    return { title: canonical.title, canonicalId: canonical.id };
+  }
+  if (normBare.includes(normTitle) && normBare.length <= normTitle.length + 24) {
+    return { title: canonical.title, canonicalId: canonical.id };
+  }
+  return null;
+}
+
+/** Free-text heading subject when lexicon has no entry (e.g. Controle Externo). */
+function freeTextHeadingSubject(
+  heading: string,
+): { title: string; canonicalId: string | null } | null {
+  const bare = heading.replace(/:$/, "").trim();
+  if (bare.length < 4 || bare.length > 80) return null;
+  if (SCOPE_BASIC_RE.test(bare) || SCOPE_SPECIFIC_RE.test(bare)) return null;
+  if (ADMIN_ITEM_RE.test(bare)) return null;
+  if (/^(das?|dos?)\s+/i.test(bare)) return null;
+  if (/conte[úu]do\s+program[áa]tico|cronograma|\banexo\b|inscri|vagas/i.test(bare)) {
     return null;
   }
-  return { title: canonical.title, canonicalId: canonical.id };
+  return { title: normalizeItem(bare), canonicalId: null };
 }
 
 function buildPathSlug(parts: string[]): string {
@@ -110,7 +136,8 @@ export function parseSyllabusFromDocument(
   positions: DiscoveredPosition[],
 ): ParsedSyllabus {
   const syllabusSections = sections.filter((s) => s.role === "syllabus");
-  const sourceSections = syllabusSections.length > 0 ? syllabusSections : sections;
+  // Prefer syllabus-tagged sections; if none, scan the whole document.
+  let sourceSections = syllabusSections.length > 0 ? syllabusSections : sections;
   const nodes: SyllabusNodeDraft[] = [];
   let ordinal = 0;
   let scope: "basic" | "specific" = "basic";
@@ -127,7 +154,7 @@ export function parseSyllabusFromDocument(
 
     // Prefer section heading as subject so list tips are not fuzzy-matched away.
     if (section.heading) {
-      const subj = subjectFromLine(section.heading);
+      const subj = subjectFromLine(section.heading) ?? freeTextHeadingSubject(section.heading);
       if (subj) {
         const pathSlug = buildPathSlug([subj.title]);
         currentSubject = { ...subj, pathSlug };
@@ -228,6 +255,18 @@ export function parseSyllabusFromDocument(
         });
       }
     }
+  }
+
+  // If syllabus-tagged sections produced no subjects (mis-tags), retry on content.
+  if (!nodes.some((n) => n.depth === 0) && syllabusSections.length > 0) {
+    const widened = sections.filter((s) => s.role === "syllabus" || s.role === "content");
+    return parseSyllabusFromDocument(
+      doc,
+      widened.map((s) =>
+        s.role === "syllabus" ? { ...s, role: "content" as const } : s,
+      ),
+      positions,
+    );
   }
 
   const leaves = nodes.filter((n) => n.depth >= 1);

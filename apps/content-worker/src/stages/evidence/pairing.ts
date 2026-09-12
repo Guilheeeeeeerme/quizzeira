@@ -31,17 +31,41 @@ export function evidencePairKey(ref: EvidenceDocumentRef, textSample: string): E
   };
 }
 
+/**
+ * Prefer gabarito matching (exam, year, position, phase, bookletType) when
+ * several candidates exist; fall back to same-exam gabarito (§18.2).
+ */
 export function findMatchingGabarito(
   prova: EvidenceDocumentRef,
   documents: EvidenceDocumentRef[],
   provaText: string,
 ): EvidenceDocumentRef | null {
   const key = evidencePairKey(prova, provaText);
-  return (
-    documents.find((d) => {
-      if (d.id === prova.id || d.kind !== "gabarito") return false;
-      if (d.examSlug !== key.examSlug) return false;
-      return true;
-    }) ?? null
+  const candidates = documents.filter(
+    (d) => d.id !== prova.id && d.kind === "gabarito" && d.examSlug === key.examSlug,
   );
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0]!;
+
+  let best: EvidenceDocumentRef = candidates[0]!;
+  let bestScore = -1;
+  for (const d of candidates) {
+    const dKey = evidencePairKey(d, d.sourceUrl ?? "");
+    let score = 0;
+    if (key.year != null && dKey.year === key.year) score += 3;
+    if (
+      key.bookletType &&
+      dKey.bookletType &&
+      key.bookletType.toLowerCase() === dKey.bookletType.toLowerCase()
+    ) {
+      score += 2;
+    }
+    if (key.phase === dKey.phase) score += 1;
+    if (key.position !== "geral" && dKey.position === key.position) score += 2;
+    if (score > bestScore) {
+      bestScore = score;
+      best = d;
+    }
+  }
+  return best;
 }

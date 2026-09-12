@@ -21,5 +21,7 @@ else
   echo "python3 missing — doc-processor tests required when Python is available" >&2
   exit 1
 fi
+# CI also unlinks §48.8 legacy tombstones before the same gates
+# (see .github/workflows/pipeline-v2.yml "Remove §48.8 legacy tombstones").
 # Root package has no eslint script; typecheck is the static gate.
 echo "OK: verification suite finished (typecheck + tests + build + doc-processor)"

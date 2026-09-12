@@ -1,7 +1,7 @@
 """Format-specific extractors."""
 
 from app.extract.html import extract_html
-from app.extract.office import extract_office
+from app.extract.office import extract_docx as extract_office
 from app.extract.pdf import extract_pdf
 from app.extract.plain import extract_plain
 

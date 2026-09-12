@@ -270,12 +270,27 @@ Eval. Nothing else in the system can publish.
 - **Definition** — The explainable chain from a published question back to
   sources.
 - **In Quizzeira** — `GET /internal/question-items/:id/provenance` returns
-  question → KUs → document/sections → generation run → reviews. Workers also
-  propagate `x-run-id` on internal calls so one tick can be followed across
-  discovery → content → quality (§31.3).
-- **Code** — content-api provenance route; admin HITL Provenance control;
+  question → KUs → document/sections → generation run → reviews, including the
+  discovery **Artifact→Source / TopicQuery** branch when the document came from
+  crawl. Workers also propagate `x-run-id` on internal calls so one tick can be
+  followed across discovery → content → quality (§31.3).
+- **Code** — content-api provenance route (`discovery-client` resolves Artifact
+  → Source/TopicQuery); admin HITL Provenance control;
   `packages/worker-kit/src/run-id.ts`.
 - **Not to confuse with** — **RoleHint** (Tier-0 crawl metadata only).
+
+## Listing trivia
+
+- **Definition** — Exam-portal metadata questions (fees, vacancies, banca name,
+  inscription dates) that look like study items but teach nothing durable.
+- **In Quizzeira** — Listing pages stay `administrative`; generation and Eval
+  reject stems matching the shared denylist so REG-001..006 never republish.
+- **Code** — `looksLikeListingTriviaStem` in
+  `packages/shared/src/pipeline/listing-trivia.ts` (re-exported from
+  `@quizzeira/shared`); rung 2 relevance + generation brief checks;
+  `fixtures/golden/regression/listing-trivia/`.
+- **Not to confuse with** — real knowledge stems about law or grammar that
+  happen to mention an exam name in passing.
 
 ## Question bank
 

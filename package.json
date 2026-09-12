@@ -26,7 +26,7 @@
     "test:quality": "node --import tsx --test apps/content-quality/src/**/*.spec.ts",
     "test:regression": "node --import tsx --test apps/content-quality/src/regression/**/*.spec.ts",
     "test:discovery": "node --import tsx --test apps/discovery-crawler/src/**/*.spec.ts",
-    "test:doc-processor": "cd apps/doc-processor && python -m pytest -q && PYTHONPATH=. python scripts/check_schema_contract.py",
+    "test:doc-processor": "cd apps/doc-processor && python3 -m pytest -q tests/ && PYTHONPATH=. python3 scripts/check_schema_contract.py",
     "db:migrate": "npm run db:migrate -w @quizzeira/api",
     "db:migrate:discovery": "npm run db:migrate -w @quizzeira/discovery-api",
     "db:migrate:content": "npm run db:migrate -w @quizzeira/content-api",

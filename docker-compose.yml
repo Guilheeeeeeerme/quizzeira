@@ -9,6 +9,10 @@
 # Internal APIs are never LAN-exposed: only web (5173) and the study API
 # (127.0.0.1:3000) publish ports. discovery-api and content-api stay on the
 # private network.
+#
+# Deterministic E2E (§41.3): set LLM_PROVIDER=fixture in .env (see .env.sample).
+# content-worker, content-quality, and quiz-corrector honor it via env_file and
+# the LLM_PROVIDER passthrough below (worker-kit fixture provider).
 services:
   mysql:
     image: mysql:8.0
@@ -188,7 +192,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: https://api.openai.com/v1
-      LLM_PROVIDER_ORDER: openai,gemini
+      # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
       MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
@@ -387,7 +393,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: https://api.openai.com/v1
-      LLM_PROVIDER_ORDER: openai,gemini
+      # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
@@ -437,7 +445,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: https://api.openai.com/v1
-      LLM_PROVIDER_ORDER: openai,gemini
+      # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}

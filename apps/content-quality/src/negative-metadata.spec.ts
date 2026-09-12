@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import { validateRelevance } from "./relevance.js";
 import { validateStructure } from "./structural.js";
 
-const FIXTURE = resolve(process.cwd(), "fixtures/golden/negative/metadata-stems.json");
+const FIXTURE = resolve(__dirname, "../../../fixtures/golden/negative/metadata-stems.json");
 
 const OPTIONS = ["A", "B", "C", "D", "E"];
 const RATIONALES = ["r1", "r2", "r3", "r4"];

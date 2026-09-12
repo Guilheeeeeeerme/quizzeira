@@ -13,8 +13,8 @@ describe("vectors knowledge-index guard", () => {
   it("defines KNOWLEDGE_INDEX_GUARD with eligibility + role filters", () => {
     assert.match(src, /KNOWLEDGE_INDEX_GUARD/);
     assert.match(src, /eligibility.*=.*eligible/);
-    assert.match(src, /DocumentRole.*knowledge/);
-    assert.match(src, /SectionRole.*content/);
+    assert.match(src, /'knowledge'::"DocumentRole"/);
+    assert.match(src, /'content'::"SectionRole"/);
     assert.match(src, /legal_article/);
   });
 
@@ -26,7 +26,7 @@ describe("vectors knowledge-index guard", () => {
 
   it("searchChunks never returns administrative/listing chunks without eligible guard off", () => {
     assert.match(src, /KNOWLEDGE_INDEX_GUARD/);
-    assert.match(src, /DocumentRole.*knowledge|role.*=.*'knowledge'/);
+    assert.match(src, /'knowledge'::"DocumentRole"|role.*=.*'knowledge'/);
     assert.doesNotMatch(
       src,
       /role.*=.*'administrative'.*eligible/,

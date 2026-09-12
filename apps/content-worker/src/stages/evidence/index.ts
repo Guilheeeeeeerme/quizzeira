@@ -37,7 +37,7 @@ export async function processEvidenceDocument(
   text: string,
   sections: ClassifiedSection[],
 ): Promise<EvidenceProcessResult> {
-  let bodyText = text;
+  let extraKeyText = "";
   if (document.kind === "prova") {
     const { items } = await content.get<{ items: EvidenceDocumentRef[] }>(
       `/internal/documents?examSlug=${encodeURIComponent(document.examSlug)}&kind=gabarito`,
@@ -47,11 +47,13 @@ export async function processEvidenceDocument(
       const bytes = await content.get<{ base64: string }>(
         `/internal/documents/${gabarito.id}/bytes`,
       );
-      bodyText = `${text}\n\n${Buffer.from(bytes.base64, "base64").toString("utf8")}`;
+      // Keep prova body separate so splitAnswerKeySection + parseAnswerKey see a
+      // real key document (§18.2 ANULADA / passage stay on the prova side).
+      extraKeyText = Buffer.from(bytes.base64, "base64").toString("utf8");
     }
   }
 
-  const questions = extractMcqs(bodyText);
+  const questions = extractMcqs(text, extraKeyText);
   if (questions.length === 0) return { previousQuestions: 0, styleProfiles: 0 };
 
   let leaves: SyllabusLeafRef[] = [];
@@ -64,7 +66,7 @@ export async function processEvidenceDocument(
     leaves = [];
   }
 
-  const year = yearFromUrlOrText(document.sourceUrl, bodyText);
+  const year = yearFromUrlOrText(document.sourceUrl, `${text}\n${extraKeyText}`);
   const banca = bancaFromSlug(document.examSlug);
 
   const payload = questions.map((q) => {
@@ -103,6 +105,8 @@ export async function processEvidenceDocument(
       prompt: q.prompt,
       options: q.options,
       correctIndex: q.correctIndex,
+      status: q.status,
+      passage: q.passage,
       subjectHint: mapped?.canonicalKey ?? null,
       syllabusNodeId: mapped?.syllabusNodeId ?? null,
       canonicalKey: mapped?.canonicalKey ?? null,
@@ -115,14 +119,15 @@ export async function processEvidenceDocument(
   });
 
   let styleProfiles = 0;
-  if (posted.created >= 5) {
+  const scored = questions.filter((q) => q.status === "ok");
+  if (posted.created >= 5 && scored.length >= 5) {
     const canonicalSubjectId =
       payload.find((p) => p.canonicalKey)?.canonicalKey?.split(":")[0] ?? "geral";
     const profile = buildStyleProfile(
-      questions.map((q) => ({
+      scored.map((q) => ({
         prompt: q.prompt,
         options: q.options,
-        passage: null,
+        passage: q.passage,
         banca,
         canonicalSubjectId,
       })),

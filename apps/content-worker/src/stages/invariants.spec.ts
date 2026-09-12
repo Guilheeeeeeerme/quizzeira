@@ -1,7 +1,7 @@
 // Concept: Invariant / property tests for pipeline v2 (§9.4, §41.6).
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import {
@@ -9,7 +9,9 @@ import {
   isGenerationEligible,
   isKnowledgeSectionRole,
   normalizeDedupText,
+  type ArtifactKindHint,
   type DocumentRole,
+  type RoleHint,
   type SectionRole,
 } from "@quizzeira/shared";
 import { classifyDocument } from "./classify.js";
@@ -17,11 +19,38 @@ import { extractHtmlText } from "./html-text.js";
 import { normalizeHtmlFallback } from "./normalize.js";
 import { decideEligibility } from "./knowledge/eligibility.js";
 
-const LISTING_FIXTURE = resolve(
-  __dirname,
-  "../../../../fixtures/golden/regression/listing-trivia/listing-page.html",
-);
-const MANIFEST = resolve(__dirname, "../../../../fixtures/golden/manifest.json");
+const GOLDEN_ROOT = resolve(__dirname, "../../../../fixtures/golden");
+const LISTING_FIXTURE = resolve(GOLDEN_ROOT, "regression/listing-trivia/listing-page.html");
+const MANIFEST = resolve(GOLDEN_ROOT, "manifest.json");
+
+interface ManifestRow {
+  id: string;
+  path: string;
+  expectedRole?: DocumentRole;
+  category?: string;
+}
+
+function hintsFor(row: ManifestRow): { kindHint?: ArtifactKindHint; roleHint?: RoleHint } | undefined {
+  if (row.expectedRole === "administrative" || row.category === "administrative") {
+    return { kindHint: "listing", roleHint: "administrative" };
+  }
+  if (row.expectedRole === "evidence") {
+    if (/gabarito/i.test(row.path)) return { kindHint: "gabarito", roleHint: "evidence" };
+    return { kindHint: "prova", roleHint: "evidence" };
+  }
+  if (row.expectedRole === "specification") {
+    return { kindHint: "edital", roleHint: "specification" };
+  }
+  // unknown / garbage: no provenance hint — tier1 lexical only
+  return undefined;
+}
+
+function contentTypeFor(path: string): string {
+  if (/\.pdf$/i.test(path)) return "application/pdf";
+  if (/\.txt$/i.test(path)) return "text/plain";
+  if (/\.json$/i.test(path)) return "application/json";
+  return "text/html";
+}
 
 describe("invariants §9.4", () => {
   it("invariant 1: non-knowledge section roles are never embed-eligible", () => {
@@ -131,6 +160,71 @@ describe("invariants §9.4", () => {
       if (role === "evidence") {
         assert.equal(isEmbedEligible(role), false, row.path);
         assert.equal(isGenerationEligible(role), false, row.path);
+      }
+    }
+  });
+
+  it("fuzz §41.6: classify + decideEligibility over non-knowledge golden HTML/TXT", () => {
+    const manifest = JSON.parse(readFileSync(MANIFEST, "utf8")) as { fixtures: ManifestRow[] };
+    const rows = manifest.fixtures.filter(
+      (f) =>
+        f.expectedRole &&
+        f.expectedRole !== "knowledge" &&
+        f.expectedRole !== "mixed" &&
+        /\.(html|htm|txt)$/i.test(f.path) &&
+        existsSync(resolve(GOLDEN_ROOT, f.path)),
+    );
+    assert.ok(rows.length >= 15, `expected ≥15 non-knowledge text fixtures, got ${rows.length}`);
+
+    for (const row of rows) {
+      const expectedRole = row.expectedRole!;
+      assert.equal(
+        isGenerationEligible(expectedRole),
+        false,
+        `${row.id}: expectedRole ${expectedRole}`,
+      );
+
+      const raw = readFileSync(resolve(GOLDEN_ROOT, row.path), "utf8");
+      const normalized = normalizeHtmlFallback({
+        documentId: row.id,
+        contentType: contentTypeFor(row.path),
+        bytes: Buffer.from(raw, "utf8"),
+        url: `https://fixture.local/${row.path}`,
+      });
+      const hints = hintsFor(row);
+      const classified = classifyDocument(normalized, hints);
+      // Provenance-hinted rows must classify to the labeled non-knowledge role.
+      if (hints?.roleHint && hints.roleHint !== "unknown") {
+        assert.equal(
+          classified.role,
+          expectedRole,
+          `${row.id}: classify got ${classified.role}, expected ${expectedRole}`,
+        );
+      }
+
+      // Property: chunks evaluated under the fixture's non-knowledge role never eligible.
+      for (const section of classified.sections) {
+        const decision = decideEligibility({
+          documentRole: expectedRole,
+          sectionRole: section.role,
+          language: normalized.stats.language || "pt",
+          chunk: {
+            ordinal: 0,
+            sectionId: section.section.id ?? `sec-${section.section.ordinal}`,
+            sectionRole: section.role,
+            text: section.section.text,
+            tokenCount: Math.ceil(section.section.charCount / 4),
+            contentHash: `fuzz-${row.id}-${section.section.ordinal}`,
+          },
+          scores: section.scores,
+          isDuplicate: false,
+          mapScore: 1,
+        });
+        assert.notEqual(
+          decision.status,
+          "eligible",
+          `${row.id} section ${section.role}: expected ineligible/parked, got eligible (${decision.reason})`,
+        );
       }
     }
   });

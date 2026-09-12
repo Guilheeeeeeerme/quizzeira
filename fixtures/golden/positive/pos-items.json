@@ -66,14 +66,20 @@
       ],
       "knowledgeUnitIds": ["ku-porcentagem-composta"],
       "knowledgeUnitStatements": [
-        "Aumentos percentuais sucessivos multiplicam os fatores: preço final = P × (1+i1) × (1+i2). Exemplo: 250 × 1,1 × 1,1 = 302,50."
+        "Aumentos percentuais sucessivos multiplicam os fatores: preço final = P × (1+i1) × (1+i2). Exemplo: R$ 250,00 × 1,1 × 1,1 = R$ 302,50 (dois aumentos de 10%)."
       ]
     },
     {
       "id": "POS-004",
       "syllabusNodeId": "fixture:direito-administrativo/licitacoes/modalidades",
       "prompt": "Nos termos da Lei 14.133/2021, a modalidade de licitação obrigatória para aquisição de bens e serviços comuns, em regra, é:",
-      "options": ["Concorrência", "Tomada de preços", "Pregão", "Convite", "Leilão"],
+      "options": [
+        "Concorrência pública ordinária",
+        "Tomada de preços clássica",
+        "Pregão eletrônico ou presencial",
+        "Convite a três fornecedores",
+        "Leilão de bens públicos"
+      ],
       "correctIndex": 2,
       "explanation": "A Lei 14.133/2021 prevê o pregão para bens e serviços comuns.",
       "distractorRationale": [

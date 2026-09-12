@@ -1,13 +1,12 @@
 // Concept: MinHash (128 permutations) for chunk near-dedup (Jaccard ≥ 0.85).
 
-import { createHash } from "node:crypto";
+import { fnv1a32 } from "./hash";
 import { normalizeDedupText } from "./text-normalize";
 
 const PERMS = 128;
 
 function tokenHash(token: string, seed: number): number {
-  const h = createHash("sha256").update(`${seed}:${token}`).digest();
-  return h.readUInt32BE(0);
+  return fnv1a32(`${seed}:${token}`);
 }
 
 function tokens(text: string): string[] {

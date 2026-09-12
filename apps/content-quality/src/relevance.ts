@@ -72,8 +72,10 @@ export function validateRelevance(input: RelevanceInput): RelevanceResult {
     }
   }
 
-  const metaP = blob ? metadataProbability(blob) : 0;
-  if (metaP > 0.5 || questionTestsExamMetadata(prompt) || isMetadataHeavy(blob, 0.5)) {
+  // Score the stem only — options (prices, org names as distractors) must not
+  // inflate section-oriented syllabusListShape / currency features.
+  const metaP = prompt ? metadataProbability(prompt) : 0;
+  if (metaP > 0.5 || questionTestsExamMetadata(prompt) || isMetadataHeavy(prompt, 0.5)) {
     reasons.push("tests_exam_metadata");
   }
 

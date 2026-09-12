@@ -3,11 +3,19 @@ import type { ArtifactKindHint, RoleHint } from "@quizzeira/shared";
 import { kindHintToArtifactKind } from "@quizzeira/shared";
 import { dmzPost } from "@quizzeira/worker-kit";
 import { crawlerEnv } from "./env.js";
-import { fetchBytes, USER_AGENT } from "./fetch.js";
+import { fetchBytes } from "./fetch.js";
 import { htmlToRoughText, rejectAfterFetch } from "./search/postfetch.js";
 
 function sha256Hex(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex");
+}
+
+function domainFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
 }
 
 export interface StoreArtifactInput {
@@ -25,6 +33,9 @@ export interface StoreArtifactInput {
   lastModified?: Date | null;
   contentHash?: string | null;
   fetchSignals?: Record<string, unknown>;
+  /** Domain for robots/politeness; defaults to hostname of url. */
+  domain?: string;
+  politenessMs?: number;
 }
 
 export type StoreArtifactResult =
@@ -54,36 +65,30 @@ export async function storeArtifact(
 
   if (input.withBytes) {
     try {
-      const res = await fetch(input.url, {
-        headers: { "user-agent": USER_AGENT },
-        signal: AbortSignal.timeout(crawlerEnv.navigationTimeoutMs),
+      const domain = input.domain || domainFromUrl(input.url);
+      const fetched = await fetchBytes(input.url, {
+        domain: domain || "unknown",
+        politenessMs: input.politenessMs ?? 1000,
       });
-      contentType = res.headers.get("content-type") ?? undefined;
-      etag = res.headers.get("etag") ?? etag;
-      const lastModRaw = res.headers.get("last-modified");
-      if (lastModRaw) {
-        const d = new Date(lastModRaw);
-        if (!Number.isNaN(d.getTime())) lastModified = d;
-      }
-      const okType = /pdf|html|text\/plain/i.test(contentType ?? "");
-      if (res.ok && okType) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.byteLength <= crawlerEnv.maxArtifactBytes) {
-          // Post-fetch rejects for knowledge topic candidates (§17.3).
-          if (input.roleHint === "knowledge" && /html/i.test(contentType ?? "")) {
-            const html = buf.toString("utf8");
-            const text = htmlToRoughText(html);
-            const reason = rejectAfterFetch({ text, html });
-            if (reason) {
-              return { downloaded: false, rejected: reason };
-            }
+      contentType = fetched.contentType;
+      etag = fetched.etag ?? etag;
+      lastModified = fetched.lastModified ?? lastModified;
+      const okType = /pdf|html|text\/plain|officedocument|msword|epub/i.test(contentType ?? "");
+      if (okType && fetched.buf.byteLength <= crawlerEnv.maxArtifactBytes) {
+        // Post-fetch rejects for knowledge topic candidates (§17.3).
+        if (input.roleHint === "knowledge" && /html/i.test(contentType ?? "")) {
+          const html = fetched.buf.toString("utf8");
+          const text = htmlToRoughText(html);
+          const reason = rejectAfterFetch({ text, html });
+          if (reason) {
+            return { downloaded: false, rejected: reason };
           }
-          base64 = buf.toString("base64");
-          contentHash = contentHash ?? sha256Hex(buf);
         }
+        base64 = fetched.buf.toString("base64");
+        contentHash = contentHash ?? fetched.contentHash;
       }
     } catch {
-      // Record URL reference only.
+      // Record URL reference only (including robots disallow).
     }
   }
 

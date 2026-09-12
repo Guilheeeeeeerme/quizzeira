@@ -12,8 +12,5 @@
   "include": ["src/**/*"],
   "exclude": [
     "src/**/*.spec.ts",
-    "src/extraction/pdf-text.ts",
-    "src/extraction/chunk.ts",
-    "src/extraction/index.ts"
   ]
 }

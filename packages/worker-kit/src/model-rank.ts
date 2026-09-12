@@ -1,6 +1,6 @@
 import { workerEnv } from "./env";
 
-export type ProviderName = "gemini" | "openai";
+export type ProviderName = "gemini" | "openai" | "fixture";
 
 export interface RankedModel {
   provider: ProviderName;
@@ -77,6 +77,7 @@ let refreshing = false;
 
 function defaultModelFor(provider: ProviderName): string {
   if (provider === "gemini") return workerEnv.geminiModel;
+  if (provider === "fixture") return "fixture-v1";
   return workerEnv.openaiModel;
 }
 

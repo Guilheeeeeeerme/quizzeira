@@ -18,18 +18,9 @@ function hourBucket(now = new Date()): Date {
 
 type StageMetricClient = {
   stageMetric: {
-    upsert: (args: {
-      where: {
-        hourBucket_stage_decision_reason: {
-          hourBucket: Date;
-          stage: string;
-          decision: string;
-          reason: string;
-        };
-      };
-      create: Record<string, unknown>;
-      update: Record<string, unknown>;
-    }) => Promise<unknown>;
+    // Duck-typed to accept PrismaClient without fighting generated upsert types.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    upsert: (args: any) => Promise<unknown>;
   };
 };
 

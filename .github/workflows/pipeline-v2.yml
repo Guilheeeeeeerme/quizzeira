@@ -25,6 +25,33 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Remove §48.8 legacy tombstones
+        run: |
+          set -euo pipefail
+          rm -f \
+            apps/content-worker/src/extraction/pdf-text.ts \
+            apps/content-worker/src/extraction/chunk.ts \
+            apps/content-worker/src/extraction/index.ts \
+            apps/discovery-crawler/src/listing-parse.ts \
+            apps/discovery-crawler/src/listing-parse.spec.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          def strip(path: Path, drop: set[str]) -> None:
+              text = path.read_text(encoding="utf-8")
+              lines = [ln for ln in text.splitlines(True) if not any(d in ln for d in drop)]
+              path.write_text("".join(lines), encoding="utf-8")
+          strip(Path("apps/content-worker/tsconfig.json"), {
+              "src/extraction/pdf-text.ts",
+              "src/extraction/chunk.ts",
+              "src/extraction/index.ts",
+          })
+          strip(Path("apps/discovery-crawler/tsconfig.json"), {
+              "src/listing-parse.ts",
+              "src/listing-parse.spec.ts",
+          })
+          PY
+          test ! -e apps/content-worker/src/extraction/pdf-text.ts
+          test ! -e apps/discovery-crawler/src/listing-parse.ts
       - run: npm run build -w @quizzeira/shared
       - run: npm run db:generate
       - run: npm run test:shared

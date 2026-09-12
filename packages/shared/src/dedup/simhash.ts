@@ -1,12 +1,7 @@
-// Concept: 64-bit SimHash over character shingles for near-duplicate documents.
+// Concept: 64-bit SimHash over character 5-gram shingles for near-duplicate documents (§26).
 
-import { createHash } from "node:crypto";
+import { hash64 } from "./hash";
 import { shingles } from "./text-normalize";
-
-function hash64(s: string): bigint {
-  const hex = createHash("sha256").update(s).digest("hex").slice(0, 16);
-  return BigInt(`0x${hex}`);
-}
 
 /** Returns unsigned 64-bit SimHash as bigint. */
 export function simhash64(text: string): bigint {

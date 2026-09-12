@@ -113,7 +113,12 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
       where: { id: request.params.id },
       data: {
         status: (body.status as never) || undefined,
-        failReason: body.failReason ? String(body.failReason).slice(0, 500) : undefined,
+        failReason:
+          body.failReason === null
+            ? null
+            : body.failReason
+              ? String(body.failReason).slice(0, 500)
+              : undefined,
         attempts: body.bumpAttempts ? { increment: 1 } : undefined,
         role: (body.role as never) || undefined,
         roleConfidence: body.roleConfidence != null ? Number(body.roleConfidence) : undefined,

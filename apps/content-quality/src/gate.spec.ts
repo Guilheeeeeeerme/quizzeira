@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decide } from "./gate";
-import type { JudgeVerdict } from "./judge";
-import type { StructuralResult } from "./structural";
+import { decide } from "./gate.js";
+import type { JudgeVerdict } from "./judge.js";
+import type { StructuralResult } from "./structural.js";
 
 const thresholds = { publish: 0.8, fail: 0.5 };
 const structuralOk: StructuralResult = { ok: true, reasons: [], notes: "structural checks passed" };

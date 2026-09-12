@@ -89,7 +89,13 @@ describe("NormalizedDocument contract (§41.2)", () => {
     for (const t of catalogue.blockTypes) {
       assert.doesNotThrow(() => sample.parse(t), t);
     }
-    const flag = normalizedDocumentSchema.shape.sections.element.shape.flags.element;
+    // flags uses .default([]) → ZodDefault wrapping ZodArray
+    const flagsField = normalizedDocumentSchema.shape.sections.element.shape.flags;
+    const flagArray =
+      "element" in flagsField
+        ? flagsField
+        : (flagsField as { _def: { innerType: { element: typeof sample } } })._def.innerType;
+    const flag = flagArray.element;
     for (const f of catalogue.sectionFlags) {
       assert.doesNotThrow(() => flag.parse(f), f);
     }

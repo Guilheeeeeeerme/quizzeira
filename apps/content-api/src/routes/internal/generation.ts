@@ -267,17 +267,14 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
           continue;
         }
 
+        // §30: previousQuestionId is transcription/OAB provenance only — never
+        // attach it to generation drafts (soft-strip; do not abort the batch).
         const previousQuestionId =
-          (qRec.previousQuestionId && String(qRec.previousQuestionId).trim()) ||
-          (body.previousQuestionId && String(body.previousQuestionId).trim()) ||
-          null;
-
-        if (origin === "generation" && previousQuestionId) {
-          throw Object.assign(
-            new Error("previousQuestionId is reserved for transcription/OAB drafts (§30)"),
-            { statusCode: 400 },
-          );
-        }
+          origin === "generation"
+            ? null
+            : (qRec.previousQuestionId && String(qRec.previousQuestionId).trim()) ||
+              (body.previousQuestionId && String(body.previousQuestionId).trim()) ||
+              null;
 
         const created = await prisma.questionItem.create({
           data: {
@@ -299,7 +296,7 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
             generationRunId: body.generationRunId ?? null,
             syllabusNodeId: bodySyllabus || qRec.syllabusNodeId || null,
             knowledgeUnitIds,
-            previousQuestionId: origin === "generation" ? null : previousQuestionId,
+            previousQuestionId,
             passage: qRec.passage ? String(qRec.passage).slice(0, 2000) : null,
             distractorRationale: Array.isArray(qRec.distractorRationale)
               ? qRec.distractorRationale

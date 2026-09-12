@@ -53,7 +53,7 @@ export function expandLabelledSections(doc: LabelledDoc): LabelledSection[] {
 
 describe("golden labelled-sections §42", () => {
   it("expands to at least targetCount (~600)", () => {
-    const path = resolve(__dirname, "../../../../fixtures/golden/labelled-sections.json");
+    const path = resolve(__dirname, "../../../fixtures/golden/labelled-sections.json");
     const doc = JSON.parse(readFileSync(path, "utf8")) as LabelledDoc;
     const expanded = expandLabelledSections(doc);
     assert.ok(doc.targetCount >= 600);

@@ -13,7 +13,7 @@ _LEGAL_ARTICLE = re.compile(
     re.I,
 )
 _LIST_MARKER = re.compile(
-    r"^(?:\(?[a-z0-9ivxlc]+\)|[•●▪]|[-–—]|[a-z]\))\s+",
+    r"^(?:(?:\(?[a-z0-9ivxlc]+\)|[a-z0-9ivxlc]+[.)]|[ivxlc]+\s*[–—-]|[•●▪]|[-–—])\s+)",
     re.I,
 )
 

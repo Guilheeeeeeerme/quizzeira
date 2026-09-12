@@ -727,39 +727,75 @@ async function processOabLegacy(document: QueuedDocument): Promise<void> {
     contentType: document.contentType,
   };
   await extractOabDocument(ref, buffer, deps);
+  // Chunks endpoint marks failed when empty; OAB drafts may still succeed — force extracted.
+  await content
+    .patch(`/internal/documents/${document.id}`, {
+      status: "extracted",
+      role: "evidence",
+      failReason: null,
+    })
+    .catch(() => undefined);
 }
 
 /** Upsert OAB_STATIC_SYLLABUS leaves and return slug → nodeId (§47 / §30). */
 async function ensureOabStaticSyllabus(
   document: QueuedDocument,
 ): Promise<Map<string, string>> {
-  const leafBySlug = new Map<string, string>();
+  const requiredSlugs = OAB_STATIC_SYLLABUS.map((s) => s.slug);
+  const indexLeaves = (
+    leaves: Array<{ id: string; pathSlug: string; canonicalKey?: string | null }>,
+  ): Map<string, string> => {
+    const map = new Map<string, string>();
+    for (const leaf of leaves) {
+      const tip = leaf.pathSlug.split("/").pop() ?? leaf.pathSlug;
+      map.set(tip, leaf.id);
+      if (leaf.canonicalKey) map.set(leaf.canonicalKey, leaf.id);
+    }
+    return map;
+  };
+  const coversOab = (map: Map<string, string>) =>
+    requiredSlugs.filter((slug) => map.has(slug)).length >= Math.ceil(requiredSlugs.length * 0.9);
+
   try {
     const { leaves } = await content.get<{
-      leaves: Array<{ id: string; pathSlug: string; title: string }>;
+      leaves: Array<{ id: string; pathSlug: string; title: string; canonicalKey?: string | null }>;
     }>(`/internal/syllabi/${encodeURIComponent(document.examSlug)}/leaves`);
-    for (const leaf of leaves ?? []) {
-      const slug = leaf.pathSlug.split("/").pop() ?? leaf.pathSlug;
-      leafBySlug.set(slug, leaf.id);
-    }
-    if (leafBySlug.size >= OAB_STATIC_SYLLABUS.length * 0.5) return leafBySlug;
+    const existing = indexLeaves(leaves ?? []);
+    if (coversOab(existing)) return existing;
   } catch {
     /* create below */
   }
 
-  const nodes = OAB_STATIC_SYLLABUS.map((s, ordinal) => ({
-    depth: 0,
-    ordinal,
-    title: s.subject,
-    rawText: s.subject,
-    pathSlug: s.pathSlug,
-    canonicalSubjectId: null,
-    canonicalKey: s.pathSlug,
-    scope: "specific",
-    positionSlugs: ["geral"],
-    parentPathSlug: null,
-    extraction: { method: "manual", confidence: 1, sourceSectionId: "oab-static" },
-  }));
+  // Root subject + leaf disciplines so leaves endpoint returns depth≥1 nodes (§47 / §30).
+  const rootPath = "oab-1-fase";
+  const nodes = [
+    {
+      depth: 0 as const,
+      ordinal: 0,
+      title: "OAB 1ª fase",
+      rawText: "OAB 1ª fase",
+      pathSlug: rootPath,
+      canonicalSubjectId: null,
+      canonicalKey: rootPath,
+      scope: "specific" as const,
+      positionSlugs: ["geral"],
+      parentPathSlug: null,
+      extraction: { method: "manual" as const, confidence: 1, sourceSectionId: "oab-static" },
+    },
+    ...OAB_STATIC_SYLLABUS.map((s, ordinal) => ({
+      depth: 1 as const,
+      ordinal: ordinal + 1,
+      title: s.subject,
+      rawText: s.subject,
+      pathSlug: `${rootPath}/${s.pathSlug}`,
+      canonicalSubjectId: null,
+      canonicalKey: s.pathSlug,
+      scope: "specific" as const,
+      positionSlugs: ["geral"],
+      parentPathSlug: rootPath,
+      extraction: { method: "manual" as const, confidence: 1, sourceSectionId: "oab-static" },
+    })),
+  ];
 
   await content
     .post("/internal/syllabi", {
@@ -779,16 +815,12 @@ async function ensureOabStaticSyllabus(
 
   try {
     const { leaves } = await content.get<{
-      leaves: Array<{ id: string; pathSlug: string }>;
+      leaves: Array<{ id: string; pathSlug: string; canonicalKey?: string | null }>;
     }>(`/internal/syllabi/${encodeURIComponent(document.examSlug)}/leaves`);
-    for (const leaf of leaves ?? []) {
-      const slug = leaf.pathSlug.split("/").pop() ?? leaf.pathSlug;
-      leafBySlug.set(slug, leaf.id);
-    }
+    return indexLeaves(leaves ?? []);
   } catch {
-    /* leave map empty — drafts still proceed */
+    return new Map();
   }
-  return leafBySlug;
 }
 
 function bytesToText(buffer: Buffer, contentType: string, examSlug: string): string {

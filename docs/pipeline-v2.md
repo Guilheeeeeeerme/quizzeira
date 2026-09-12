@@ -83,7 +83,13 @@ bash scripts/cleanup-and-verify-pipeline-v2.sh
 bash scripts/verify-pipeline-v2.sh
 ```
 
-Until shell/delete work in the agent harness, run these locally. Tombstones
-(`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`, `listing-parse.ts`) remain
-on disk as empty stubs until `cleanup-and-verify-pipeline-v2.sh` unlinks them
-and clears the matching tsconfig excludes.
+Until you run cleanup once, tombstones
+(`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`, `listing-parse.ts`) may still
+exist as empty stubs. Prefer `cleanup-and-verify-pipeline-v2.sh` so they are
+unlinked and matching tsconfig excludes are cleared.
+
+**Harness blocker (2026-09-12):** Cursor agent Shell/Delete tools are rejected
+every turn, so this gate has never been executed in-agent. Code for pipeline v2
+is present; §48.1 green evidence and §48.8 physical delete are still pending
+operator/local run of the script above. Operational pilots (§48.4–5) remain
+out-of-band.

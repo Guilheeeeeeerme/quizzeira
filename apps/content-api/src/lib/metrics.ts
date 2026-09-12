@@ -26,11 +26,14 @@ function reasonsOf(value: unknown): string[] {
 
 type MetricsPrisma = {
   questionItem: {
-    count: (args: unknown) => Promise<number>;
-    findMany: (args: unknown) => Promise<Array<{ failReasons: unknown; status: string }>>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    count: (args?: any) => Promise<number>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findMany: (args?: any) => Promise<Array<{ failReasons: unknown; status: string }>>;
   };
   stageMetric: {
-    findMany: (args: unknown) => Promise<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findMany: (args?: any) => Promise<
       Array<{
         stage: string;
         decision: string;

@@ -57,13 +57,30 @@ export function extractMetadataFeatures(text: string): MetadataFeatures {
   const chars = text.length;
   const lines = text.split(/\n+/).filter((l) => l.trim());
   const shortLines = lines.filter((l) => l.trim().length > 0 && l.trim().length < 80);
+  const longLines = lines.filter((l) => l.trim().length >= 80);
+  const questionStructure = countMatches(text, QUESTION_OPT_RE) >= 3 ? 1 : 0;
+  // Tip-list shape for edital anexos — not MCQ stems (long prompt + short options).
   const syllabusListShape =
-    lines.length >= 5 && shortLines.length / Math.max(lines.length, 1) >= 0.6 ? 1 : 0;
+    questionStructure === 0 &&
+    longLines.length === 0 &&
+    lines.length >= 5 &&
+    shortLines.length / Math.max(lines.length, 1) >= 0.6
+      ? 1
+      : 0;
+
+  const vacancyLexicon = countMatches(text, VACANCY_RE) > 0 ? 1 : 0;
+  const currencyHits = countMatches(text, CURRENCY_RE);
+  // Currency alone is common in math/finance stems; only treat as admin when
+  // vacancy/registration lexicon is also present.
+  const currencyDensity =
+    currencyHits > 0 && (vacancyLexicon === 1 || /\btaxa\b|\binscri/i.test(text))
+      ? density(currencyHits, chars)
+      : 0;
 
   return {
     dateDensity: density(countMatches(text, DATE_RE), chars),
-    currencyDensity: density(countMatches(text, CURRENCY_RE), chars),
-    vacancyLexicon: countMatches(text, VACANCY_RE) > 0 ? 1 : 0,
+    currencyDensity,
+    vacancyLexicon,
     candidateImperative: countMatches(text, IMPERATIVE_RE) > 0 ? 1 : 0,
     orgDensity: density(countMatches(text, ORG_RE), chars),
     editalReference: countMatches(text, EDITAL_RE) > 0 ? 1 : 0,
@@ -71,7 +88,7 @@ export function extractMetadataFeatures(text: string): MetadataFeatures {
     syllabusListShape,
     legalCitationDensity: density(countMatches(text, LEGAL_RE), chars),
     explanatoryMarkers: density(countMatches(text, EXPLAIN_RE), chars),
-    questionStructure: countMatches(text, QUESTION_OPT_RE) >= 3 ? 1 : 0,
+    questionStructure,
   };
 }
 
