@@ -27,6 +27,7 @@ export async function runDiscoveryPipeline(
     openDiscovered: 0,
     proposedSources: 0,
     artifactsStored: 0,
+    topicQueriesRun: 0,
     errors: [],
   };
 
@@ -92,11 +93,13 @@ export async function runDiscoveryPipeline(
           // Content with junk examSlugs (certificacao, voltar-para-home, …).
           if (upserted.record.status !== "open") continue;
 
-          // Prefer an edital/PDF URL; otherwise keep the listing page so Content
-          // still has HTML to extract while the board has not published a PDF.
+          // Only an edital/PDF URL becomes an exam artifact. The listing page
+          // is portal navigation: stored as an exam document it produced the
+          // "which cargo is TCE-GO hiring for" questions (spec §11.2 item 1,
+          // RC-2). An exam without a PDF simply has no content yet.
           // Store even when the exam row is unchanged — first successful crawl
           // may have discovered the listing before artifact download existed.
-          const artifactUrl = open.editalUrl || open.listingUrl;
+          const artifactUrl = open.editalUrl;
           if (artifactUrl && artifactBudget > 0) {
             const stored = await storeArtifact({
               examId: upserted.record.id,
