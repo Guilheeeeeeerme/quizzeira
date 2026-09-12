@@ -14,6 +14,12 @@ export interface GateInput {
   /** The item's own claimed answer, for agreement checking. */
   correctIndex: number | null;
   thresholds: GateThresholds;
+  /**
+   * When true and judge is null, structurally-ok extraction items publish
+   * instead of parking in needs_review (Headroom/provider outage escape hatch).
+   */
+  publishExtractionWithoutJudge?: boolean;
+  origin?: "extraction" | "generation" | string | null;
 }
 
 export interface GateThresholds {
@@ -46,7 +52,20 @@ export function decide(input: GateInput): GateResult {
 
   // Without a judge verdict we refuse to publish, but we also refuse to fail —
   // an infrastructure gap is not the item's fault, so a human decides.
+  // Exception: past-exam extraction can opt into structural-only publish when
+  // the LLM path (often Headroom) is known broken.
   if (!judge) {
+    if (
+      input.publishExtractionWithoutJudge &&
+      input.origin === "extraction"
+    ) {
+      return {
+        decision: "published",
+        score: 1,
+        reasons: ["structural_ok", "extraction_without_judge"],
+        notes: "published from past-exam extraction; LLM judge unavailable",
+      };
+    }
     return {
       decision: "needs_review",
       score: 0,

@@ -18,6 +18,7 @@ interface PendingItem {
   correctIndex: number | null;
   referenceAnswer: string | null;
   explanation: string | null;
+  origin?: "extraction" | "generation" | string | null;
 }
 
 export interface EvalPassResult {
@@ -68,6 +69,8 @@ export async function runEvalPass(): Promise<EvalPassResult> {
         publish: qualityEnv.publishThreshold,
         fail: qualityEnv.failThreshold,
       },
+      publishExtractionWithoutJudge: qualityEnv.publishExtractionWithoutJudge,
+      origin: item.origin,
     });
 
     await contentApi.post("/internal/question-items/verdict", {
@@ -76,7 +79,11 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       score: verdict.score,
       notes: verdict.notes,
       reasons: verdict.reasons,
-      stage: structural.ok ? "structural+judge" : "structural",
+      stage: judge
+        ? "structural+judge"
+        : verdict.decision === "published"
+          ? "structural+extraction"
+          : "structural",
       model: judge?.model ?? null,
     });
 

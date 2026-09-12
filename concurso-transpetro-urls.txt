@@ -1,0 +1,47 @@
+Concursos / Transpetro URLs — archaeology from git history
+===========================================================
+Scope: full patch walk of quizzeira/argus/promptdesk/infra git history (all branches) as of 2026-09-12.
+
+Origin commits (quizzeira)
+--------------------------
+- 1057496  refactor: concurso-only Discovery/Content/Eval/Study pipeline
+- a2cfaa2  wip: seed Transpetro 2023.2 Administração MCQs into question bank
+- d2cc89a  wip: open-exams study product, smart crawler, UI cleanup
+- aef01b6  wip: exams catalog UX, pipeline timeline, quiz media, PCI source
+- 21138f3  refactor(shared): extract slugifyKey; drop Redis question-bank helpers
+
+URLs (dedup, with where they came from)
+---------------------------------------
+# --- Source catalog / crawler allowlist (removed from tree at 1057496/21138f3) ---
+https://www.pciconcursos.com.br/provas/          (11 hits; PCI provas index, aef01b6/a2cfaa2)
+https://www.pciconcursos.com.br/                  (2 hits)
+https://www.cesgranrio.org.br/concursos/          (8 hits; d2cc89a listing source)
+https://www.fcc.org.br/concursos/                 (2 hits; d2cc89a listing source)
+https://www.cebraspe.org.br/concursos/            (2 hits; d2cc89a listing source)
+https://conhecimento.fgv.br/concursos             (2 hits; d2cc89a listing source)
+https://www.ibamsp-concursos.org.br/informacoes/179/  (5 hits; d2cc89a seeded source)
+https://transpetro.com.br/                        (2 hits; d2cc89a seeded source: "Transpetro selections")
+https://www.gov.br/pt-br/categorias/trabalho-e-previdencia/trabalho/concursos  (2 hits)
+
+# --- Single-path refs (edital / listing fixtures / slug tests) ---
+https://www.cesgranrio.org.br/concursos/transpetro-psp-terra/edital.pdf  (discovery-crawler fixture open-listing.html)
+https://www.cesgranrio.org.br/concursos/bb-escriturario/                  (fixture)
+https://www.cesgranrio.org.br/concursos/caixa-tecnico/                    (fixture)
+https://www.cesgranrio.org.br/concursos/evento/edital.pdf                 (crawler.spec.ts)
+https://www.cesgranrio.org.br/concursos/evento/1                          (crawler.spec.ts)
+https://www.fcc.org.br/concursos/arquivo-antigo/                          (fixture)
+https://www.correios.com.br/sobre-correios/trabalhe-conosco/concursos/edital.pdf  (fixture)
+
+Test-only URLs (not real data)
+------------------------------
+https://portal.exemplo.gov.br/concursos/1
+https://www.example.org/concursos
+
+Crawler keyword seeds tied to Transpetro (history a2cfaa2/d2cc89a)
+------------------------------------------------------------------
+- examSlug seeds: "transpetro", "transpetro-cesgranrio", "transpetro-psp-terra"
+- slug test: slugifyKey("Transpetro / Cesgranrio") == "transpetro-cesgranrio"
+- exam-catalog slug hint: catalogSlugHint("Transpetro PSP") matches /transpetro/
+- crawler keyword guard still matches `\b(transpetro|petrobras|...\bbb\b...)` in
+  quizzeira/packages/shared/src/crawler.ts (live file)
+- a2cfaa2 seeded 38 scored MCQs from administracao.pdf + gabarito.pdf (PCI/Cesgranrio)

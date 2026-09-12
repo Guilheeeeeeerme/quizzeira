@@ -42,4 +42,19 @@ describe("parseListingHtml", () => {
     assert.ok(records.some((r) => r.examSlug.includes("transpetro")));
     assert.ok(records.some((r) => r.status === "open"));
   });
+
+  it("drops nav, privacy, and cookie-manager links", () => {
+    const html = `
+      <a href="/fundacao#sobre">SOBRE NÓS</a>
+      <a href="/privacidade/#cmplz-manage-consent-container">Gerenciar opções</a>
+      <a href="https://www.cookiedatabase.org/x">Cookie Database</a>
+      <a href="/concurso/transpetro-2026/">Transpetro 2026 inscrição aberta</a>
+    `;
+    const listings = parseListingHtml(html, "https://www.cesgranrio.org.br/", {
+      linkPatterns: [],
+      openPatterns: [],
+    });
+    assert.equal(listings.length, 1);
+    assert.match(listings[0]!.href, /transpetro-2026/);
+  });
 });

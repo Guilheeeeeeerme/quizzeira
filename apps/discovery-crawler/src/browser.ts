@@ -61,6 +61,20 @@ export async function crawlSourceListings(source: CrawlerSource): Promise<{
 
   try {
     for (const startUrl of source.startUrls.slice(0, 2)) {
+      // Direct PDF start URLs are themselves the artifact/exam — do not scrape
+      // browser chrome / error HTML for random nav links.
+      if (/\.pdf(\?|#|$)/i.test(startUrl)) {
+        const leaf = decodeURIComponent(
+          startUrl.split("/").pop()?.replace(/\.pdf$/i, "") || "edital",
+        ).replace(/[-_]+/g, " ");
+        all.push({
+          title: leaf.length >= 8 ? leaf : `Edital ${source.name || source.domain}`,
+          href: startUrl,
+          textBlob: `${leaf} ${startUrl}`,
+        });
+        continue;
+      }
+
       await sleep(source.politenessMs);
       await page.goto(startUrl, { waitUntil: "domcontentloaded" });
       const html = await page.content();

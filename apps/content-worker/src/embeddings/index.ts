@@ -70,10 +70,13 @@ export async function embedText(text: string): Promise<number[]> {
 async function embedGemini(text: string): Promise<number[]> {
   const model = contentEnv.geminiEmbeddingModel;
   const res = await fetch(
-    `${workerEnv.geminiBaseUrl}/v1beta/models/${model}:embedContent?key=${workerEnv.geminiApiKey}`,
+    `${workerEnv.geminiBaseUrl}/v1beta/models/${model}:embedContent`,
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": workerEnv.geminiApiKey,
+      },
       body: JSON.stringify({
         model: `models/${model}`,
         content: { parts: [{ text }] },

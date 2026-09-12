@@ -10,18 +10,47 @@ function num(key: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function flag(key: string, fallback: boolean): boolean {
+  const raw = process.env[key];
+  if (raw == null || raw === "") return fallback;
+  return raw !== "false" && raw !== "0";
+}
+
+function looksLikeHeadroom(url: string): boolean {
+  return /headroom|:8787\b/i.test(url);
+}
+
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 export const DEFAULT_OPENAI_MODEL = "gpt-5-nano";
 export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 
+/**
+ * When false, workers talk to public Gemini/OpenAI URLs even if GEMINI_BASE_URL
+ * / OPENAI_BASE_URL point at Headroom. Use this when Headroom breaks a path
+ * (auth, Docker networking to 127.0.0.1:8787, etc.). Host-side Cursor tooling
+ * can keep using Headroom independently.
+ */
+const llmUseHeadroom = flag("LLM_USE_HEADROOM", true);
+
+function resolveLlmBaseUrl(
+  configured: string | undefined,
+  publicDefault: string,
+): string {
+  const raw = (configured || publicDefault).replace(/\/$/, "");
+  if (!llmUseHeadroom && looksLikeHeadroom(raw)) return publicDefault;
+  return raw;
+}
+
 export const workerEnv = {
+  /** Explicit opt-in/out for Headroom LLM proxy. */
+  llmUseHeadroom,
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
-  geminiBaseUrl: (process.env.GEMINI_BASE_URL || DEFAULT_GEMINI_BASE_URL).replace(/\/$/, ""),
+  geminiBaseUrl: resolveLlmBaseUrl(process.env.GEMINI_BASE_URL, DEFAULT_GEMINI_BASE_URL),
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
   openaiModel: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
-  openaiBaseUrl: (process.env.OPENAI_BASE_URL || DEFAULT_OPENAI_BASE_URL).replace(/\/$/, ""),
+  openaiBaseUrl: resolveLlmBaseUrl(process.env.OPENAI_BASE_URL, DEFAULT_OPENAI_BASE_URL),
   llmProviderOrder: process.env.LLM_PROVIDER_ORDER || "gemini,openai",
   modelRankRefreshMs: num("MODEL_RANK_REFRESH_MS", 43_200_000),
   modelRankTopN: num("MODEL_RANK_TOP_N", 3),

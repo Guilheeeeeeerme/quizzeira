@@ -33,6 +33,31 @@ test("a missing judge parks the item for human review", () => {
   assert.ok(result.reasons.includes("judge_unavailable"));
 });
 
+test("extraction can publish without judge when the escape hatch is on", () => {
+  const result = decide({
+    structural: structuralOk,
+    judge: null,
+    correctIndex: 2,
+    thresholds,
+    publishExtractionWithoutJudge: true,
+    origin: "extraction",
+  });
+  assert.equal(result.decision, "published");
+  assert.ok(result.reasons.includes("extraction_without_judge"));
+});
+
+test("generation still needs a judge even with the extraction escape hatch", () => {
+  const result = decide({
+    structural: structuralOk,
+    judge: null,
+    correctIndex: 2,
+    thresholds,
+    publishExtractionWithoutJudge: true,
+    origin: "generation",
+  });
+  assert.equal(result.decision, "needs_review");
+});
+
 test("a high-scoring item with judge agreement publishes", () => {
   const result = decide({ structural: structuralOk, judge: judge(), correctIndex: 2, thresholds });
   assert.equal(result.decision, "published");

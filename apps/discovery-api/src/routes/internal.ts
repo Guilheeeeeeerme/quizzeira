@@ -186,11 +186,24 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
     const title = String(body.title || "");
     const editalUrl = (body.editalUrl as string) || null;
     const id = String(body.id || openExamId({ examSlug, listingUrl, title }));
-    const existing = await prisma.exam.findUnique({ where: { id } });
+    // Prefer the natural unique key — title-derived ids collide when the same
+    // listing is rediscovered with a slightly different anchor text.
+    const existing =
+      (await prisma.exam.findUnique({
+        where: { examSlug_listingUrl: { examSlug, listingUrl } },
+      })) || (await prisma.exam.findUnique({ where: { id } }));
+    const incomingStatus = (body.status as string) || "open";
+    // Preserve admin closes; don't let a weak listing signal demote an open exam.
+    const nextStatus =
+      existing?.status === "closed"
+        ? "closed"
+        : existing?.status === "open" && incomingStatus === "unknown"
+          ? "open"
+          : incomingStatus;
     const row = await prisma.exam.upsert({
-      where: { id },
+      where: { examSlug_listingUrl: { examSlug, listingUrl } },
       create: {
-        id,
+        id: existing?.id || id,
         examSlug,
         title,
         org: (body.org as string) || null,
@@ -198,7 +211,7 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
         emphasis: body.emphasis ?? [],
         editalUrl,
         listingUrl,
-        status: (body.status as never) || "open",
+        status: nextStatus as never,
         sourceId: String(body.sourceId || ""),
         sourceDomain: String(body.sourceDomain || ""),
       },
@@ -209,7 +222,7 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
         emphasis: body.emphasis ?? [],
         editalUrl,
         lastSeenAt: new Date(),
-        status: (body.status as never) || "open",
+        status: nextStatus as never,
       },
     });
     return {
