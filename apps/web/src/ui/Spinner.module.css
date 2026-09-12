@@ -6,25 +6,22 @@
 
 .visual {
   display: block;
-  border: 2px solid var(--border-default);
+  border: var(--border-width) solid var(--border-default);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
 
 .sm .visual {
-  width: 14px;
-  height: 14px;
+  size: 14px;
 }
 
 .md .visual {
-  width: 20px;
-  height: 20px;
+  size: 20px;
 }
 
 .lg .visual {
-  width: 28px;
-  height: 28px;
+  size: 28px;
 }
 
 @keyframes spin {

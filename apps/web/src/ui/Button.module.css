@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-1-25);
-  border: 1px solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-sm);
   font-weight: 500;
   font-size: var(--text-13);
@@ -67,7 +67,7 @@
 
 .danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--danger-foreground);
 }
 
 .danger:hover:not(:disabled) {
@@ -76,9 +76,8 @@
 
 .spinner {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  border: 2px solid transparent;
+  size: 14px;
+  border: var(--border-width) solid transparent;
   border-top-color: currentColor;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;

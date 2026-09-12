@@ -9,7 +9,7 @@
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   cursor: pointer;
@@ -32,10 +32,9 @@
 
 .indicator {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  border: 1px solid var(--border-strong);
+  size: 16px;
+  margin-top: var(--space-1);
+  border: var(--border-width) solid var(--border-strong);
   border-radius: 50%;
   background: var(--surface-overlay);
 }

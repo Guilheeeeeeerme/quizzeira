@@ -4,7 +4,7 @@
 }
 
 .display {
-  font-size: clamp(36px, 6vw, var(--text-60));
+  font-size: var(--text-60);
   font-weight: 700;
   line-height: 1.05;
 }

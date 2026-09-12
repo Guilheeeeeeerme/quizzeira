@@ -1,14 +1,14 @@
 .root {
   display: inline-flex;
-  gap: 1px;
-  padding: 2px;
-  border: 1px solid var(--border-subtle);
+  gap: var(--space-1-25);
+  padding: var(--space-1-25);
+  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
 }
 
 .item {
-  min-height: 24px;
+  min-height: 1.5rem;
   padding: 0 var(--space-2-75);
   border: 0;
   border-radius: var(--radius-sm);
@@ -20,10 +20,15 @@
 }
 
 .item:hover {
+  background: var(--surface-hover);
   color: var(--text-primary);
 }
 
 .selected {
   background: var(--surface-active);
   color: var(--text-primary);
+}
+
+.selected:hover {
+  background: var(--surface-active);
 }

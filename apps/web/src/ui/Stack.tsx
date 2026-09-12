@@ -14,7 +14,7 @@ const gapVar: Record<Gap, string> = {
 };
 
 export function Stack({
-  gap = 4,
+  gap = 1,
   direction = "column",
   align,
   justify,
@@ -42,7 +42,7 @@ export function Stack({
 
 export function Grid({
   columns = 3,
-  gap = 4,
+  gap = 1,
   className,
   children,
   ...rest

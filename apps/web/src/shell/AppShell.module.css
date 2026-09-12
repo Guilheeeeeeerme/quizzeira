@@ -25,7 +25,6 @@
   margin: 0;
   font-size: var(--text-12);
   font-weight: 500;
-  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-tertiary);
 }
@@ -183,7 +182,7 @@
 
 .userSelect:focus-visible {
   outline: var(--outline-width) solid var(--focus-ring);
-  outline-offset: var(--border-width);
+  outline-offset: var(--outline-width);
 }
 
 .userItem {
