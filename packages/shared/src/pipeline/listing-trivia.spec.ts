@@ -27,4 +27,11 @@ describe("looksLikeListingTriviaStem", () => {
       false,
     );
   });
+
+  it("flags vacancy listing stems", () => {
+    assert.equal(
+      looksLikeListingTriviaStem("Quantas vagas são oferecidas para o cargo de Analista?"),
+      true,
+    );
+  });
 });

@@ -137,7 +137,17 @@ export function parseSyllabusFromDocument(
 ): ParsedSyllabus {
   const syllabusSections = sections.filter((s) => s.role === "syllabus");
   // Prefer syllabus-tagged sections; if none, scan the whole document.
+  // When the only syllabus hit is an empty "Conteúdo Programático" wrapper,
+  // still fall back to subject sections so leaf tips are recovered (§15 / §42).
   let sourceSections = syllabusSections.length > 0 ? syllabusSections : sections;
+  const syllabusHasOutline = sourceSections.some((s) => {
+    if (splitOutlineItems(s.section.text).length > 0) return true;
+    const heading = s.section.heading ?? "";
+    return Boolean(subjectFromLine(heading) ?? freeTextHeadingSubject(heading));
+  });
+  if (syllabusSections.length > 0 && !syllabusHasOutline) {
+    sourceSections = sections;
+  }
   const nodes: SyllabusNodeDraft[] = [];
   let ordinal = 0;
   let scope: "basic" | "specific" = "basic";

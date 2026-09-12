@@ -36,6 +36,7 @@ import {
 } from "./knowledge/mapping.js";
 import { mapChunksLlmResidue } from "./knowledge/mapping-llm.js";
 import { normalizeDocument, normalizeHtmlFallback } from "./normalize.js";
+import { ProcessorUnavailableError } from "../doc-processor-client.js";
 import {
   bonusesFromDomainStats,
   computePageRank,
@@ -88,12 +89,13 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
 
   for (const document of items) {
     try {
+      // Mark extracting without consuming attempts yet (§33 processor_unavailable).
       await content.patch(`/internal/documents/${document.id}`, {
         status: "extracting",
-        bumpAttempts: true,
       });
 
       if (isOabExamSlug(document.examSlug)) {
+        await content.patch(`/internal/documents/${document.id}`, { bumpAttempts: true });
         await processOabLegacy(document);
         result.processed += 1;
         continue;
@@ -105,10 +107,54 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
         contentType: contentType || document.contentType || "application/octet-stream",
         bytes: buffer,
         url: document.sourceUrl,
+        roleHint: (document.role as string | null) ?? null,
       };
-      const normalized = contentEnv.stageNormalizeEnabled
-        ? await normalizeDocument(normalizeInput)
-        : normalizeHtmlFallback(normalizeInput);
+      let normalized;
+      try {
+        normalized = contentEnv.stageNormalizeEnabled
+          ? await normalizeDocument(normalizeInput)
+          : normalizeHtmlFallback(normalizeInput);
+      } catch (err) {
+        if (err instanceof ProcessorUnavailableError) {
+          logWarn("processor_unavailable", {
+            worker: NAME,
+            documentId: document.id,
+            error: err.message.slice(0, 200),
+          });
+          await content
+            .patch(`/internal/documents/${document.id}`, { status: "pending" })
+            .catch(() => undefined);
+          await emitStageMetric({
+            stage: "normalize",
+            decision: "processor_unavailable",
+            reason: err.message.slice(0, 200),
+          });
+          continue;
+        }
+        throw err;
+      }
+
+      // Content-path attempt accounting starts after processor contact succeeds.
+      await content.patch(`/internal/documents/${document.id}`, { bumpAttempts: true });
+
+      const tooShort = normalized.cleaningLog.some(
+        (e) =>
+          e.step === "minimum_content" &&
+          typeof e.sample === "string" &&
+          e.sample.startsWith("too_short"),
+      );
+      if (tooShort || (normalized.stats.chars ?? 0) === 0) {
+        await content.patch(`/internal/documents/${document.id}`, {
+          status: "failed",
+          failReason: "too_short",
+        });
+        result.failed += 1;
+        await emitStageMetric({
+          stage: "normalize",
+          decision: "too_short",
+        });
+        continue;
+      }
 
       let classification = classifyDocument(normalized, {
         roleHint: (document.role as never) ?? null,
@@ -796,9 +842,9 @@ async function ensureOabStaticSyllabus(
       ordinal: ordinal + 1,
       title: s.subject,
       rawText: s.subject,
-      pathSlug: `${rootPath}/${s.pathSlug}`,
+      pathSlug: s.pathSlug.startsWith(`${rootPath}/`) ? s.pathSlug : `${rootPath}/${s.slug}`,
       canonicalSubjectId: null,
-      canonicalKey: s.pathSlug,
+      canonicalKey: s.slug,
       scope: "specific" as const,
       positionSlugs: ["geral"],
       parentPathSlug: rootPath,

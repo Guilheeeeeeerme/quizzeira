@@ -54,14 +54,20 @@ def test_process_html_json_base64():
 
 
 def test_process_plain_text():
+    # Must exceed §13.1 minimum_content (400 chars) or cleaning wipes the doc.
     text = (
         b"INTRODUCAO\n\n"
         b"Texto de exemplo para normalizacao de documento educacional "
         b"sobre concordancia verbal e nominal em lingua portuguesa para "
-        b"concursos publicos brasileiros com conteudo suficiente.\n\n"
+        b"concursos publicos brasileiros com conteudo suficiente para estudo.\n\n"
         b"1. Primeiro topico\n"
         b"Conteudo do topico com explicacao detalhada das regras gramaticais "
-        b"aplicaveis a provas objetivas de multipla escolha.\n"
+        b"aplicaveis a provas objetivas de multipla escolha, incluindo casos "
+        b"de sujeito composto anteposto e posposto ao verbo, bem como usos "
+        b"impessoais de haver e fazer no sentido temporal.\n\n"
+        b"2. Segundo topico\n"
+        b"Concordancia nominal e a flexao do adjetivo em genero e numero com "
+        b"o substantivo a que se refere, com atencao as locucoes fixas.\n"
     )
     payload = {
         "documentId": "doc-plain-1",

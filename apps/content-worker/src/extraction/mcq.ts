@@ -98,18 +98,29 @@ export function extractPassageMap(body: string): Map<number, string> {
 export function parseQuestionBlocks(body: string): QuestionBlock[] {
   const text = body.replace(/\r\n/g, "\n");
   const starts: Array<{ number: number; at: number; headerLength: number }> = [];
-  const header = /(?:^|\n)\s*(?:quest(?:ão|ao)\s*)?(\d{1,3})\s*[-.)]\s+/gi;
+  // Allow "01." / "Questão 1)" / "1 -" headers; keep Number() so 01 → 1.
+  const header = /(?:^|\n)\s*(?:quest(?:ão|ao)\s*)?(\d{1,3})\s*[-.)]\s*/gi;
   for (const match of text.matchAll(header)) {
     if (match.index == null) continue;
     const number = Number(match[1]);
     if (!Number.isFinite(number) || number < 1) continue;
+    // Skip matches that look like decimal numbers inside prose (e.g. "8.666").
+    const after = text.slice(match.index + match[0].length, match.index + match[0].length + 1);
+    if (/^\d$/.test(after)) continue;
     starts.push({ number, at: match.index, headerLength: match[0].length });
   }
 
+  // Drop nested false headers that sit inside a previous question's option text.
+  const deduped: typeof starts = [];
+  for (const start of starts) {
+    if (deduped.some((s) => s.number === start.number)) continue;
+    deduped.push(start);
+  }
+
   const blocks: QuestionBlock[] = [];
-  for (let i = 0; i < starts.length; i += 1) {
-    const start = starts[i];
-    const end = i + 1 < starts.length ? starts[i + 1].at : text.length;
+  for (let i = 0; i < deduped.length; i += 1) {
+    const start = deduped[i];
+    const end = i + 1 < deduped.length ? deduped[i + 1].at : text.length;
     const raw = text.slice(start.at + start.headerLength, end).trim();
     if (!raw) continue;
     const parsed = parseOptions(raw);

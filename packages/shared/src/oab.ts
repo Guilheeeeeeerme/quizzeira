@@ -229,7 +229,7 @@ export const OAB_STATIC_SYLLABUS: readonly {
 }[] = OAB_OBJECTIVE_BLUEPRINT.map((s) => ({
   subject: s.name,
   slug: s.slug,
-  pathSlug: s.slug,
+  pathSlug: `oab-1-fase/${s.slug}`,
   from: s.from,
   to: s.to,
 }));

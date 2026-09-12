@@ -34,7 +34,7 @@ describe("generation metadata guard (§43.2)", () => {
     for (const row of rows) {
       assert.ok(
         questionTestsExamMetadata(row.prompt),
-        `${row.id} should match METADATA_QUESTION_RE`,
+        `${row.id} should match exam-metadata / listing-trivia denylist`,
       );
       const result = validateRelevance({
         origin: "generation",

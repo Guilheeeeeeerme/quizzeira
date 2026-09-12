@@ -1,3 +1,5 @@
+import { dmzGet, dmzPut } from "@quizzeira/worker-kit";
+
 const CACHE_MS = 24 * 60 * 60 * 1000;
 const USER_AGENT =
   "QuizzeiraDiscoveryCrawler/0.1 (+https://quizzeira.local; research; polite)";
@@ -7,7 +9,10 @@ interface RobotsCacheEntry {
   disallow: string[];
 }
 
-const cache = new Map<string, RobotsCacheEntry>();
+/** In-process cache keyed by domain (hot path). */
+const memoryCache = new Map<string, RobotsCacheEntry>();
+/** Optional sourceId → domain so we can persist to Source.robotsCache. */
+const sourceByDomain = new Map<string, string>();
 
 function parseDisallow(body: string): string[] {
   const lines = body.split(/\r?\n/);
@@ -28,9 +33,49 @@ function parseDisallow(body: string): string[] {
   return disallow;
 }
 
+/** Bind a source id so robots cache can be written to Postgres. */
+export function bindRobotsSource(domain: string, sourceId: string): void {
+  sourceByDomain.set(domain.toLowerCase(), sourceId);
+}
+
+async function loadPersisted(domain: string): Promise<RobotsCacheEntry | null> {
+  const sourceId = sourceByDomain.get(domain.toLowerCase());
+  if (!sourceId) return null;
+  try {
+    const res = await dmzGet<{ robotsCache: RobotsCacheEntry | null }>(
+      `/internal/sources/${sourceId}/robots-cache`,
+    );
+    const entry = res.robotsCache;
+    if (!entry || typeof entry.fetchedAt !== "number" || !Array.isArray(entry.disallow)) {
+      return null;
+    }
+    if (Date.now() - entry.fetchedAt >= CACHE_MS) return null;
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+async function persist(domain: string, entry: RobotsCacheEntry): Promise<void> {
+  const sourceId = sourceByDomain.get(domain.toLowerCase());
+  if (!sourceId) return;
+  try {
+    await dmzPut(`/internal/sources/${sourceId}/robots-cache`, entry);
+  } catch {
+    /* persistence must not block crawl */
+  }
+}
+
 async function loadRobots(domain: string): Promise<RobotsCacheEntry> {
-  const cached = cache.get(domain);
+  const key = domain.toLowerCase();
+  const cached = memoryCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < CACHE_MS) return cached;
+
+  const persisted = await loadPersisted(key);
+  if (persisted) {
+    memoryCache.set(key, persisted);
+    return persisted;
+  }
 
   const url = `https://${domain}/robots.txt`;
   try {
@@ -40,11 +85,13 @@ async function loadRobots(domain: string): Promise<RobotsCacheEntry> {
     });
     const body = res.ok ? await res.text() : "";
     const entry = { fetchedAt: Date.now(), disallow: parseDisallow(body) };
-    cache.set(domain, entry);
+    memoryCache.set(key, entry);
+    void persist(key, entry);
     return entry;
   } catch {
-    const entry = { fetchedAt: Date.now(), disallow: [] };
-    cache.set(domain, entry);
+    const entry = { fetchedAt: Date.now(), disallow: [] as string[] };
+    memoryCache.set(key, entry);
+    void persist(key, entry);
     return entry;
   }
 }
@@ -67,5 +114,5 @@ export async function isAllowedByRobots(url: string, domain: string): Promise<bo
 }
 
 export function clearRobotsCache(): void {
-  cache.clear();
+  memoryCache.clear();
 }

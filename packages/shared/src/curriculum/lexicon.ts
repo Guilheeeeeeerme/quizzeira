@@ -121,7 +121,7 @@ export const CANONICAL_SUBJECTS: CanonicalSubject[] = [
   {
     id: "informatica",
     title: "Informática",
-    aliases: ["noções de informática", "ti", "tecnologia da informação"],
+    aliases: ["noções de informática", "nocoes de informatica", "ti", "tecnologia da informação"],
     conventionalTopics: ["Sistemas operacionais", "Internet", "Segurança", "Pacote Office", "Redes"],
   },
   {

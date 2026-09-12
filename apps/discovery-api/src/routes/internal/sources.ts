@@ -128,4 +128,30 @@ export async function registerInternalSourceRoutes(app: FastifyInstance): Promis
     });
     return { ok: true };
   });
+
+  // ── robots.txt cache (§11.5 / Source.robotsCache) ──────────────────────────
+
+  app.get<{ Params: { id: string } }>("/internal/sources/:id/robots-cache", async (request) => {
+    const source = await prisma.source.findUnique({
+      where: { id: request.params.id },
+      select: { robotsCache: true },
+    });
+    return { robotsCache: source?.robotsCache ?? null };
+  });
+
+  app.put<{
+    Params: { id: string };
+    Body: { fetchedAt: number; disallow: string[] };
+  }>("/internal/sources/:id/robots-cache", async (request) => {
+    const body = request.body ?? { fetchedAt: Date.now(), disallow: [] as string[] };
+    const robotsCache = {
+      fetchedAt: Number(body.fetchedAt) || Date.now(),
+      disallow: Array.isArray(body.disallow) ? body.disallow.map(String) : [],
+    };
+    await prisma.source.update({
+      where: { id: request.params.id },
+      data: { robotsCache },
+    });
+    return { ok: true, robotsCache };
+  });
 }

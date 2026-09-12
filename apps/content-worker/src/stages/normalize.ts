@@ -6,8 +6,10 @@ import {
   type NormalizedSection,
 } from "@quizzeira/shared";
 import { createHash } from "node:crypto";
-import { processDocumentWithDocProcessor } from "../doc-processor-client.js";
+import { processDocumentWithDocProcessor, ProcessorUnavailableError } from "../doc-processor-client.js";
 import { extractHtmlText } from "./html-text.js";
+
+export { ProcessorUnavailableError };
 
 export interface NormalizeInput {
   documentId: string;
@@ -154,7 +156,9 @@ function extractTitle(html: string): string | null {
 export async function normalizeDocument(input: NormalizeInput): Promise<NormalizedDocument> {
   try {
     return await processDocumentWithDocProcessor(input);
-  } catch {
+  } catch (err) {
+    // Spec §33: processor unreachable → do not degrade; caller keeps doc pending.
+    if (err instanceof ProcessorUnavailableError) throw err;
     if (/html/i.test(input.contentType) || input.bytes.subarray(0, 15).toString("utf8").includes("<")) {
       return normalizeHtmlFallback(input);
     }

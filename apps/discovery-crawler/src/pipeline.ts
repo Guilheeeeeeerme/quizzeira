@@ -11,6 +11,7 @@ import { fetchPage } from "./fetch.js";
 import { crawlOabSource, type OabExamGroup } from "./oab-fgv.js";
 import { storeArtifact, storeSourceListingArtifact } from "./store.js";
 import { crawlTopicQueries } from "./topic.js";
+import { bindRobotsSource } from "./robots.js";
 
 const NAME = "discovery-crawler";
 
@@ -54,6 +55,7 @@ export async function runDiscoveryPipeline(
 
     for (const source of selected) {
       try {
+        bindRobotsSource(source.domain, source.id);
         artifactBudget = await crawlSource(source, summary, artifactBudget, onlySourceId);
         await dmzPost(`/internal/sources/${source.id}/health`, { ok: true });
         summary.sourcesOk += 1;
@@ -96,6 +98,8 @@ async function crawlSource(
   budget: number,
   onlySourceId?: string | null,
 ): Promise<number> {
+  // Exam-specific strategies (strategy registry). Checked before discoveryMode
+  // so `discoveryMode=custom` + `strategy=oab-fgv` still routes correctly.
   if (source.strategy === "oab-fgv") {
     if (crawlerEnv.fixtureMode) {
       summary.sourcesSkipped += 1;
@@ -110,6 +114,15 @@ async function crawlSource(
   }
   if (discoveryMode === "direct") {
     return crawlDirectSource(source, summary, budget);
+  }
+  if (discoveryMode === "custom") {
+    // Spec §11.1: custom = registered strategy handler. Unknown strategies must
+    // not silently fall through to listing (would reintroduce RC-2 patterns).
+    const message = `discoveryMode=custom has no registered handler for strategy=${source.strategy}`;
+    logInfo(message, { worker: NAME, sourceId: source.id, strategy: source.strategy });
+    summary.sourcesSkipped += 1;
+    summary.errors.push(`${source.domain}: ${message}`);
+    return budget;
   }
 
   return crawlListingMode(source, summary, budget, onlySourceId);

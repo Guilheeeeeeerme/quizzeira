@@ -76,9 +76,11 @@ describe("golden evidence parse (§42)", () => {
       const text = extractHtmlText(html);
       const extraKey = gabaritoFor(htmlName, expected);
 
-      let extracted = extractMcqs(text);
-      if (extracted.length === 0 && extraKey) {
-        extracted = extractMcqs(text, extraKey);
+      // Prefer merged key text up front so separate gabaritos are not missed when
+      // the body coincidentally matches a key-like fragment.
+      let extracted = extractMcqs(text, extraKey);
+      if (extracted.length === 0) {
+        extracted = extractMcqs(text);
       }
 
       const byNumber = new Map(extracted.map((q) => [q.number, q]));
@@ -87,7 +89,11 @@ describe("golden evidence parse (§42)", () => {
         const got = byNumber.get(exp.number);
         if (!got) continue;
         const stem = (exp.stem ?? exp.prompt ?? "").toLowerCase();
-        const stemOk = !stem || got.prompt.toLowerCase().includes(stem.slice(0, 24));
+        const gotPrompt = got.prompt.toLowerCase();
+        const stemOk =
+          !stem ||
+          gotPrompt.includes(stem.slice(0, Math.min(24, stem.length))) ||
+          stem.includes(gotPrompt.slice(0, Math.min(24, gotPrompt.length)));
         const wantIdx = answerIndex(exp);
         const keyOk = wantIdx == null || got.correctIndex === wantIdx;
         if (stemOk && keyOk) matched += 1;

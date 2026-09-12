@@ -6,6 +6,7 @@ import { crawlerEnv } from "./env.js";
 import { fetchWithPlaywright } from "./browser.js";
 import { isAllowedByRobots } from "./robots.js";
 import { waitForDomain } from "./politeness.js";
+import { assertSafeFetchTarget } from "./ssrf.js";
 
 export interface FetchResult {
   url: string;
@@ -60,6 +61,8 @@ export async function fetchPage(
 ): Promise<FetchResult> {
   const fixture = await readFixture(url);
   if (fixture) return fixture;
+
+  await assertSafeFetchTarget(url);
 
   const allowed = await isAllowedByRobots(url, source.domain);
   if (!allowed) {
@@ -120,6 +123,8 @@ export async function fetchBytes(
   lastModified: Date | null;
   contentHash: string;
 }> {
+  await assertSafeFetchTarget(url);
+
   const allowed = await isAllowedByRobots(url, source.domain);
   if (!allowed) {
     throw new Error(`robots.txt disallows ${url}`);

@@ -22,11 +22,28 @@ def test_cleaning_pipeline_idempotent():
 
 
 def test_section_text_covers_cleaned_blocks():
+    # Keep total cleaned chars ≥ §13.1 minimum_content (400).
     blocks = [
         Block(type="heading", text="Art. 1º Normas gerais", level=1),
-        Block(type="paragraph", text="Esta Lei estabelece normas gerais de licitação."),
+        Block(
+            type="paragraph",
+            text=(
+                "Esta Lei estabelece normas gerais de licitação e contratação "
+                "para as Administrações Públicas diretas, autárquicas e "
+                "fundacionais da União, dos Estados, do Distrito Federal e dos "
+                "Municípios, inclusive as empresas públicas e sociedades de economia mista."
+            ),
+        ),
         Block(type="heading", text="Art. 2º Definições", level=1),
-        Block(type="paragraph", text="Considera-se licitação o procedimento administrativo."),
+        Block(
+            type="paragraph",
+            text=(
+                "Considera-se licitação o procedimento administrativo destinado "
+                "a selecionar a proposta mais vantajosa para a Administração, "
+                "observados os princípios da isonomia, da competitividade e da "
+                "vinculação ao instrumento convocatório."
+            ),
+        ),
     ]
     cleaned, _ = run_cleaning_pipeline(blocks, role_hint="knowledge", document_id="sec-1")
     sections = build_sections("sec-1", cleaned)
