@@ -50,4 +50,12 @@ export const contentEnv = {
   docProcessorUrl: (
     process.env.DOC_PROCESSOR_URL || "http://doc-processor:8090"
   ).replace(/\/$/, ""),
+
+  /** fixture = deterministic grounded generator; llm = provider path. */
+  generationMode: (process.env.CONTENT_GENERATION_MODE === "llm" ? "llm" : "fixture") as
+    | "fixture"
+    | "llm",
+  /** When false, never use exam-level queue without syllabusNodeId. */
+  allowLegacyExamGeneration: process.env.CONTENT_ALLOW_LEGACY_EXAM_GENERATION === "true",
+  minKuPerLeaf: num("CONTENT_MIN_KU_PER_LEAF", 4),
 };
