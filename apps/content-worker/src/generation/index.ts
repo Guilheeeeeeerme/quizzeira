@@ -70,11 +70,14 @@ export async function runGenerationPass(): Promise<GenerationPassResult> {
 }
 
 async function generateForExam(item: QueueItem, count: number): Promise<number> {
-  const subject = "geral";
+  // Prefer a concrete subject when the exam has syllabus coverage; fall back to
+  // a knowledge-oriented query (never "conteúdo programático e requisitos").
+  const subject = "conhecimento";
   const { run } = await content.post<{ run: { id: string } }>("/internal/generation/runs", {
     examSlug: item.examSlug,
     subject,
     requested: count,
+    promptVersion: "generation.v2",
   });
 
   try {
@@ -143,7 +146,7 @@ async function generateForExam(item: QueueItem, count: number): Promise<number> 
 }
 
 async function retrieveChunks(item: QueueItem, subject: string): Promise<RetrievedChunk[]> {
-  const query = [item.examTitle ?? item.examSlug, subject, "conteúdo programático e requisitos"]
+  const query = [item.examTitle ?? item.examSlug, subject, "conceitos regras exemplos definição"]
     .filter(Boolean)
     .join(" — ");
   const embedding = await embedText(query);

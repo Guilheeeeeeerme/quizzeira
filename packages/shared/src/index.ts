@@ -7,4 +7,7 @@ export * from "./output-policy";
 export * from "./crawler";
 export * from "./content";
 export * from "./oab";
+export * from "./curriculum/index";
+export * from "./pipeline/index";
+export * from "./dedup/minhash";
 

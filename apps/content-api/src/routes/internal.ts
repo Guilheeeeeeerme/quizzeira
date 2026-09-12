@@ -388,6 +388,8 @@ function examSlugPriority(slug: string): number {
         locale: i.locale,
         origin: i.origin,
         documentId: i.documentId,
+        syllabusNodeId: i.syllabusNodeId,
+        knowledgeUnitIds: i.knowledgeUnitIds ?? [],
       })),
     };
   });
@@ -434,6 +436,68 @@ function examSlugPriority(slug: string): number {
       ]);
 
       return { item };
+    },
+  );
+
+  /** Demote legacy generation-origin published items to needs_review (§50 #4). */
+  app.post("/internal/question-items/demote-legacy-generation", async () => {
+    const result = await prisma.questionItem.updateMany({
+      where: { status: "published", origin: "generation", syllabusNodeId: null },
+      data: { status: "needs_review", publishedAt: null },
+    });
+    return { demoted: result.count };
+  });
+
+  /** Persist normalize + classify output from content-worker. */
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/internal/documents/:id/normalize",
+    async (request) => {
+      const body = request.body ?? {};
+      const document = await prisma.document.update({
+        where: { id: request.params.id },
+        data: {
+          role: (body.role as never) || "unknown",
+          roleConfidence: body.roleConfidence != null ? Number(body.roleConfidence) : null,
+          roleMethod: (body.roleMethod as string) || null,
+          subtype: (body.subtype as string) || null,
+          language: (body.language as string) || null,
+          normalizerVersion: (body.normalizerVersion as string) || null,
+          stats: body.stats ?? undefined,
+          status: "extracted",
+        },
+      });
+
+      const sections = Array.isArray(body.sections) ? body.sections : [];
+      for (const section of sections as Array<Record<string, unknown>>) {
+        await prisma.section.upsert({
+          where: {
+            documentId_ordinal: {
+              documentId: document.id,
+              ordinal: Number(section.ordinal || 0),
+            },
+          },
+          create: {
+            documentId: document.id,
+            ordinal: Number(section.ordinal || 0),
+            path: section.path ?? [],
+            heading: (section.heading as string) || null,
+            level: Number(section.level || 0),
+            role: (section.role as never) || "other",
+            scores: section.scores ?? undefined,
+            charCount: Number(section.charCount || 0),
+          },
+          update: {
+            path: section.path ?? [],
+            heading: (section.heading as string) || null,
+            level: Number(section.level || 0),
+            role: (section.role as never) || "other",
+            scores: section.scores ?? undefined,
+            charCount: Number(section.charCount || 0),
+          },
+        });
+      }
+
+      return { document, sectionCount: sections.length };
     },
   );
 }

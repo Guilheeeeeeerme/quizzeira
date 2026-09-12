@@ -214,6 +214,10 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
         status: nextStatus as never,
         sourceId: String(body.sourceId || ""),
         sourceDomain: String(body.sourceDomain || ""),
+        kind: (body.kind as never) || "concurso",
+        editionKey: (body.editionKey as string) || null,
+        detailUrl: (body.detailUrl as string) || listingUrl,
+        positions: body.positions ?? [],
       },
       update: {
         title,
@@ -223,6 +227,10 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
         editalUrl,
         lastSeenAt: new Date(),
         status: nextStatus as never,
+        kind: (body.kind as never) || undefined,
+        editionKey: (body.editionKey as string) || undefined,
+        detailUrl: (body.detailUrl as string) || undefined,
+        positions: body.positions ?? undefined,
       },
     });
     return {
@@ -272,9 +280,15 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
         examId: (body.examId as string) || null,
         sourceId: (body.sourceId as string) || null,
         kind: (body.kind as never) || "other",
+        kindHint: (body.kindHint as never) || "unknown",
+        roleHint: (body.roleHint as never) || "unknown",
+        anchorLabel: (body.anchorLabel as string) || null,
+        topicQueryId: (body.topicQueryId as string) || null,
         url: (body.url as string) || null,
         storageKey,
         checksum,
+        contentHash: (body.contentHash as string) || checksum,
+        etag: (body.etag as string) || null,
         contentType: (body.contentType as string) || null,
         byteSize,
         published: Boolean(body.published),
@@ -302,9 +316,14 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
         examSlug: a.exam?.examSlug ?? null,
         examTitle: a.exam?.title ?? null,
         kind: a.kind,
+        kindHint: a.kindHint,
+        roleHint: a.roleHint,
+        anchorLabel: a.anchorLabel,
+        topicQueryId: a.topicQueryId,
         url: a.url,
         storageKey: a.storageKey,
         checksum: a.checksum,
+        contentHash: a.contentHash,
         contentType: a.contentType,
         byteSize: a.byteSize,
         published: a.published,
@@ -359,4 +378,59 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
 
   /** Admin "crawl now" handoff, consumed once per crawler tick. */
   app.post("/internal/crawl/force/consume", async () => consumeForceCrawl());
+
+  // ── Topic queries (knowledge discovery) ───────────────────────────────────
+
+  app.get("/internal/topic-queries", async (request) => {
+    const q = request.query as { status?: string; limit?: string };
+    const items = await prisma.topicQuery.findMany({
+      where: q.status ? { status: q.status } : undefined,
+      orderBy: { createdAt: "asc" },
+      take: Math.min(100, Number(q.limit || 20)),
+    });
+    return {
+      items: items.map((row) => ({
+        id: row.id,
+        examId: row.examId,
+        syllabusNodeId: row.syllabusNodeId,
+        canonicalKey: row.canonicalKey,
+        queries: row.queries,
+        status: row.status,
+      })),
+    };
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/internal/topic-queries", async (request) => {
+    const body = request.body ?? {};
+    const row = await prisma.topicQuery.create({
+      data: {
+        examId: String(body.examId || ""),
+        syllabusNodeId: String(body.syllabusNodeId || ""),
+        canonicalKey: String(body.canonicalKey || ""),
+        queries: body.queries ?? [],
+        status: String(body.status || "queued"),
+      },
+    });
+    return { topicQuery: row };
+  });
+
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/internal/topic-queries/:id",
+    async (request) => {
+      const body = request.body ?? {};
+      const row = await prisma.topicQuery.update({
+        where: { id: request.params.id },
+        data: {
+          status: body.status != null ? String(body.status) : undefined,
+          candidatesFound:
+            body.candidatesFound != null ? Number(body.candidatesFound) : undefined,
+          candidatesStored:
+            body.candidatesStored != null ? Number(body.candidatesStored) : undefined,
+          finishedAt: body.finishedAt ? new Date(String(body.finishedAt)) : undefined,
+          attempts: body.attempts != null ? Number(body.attempts) : undefined,
+        },
+      });
+      return { topicQuery: row };
+    },
+  );
 }

@@ -46,4 +46,8 @@ export const contentEnv = {
   ).replace(/\/$/, ""),
   contentApiKey:
     process.env.INTERNAL_API_KEY_CONTENT || process.env.INTERNAL_API_KEY || "dev-content-key",
+
+  docProcessorUrl: (
+    process.env.DOC_PROCESSOR_URL || "http://doc-processor:8090"
+  ).replace(/\/$/, ""),
 };

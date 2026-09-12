@@ -1,0 +1,86 @@
+[
+  {
+    "id": "REG-001",
+    "prompt": "O Tribunal de Contas do Estado de Goiás está com inscrições abertas para qual cargo?",
+    "options": [
+      "Técnico de Controle Externo",
+      "Auditor de Finanças",
+      "Analista Judiciário",
+      "Procurador",
+      "Delegado"
+    ],
+    "correctIndex": 0,
+    "syllabusNodeId": "leaf-concordancia-verbal",
+    "knowledgeUnitIds": []
+  },
+  {
+    "id": "REG-002",
+    "prompt": "Qual associação oferece o 54º Exame para Certificação — CFP®?",
+    "options": [
+      "PLANEJAR",
+      "Cesgranrio",
+      "FGV",
+      "Vunesp",
+      "FCC"
+    ],
+    "correctIndex": 0,
+    "syllabusNodeId": "leaf-concordancia-verbal",
+    "knowledgeUnitIds": []
+  },
+  {
+    "id": "REG-003",
+    "prompt": "Qual cargo está sendo oferecido pela Secretaria de Estado da Fazenda de Santa Catarina?",
+    "options": [
+      "Auditor Estadual de Finanças Públicas",
+      "Técnico Tributário",
+      "Analista de TI",
+      "Contador",
+      "Economista"
+    ],
+    "correctIndex": 0,
+    "syllabusNodeId": "leaf-concordancia-verbal",
+    "knowledgeUnitIds": []
+  },
+  {
+    "id": "REG-004",
+    "prompt": "O cargo de Técnico de Controle Externo é oferecido por qual instituição?",
+    "options": [
+      "Tribunal de Contas do Estado de Goiás",
+      "SEF-SC",
+      "MANAUSPREV",
+      "FDSBC",
+      "PLANEJAR"
+    ],
+    "correctIndex": 0,
+    "syllabusNodeId": "leaf-concordancia-verbal",
+    "knowledgeUnitIds": []
+  },
+  {
+    "id": "REG-005",
+    "prompt": "Qual o nome da associação que realiza o 54º Exame para Certificação — CFP®?",
+    "options": [
+      "PLANEJAR — Associação Brasileira de Planejamento Financeiro",
+      "OAB",
+      "CFC",
+      "CRC",
+      "CVM"
+    ],
+    "correctIndex": 0,
+    "syllabusNodeId": "leaf-concordancia-verbal",
+    "knowledgeUnitIds": []
+  },
+  {
+    "id": "REG-006",
+    "prompt": "O que a PLANEJAR — Associação Brasileira de Planejamento Financeiro está promovendo?",
+    "options": [
+      "54º Exame para Certificação — CFP®",
+      "Concurso público federal",
+      "Vestibular",
+      "MBA em finanças",
+      "Curso de inglês"
+    ],
+    "correctIndex": 0,
+    "syllabusNodeId": "leaf-concordancia-verbal",
+    "knowledgeUnitIds": []
+  }
+]

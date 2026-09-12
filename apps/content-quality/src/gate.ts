@@ -1,14 +1,15 @@
-// Concept: Publish gate (turns structural + judge signals into one decision)
-//
-// Pure function on purpose: the decision rule is the most consequential logic
-// in the pipeline, so it is testable without a model or a database.
+// Concept: Publish gate (turns structural + relevance + grounding + judge into one decision)
 import type { JudgeVerdict } from "./judge.js";
 import type { StructuralResult } from "./structural.js";
+import type { RelevanceResult } from "./relevance.js";
+import type { GroundingResult } from "./grounding.js";
 
 export type GateDecision = "published" | "failed" | "needs_review";
 
 export interface GateInput {
   structural: StructuralResult;
+  relevance?: RelevanceResult | null;
+  grounding?: GroundingResult | null;
   /** Null when the judge could not run (no provider, budget hit, outage). */
   judge: JudgeVerdict | null;
   /** The item's own claimed answer, for agreement checking. */
@@ -19,7 +20,7 @@ export interface GateInput {
    * instead of parking in needs_review (Headroom/provider outage escape hatch).
    */
   publishExtractionWithoutJudge?: boolean;
-  origin?: "extraction" | "generation" | string | null;
+  origin?: "extraction" | "generation" | "transcription" | string | null;
 }
 
 export interface GateThresholds {
@@ -39,8 +40,6 @@ export interface GateResult {
 export function decide(input: GateInput): GateResult {
   const { structural, judge, thresholds } = input;
 
-  // Structural failures are deterministic and final; no model opinion can
-  // rescue a malformed item.
   if (!structural.ok) {
     return {
       decision: "failed",
@@ -50,14 +49,39 @@ export function decide(input: GateInput): GateResult {
     };
   }
 
-  // Without a judge verdict we refuse to publish, but we also refuse to fail —
-  // an infrastructure gap is not the item's fault, so a human decides.
-  // Exception: past-exam extraction can opt into structural-only publish when
-  // the LLM path (often Headroom) is known broken.
+  if (input.relevance && !input.relevance.ok) {
+    const softOnly =
+      input.relevance.reasons.length > 0 &&
+      input.relevance.reasons.every((r) => r === "temporally_dependent");
+    if (softOnly) {
+      return {
+        decision: "needs_review",
+        score: 0.4,
+        reasons: input.relevance.reasons,
+        notes: input.relevance.notes,
+      };
+    }
+    return {
+      decision: "failed",
+      score: 0,
+      reasons: input.relevance.reasons,
+      notes: input.relevance.notes,
+    };
+  }
+
+  if (input.grounding && !input.grounding.ok) {
+    return {
+      decision: "failed",
+      score: 0,
+      reasons: input.grounding.reasons,
+      notes: input.grounding.notes,
+    };
+  }
+
   if (!judge) {
     if (
       input.publishExtractionWithoutJudge &&
-      input.origin === "extraction"
+      (input.origin === "extraction" || input.origin === "transcription")
     ) {
       return {
         decision: "published",
@@ -76,8 +100,6 @@ export function decide(input: GateInput): GateResult {
 
   const reasons = [...judge.reasons];
 
-  // Disagreement on the keyed answer is the single strongest failure signal:
-  // either the item is wrong or it is ambiguous. Both are disqualifying.
   const disagrees =
     input.correctIndex != null &&
     judge.answerIndex != null &&
@@ -107,7 +129,6 @@ export function decide(input: GateInput): GateResult {
     };
   }
 
-  // The middle band is exactly what HITL exists for.
   return {
     decision: "needs_review",
     score: judge.score,

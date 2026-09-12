@@ -377,6 +377,7 @@ services:
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
       CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
+      DOC_PROCESSOR_URL: http://doc-processor:8090
     volumes:
       - ./apps/content-worker:/app/apps/content-worker
       - ./packages/shared:/app/packages/shared
@@ -387,6 +388,8 @@ services:
       content-api:
         condition: service_healthy
       discovery-api:
+        condition: service_healthy
+      doc-processor:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -439,6 +442,27 @@ services:
         condition: service_healthy
     networks:
       - dmz
+      - private
+
+  # ── Document processor (Python) ───────────────────────────────────────────
+
+  doc-processor:
+    build:
+      context: .
+      dockerfile: apps/doc-processor/Dockerfile
+      network: host
+    restart: unless-stopped
+    environment:
+      PORT: 8090
+    ports:
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
       - private
 
 volumes:

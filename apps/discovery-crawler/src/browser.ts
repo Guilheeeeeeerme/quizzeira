@@ -8,14 +8,14 @@ import {
   filterOpenListings,
   parseListingHtml,
   type DiscoveredListing,
-} from "./listing-parse.js";
+} from "./listing.js";
 
 export type { DiscoveredListing };
 export {
   filterOpenListings,
   listingsToOpenRecords,
   parseListingHtml,
-} from "./listing-parse.js";
+} from "./listing.js";
 
 let browser: Browser | null = null;
 

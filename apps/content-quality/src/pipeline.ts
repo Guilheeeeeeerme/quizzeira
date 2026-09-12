@@ -1,9 +1,11 @@
-// Concept: Eval (one pass over the draft queue)
+// Concept: Eval (validation ladder §25: structural → relevance → grounding → judge → gate)
 import { llmErrorCode, logInfo, logWarn } from "@quizzeira/worker-kit";
 import { contentApi } from "./client.js";
 import { qualityEnv } from "./env.js";
 import { decide } from "./gate.js";
+import { validateGrounding } from "./grounding.js";
 import { judgeItem, type JudgeVerdict } from "./judge.js";
+import { validateRelevance } from "./relevance.js";
 import { validateStructure } from "./structural.js";
 
 const NAME = "content-quality";
@@ -18,7 +20,9 @@ interface PendingItem {
   correctIndex: number | null;
   referenceAnswer: string | null;
   explanation: string | null;
-  origin?: "extraction" | "generation" | string | null;
+  origin?: "extraction" | "generation" | "transcription" | string | null;
+  syllabusNodeId?: string | null;
+  knowledgeUnitIds?: string[] | null;
 }
 
 export interface EvalPassResult {
@@ -37,10 +41,32 @@ export async function runEvalPass(): Promise<EvalPassResult> {
 
   for (const item of items) {
     const structural = validateStructure(item);
+    const relevance = structural.ok
+      ? validateRelevance({
+          prompt: item.prompt,
+          options: item.options,
+          explanation: item.explanation,
+          origin: item.origin,
+          syllabusNodeId: item.syllabusNodeId,
+          knowledgeUnitIds: item.knowledgeUnitIds ?? [],
+        })
+      : null;
 
-    // Only items that survived the deterministic gate cost a model call.
+    const grounding =
+      structural.ok && relevance?.ok && item.origin === "generation"
+        ? validateGrounding({
+            knowledgeUnitIds: item.knowledgeUnitIds ?? [],
+            allowedKnowledgeUnitIds: item.knowledgeUnitIds ?? [],
+            correctOption:
+              item.options && item.correctIndex != null
+                ? item.options[item.correctIndex]
+                : null,
+            explanation: item.explanation,
+          })
+        : null;
+
     let judge: JudgeVerdict | null = null;
-    if (structural.ok) {
+    if (structural.ok && relevance?.ok && (!grounding || grounding.ok)) {
       try {
         judge = await judgeItem({
           examSlug: item.examSlug,
@@ -55,14 +81,14 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       } catch (err) {
         const code = llmErrorCode(err);
         logWarn("judge unavailable", { worker: NAME, itemId: item.id, code });
-        // Budget exhaustion means every remaining item would park in
-        // needs_review; stop instead of flooding the HITL queue.
         if (code === "llm_budget_exceeded") break;
       }
     }
 
     const verdict = decide({
       structural,
+      relevance,
+      grounding,
       judge,
       correctIndex: item.correctIndex,
       thresholds: {
@@ -79,11 +105,14 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       score: verdict.score,
       notes: verdict.notes,
       reasons: verdict.reasons,
-      stage: judge
-        ? "structural+judge"
-        : verdict.decision === "published"
-          ? "structural+extraction"
-          : "structural",
+      stage: [
+        "structural",
+        relevance ? "relevance" : null,
+        grounding ? "grounding" : null,
+        judge ? "judge" : null,
+      ]
+        .filter(Boolean)
+        .join("+"),
       model: judge?.model ?? null,
     });
 

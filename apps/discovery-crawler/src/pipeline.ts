@@ -1,14 +1,26 @@
-// Concept: Ingestion (one crawl pass over the enabled Source registry)
+// Concept: Ingestion (listing + detail + topic + direct modes)
 //
-// Every write goes to discovery-api. The crawler has no knowledge of topics,
-// quizzes, or the question bank — turning a PDF into questions is Content's job.
+// Spec §11: never store the listing page as an exam artifact. Document
+// candidates come from the detail page with kind/role hints.
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
-import { listingsFingerprint, oabEditionPageUrl } from "@quizzeira/shared";
+import {
+  classifyExamKind,
+  isConcursoEligible,
+  listingsFingerprint,
+  normalizeOpenExam,
+  oabEditionPageUrl,
+} from "@quizzeira/shared";
 import { dmzGet, dmzPost, dmzPut, logError, logInfo } from "@quizzeira/worker-kit";
 import { closeBrowser, crawlSourceListings, listingsToOpenRecords } from "./browser.js";
+import { parseDetailHtml } from "./detail.js";
 import { crawlerEnv } from "./env.js";
+import { fetchBytes } from "./fetch.js";
 import { crawlOabSource, type OabExamGroup } from "./oab-fgv.js";
+import { politeWait } from "./politeness.js";
+import { fetchRobots, isAllowedByRobots } from "./robots.js";
+import { storeArtifact, USER_AGENT } from "./store.js";
+import { runTopicDiscoveryPass } from "./topic.js";
 
 const NAME = "discovery-crawler";
 
@@ -39,10 +51,11 @@ export async function runDiscoveryPipeline(
       "/internal/sources?status=active",
     );
 
-    // An empty registry is the normal first-boot state: nothing is seeded, an
-    // admin adds the first Source through the Admin UI.
     if (sources.length === 0) {
       logInfo("source registry empty", { worker: NAME, runId });
+      // Still drain topic queries even with empty source registry.
+      const topic = await runTopicDiscoveryPass(artifactBudget);
+      summary.artifactsStored += topic.stored;
       summary.status = "ok";
       return await finish(summary);
     }
@@ -54,8 +67,6 @@ export async function runDiscoveryPipeline(
     for (const source of selected) {
       try {
         if (source.strategy === "oab-fgv") {
-          // No fixture exercises an ASP.NET postback, and the generic fixture
-          // would file its listing under OAB exam slugs. Skip instead.
           if (crawlerEnv.fixtureMode) {
             summary.sourcesSkipped += 1;
             continue;
@@ -79,30 +90,78 @@ export async function runDiscoveryPipeline(
           continue;
         }
 
+        // Optional: store listing HTML attached to Source only (debug), never as exam artifact.
+        for (const startUrl of source.startUrls.slice(0, 1)) {
+          if (artifactBudget <= 0) break;
+          await storeArtifact({
+            examId: null,
+            sourceId: source.id,
+            url: startUrl,
+            withBytes: crawlerEnv.fixtureMode,
+            kind: "other",
+            kindHint: "listing",
+            roleHint: "administrative",
+            anchorLabel: "listing",
+          });
+        }
+
+        const robots = await fetchRobots(`https://${source.domain}`, USER_AGENT);
+
         for (const open of listingsToOpenRecords(listings, source)) {
+          if (!isConcursoEligible(open.kind ?? classifyExamKind(open.title, open.listingUrl))) {
+            continue;
+          }
+
+          const detailUrl = open.listingUrl;
+          let detail = parseDetailHtml("", detailUrl);
+          let documents = detail.documents;
+
+          if (isAllowedByRobots(detailUrl, robots)) {
+            await politeWait(source.domain, source.politenessMs);
+            const fetched = await fetchBytes(detailUrl);
+            if (fetched.ok && fetched.buffer && /html/i.test(fetched.contentType)) {
+              detail = parseDetailHtml(fetched.buffer.toString("utf8"), detailUrl);
+              documents = detail.documents;
+            }
+          }
+
+          const record = normalizeOpenExam({
+            title: detail.title || open.title,
+            href: detailUrl,
+            sourceId: source.id,
+            sourceDomain: source.domain,
+            orgHint: detail.org || open.org,
+            bancaHint: detail.banca || open.banca,
+            editionKey: detail.editionKey || open.editionKey,
+            detailUrl,
+            registrationEnd: detail.registrationEnd,
+            positions: detail.positions,
+            kind: open.kind,
+          });
+
           const upserted = await dmzPost<{
             record: OpenExamRecord;
             created: boolean;
             changed: boolean;
-          }>("/internal/open-exams", open);
+          }>("/internal/open-exams", record);
 
           if (upserted.changed) summary.openDiscovered += 1;
-
-          // Skip artifact download for unknown nav/chrome rows — they flood
-          // Content with junk examSlugs (certificacao, voltar-para-home, …).
           if (upserted.record.status !== "open") continue;
 
-          // Prefer an edital/PDF URL; otherwise keep the listing page so Content
-          // still has HTML to extract while the board has not published a PDF.
-          // Store even when the exam row is unchanged — first successful crawl
-          // may have discovered the listing before artifact download existed.
-          const artifactUrl = open.editalUrl || open.listingUrl;
-          if (artifactUrl && artifactBudget > 0) {
+          // CRITICAL: never fall back to listingUrl as exam artifact (§11.2 / checklist #1).
+          for (const doc of documents) {
+            if (artifactBudget <= 0) break;
+            if (doc.roleHint === "administrative" && doc.kindHint === "listing") continue;
+            if (!isAllowedByRobots(doc.url, robots)) continue;
+            await politeWait(source.domain, source.politenessMs);
             const stored = await storeArtifact({
               examId: upserted.record.id,
               sourceId: source.id,
-              url: artifactUrl,
+              url: doc.url,
               withBytes: true,
+              kindHint: doc.kindHint,
+              roleHint: doc.roleHint,
+              anchorLabel: doc.label,
             });
             if (stored) {
               summary.artifactsStored += 1;
@@ -116,8 +175,6 @@ export async function runDiscoveryPipeline(
           listingCount: listings.length,
         });
 
-        // Adaptive reach, gated: at most 2 proposals per source per pass, and
-        // proposals are inert until an admin approves them.
         for (const domain of outboundDomains.slice(0, 2)) {
           const proposed = await dmzPost<{ proposed?: boolean }>("/internal/sources/propose", {
             url: `https://${domain}/`,
@@ -132,8 +189,6 @@ export async function runDiscoveryPipeline(
         summary.sourcesOk += 1;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // Compose restarts / shared rebuilds close Playwright mid-pass; do not
-        // mark the Source broken or the next force crawl is skipped (active-only).
         if (/Target .+ closed|browser has been closed|browserContext\.close/i.test(message)) {
           logInfo("crawl interrupted (browser closed)", {
             worker: NAME,
@@ -151,6 +206,9 @@ export async function runDiscoveryPipeline(
         }).catch(() => undefined);
       }
     }
+
+    const topic = await runTopicDiscoveryPass(artifactBudget);
+    summary.artifactsStored += topic.stored;
 
     summary.status =
       summary.sourcesFailed === 0 ? "ok" : summary.sourcesOk > 0 ? "partial" : "failed";
@@ -181,14 +239,6 @@ async function finish(summary: CrawlerRunSummary): Promise<CrawlerRunSummary> {
   return summary;
 }
 
-/**
- * Ingests the OAB portal. Unlike a listing source, the exams are known in
- * advance: the crawl produces one open-exam row per edition and phase, and
- * every document it carries is stored with the kind the label taxonomy gave it
- * — which is what lets Extraction pair a caderno with its gabarito.
- *
- * Returns the remaining artifact budget.
- */
 async function crawlOab(
   source: CrawlerSource,
   summary: CrawlerRunSummary,
@@ -229,6 +279,14 @@ async function crawlOab(
         url: doc.url,
         kind: doc.kind,
         withBytes: true,
+        kindHint: doc.kind === "edital" ? "edital" : doc.kind === "prova" ? "prova" : doc.kind === "gabarito" ? "gabarito" : "unknown",
+        roleHint:
+          doc.kind === "edital"
+            ? "specification"
+            : doc.kind === "prova" || doc.kind === "gabarito"
+              ? "evidence"
+              : "unknown",
+        anchorLabel: doc.label,
       });
       if (stored) {
         summary.artifactsStored += 1;
@@ -255,67 +313,9 @@ function oabOpenExamRecord(source: CrawlerSource, group: OabExamGroup) {
     emphasis: [],
     editalUrl: edital?.url ?? null,
     listingUrl: oabEditionPageUrl(group.edition.fgvKey),
-    // The Exame de Ordem runs about three times a year: an edition page is
-    // never "closed" material the way a one-off concurso is.
     status: "open" as const,
     sourceId: source.id,
     sourceDomain: source.domain,
+    kind: "oab" as const,
   };
 }
-
-async function storeArtifact(input: {
-  examId: string;
-  sourceId: string;
-  url: string;
-  withBytes: boolean;
-  /** Set by sources that classify their own documents (oab-fgv). */
-  kind?: string;
-}): Promise<{ downloaded: boolean } | null> {
-  const kind = input.kind ?? (/edital/i.test(input.url) ? "edital" : "other");
-  let base64: string | undefined;
-  let contentType: string | undefined;
-
-  if (input.withBytes) {
-    try {
-      const res = await fetch(input.url, {
-        headers: { "user-agent": USER_AGENT },
-        signal: AbortSignal.timeout(crawlerEnv.navigationTimeoutMs),
-      });
-      contentType = res.headers.get("content-type") ?? undefined;
-      const okType = /pdf|html|text\/plain/i.test(contentType ?? "");
-      if (res.ok && okType) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.byteLength <= crawlerEnv.maxArtifactBytes) {
-          base64 = buf.toString("base64");
-        }
-      }
-    } catch {
-      // Fall through and record the URL reference only.
-    }
-  }
-
-  const inferredKind =
-    input.kind ??
-    (/edital/i.test(input.url) || /pdf/i.test(contentType ?? "")
-      ? kind
-      : /html/i.test(contentType ?? "")
-        ? "other"
-        : kind);
-
-  try {
-    await dmzPost("/internal/artifacts", {
-      examId: input.examId,
-      sourceId: input.sourceId,
-      kind: inferredKind,
-      url: input.url,
-      contentType: contentType ?? "application/octet-stream",
-      base64,
-    });
-    return { downloaded: Boolean(base64) };
-  } catch {
-    return null;
-  }
-}
-
-const USER_AGENT =
-  "QuizzeiraDiscoveryCrawler/0.1 (+https://quizzeira.local; research; polite)";
