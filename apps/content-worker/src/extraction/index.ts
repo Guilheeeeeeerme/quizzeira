@@ -4,6 +4,13 @@ import { content, discovery } from "../clients.js";
 import { contentEnv } from "../env.js";
 import { chunkText } from "./chunk.js";
 import { extractMcqs } from "./mcq.js";
+import {
+  extractLayoutText,
+  extractOabDocument,
+  isOabExamSlug,
+  type OabDocumentRef,
+  type OabExtractionDeps,
+} from "./oab/index.js";
 import { extractHtmlText, extractPdfText } from "./pdf-text.js";
 
 const NAME = "content-worker/extraction";
@@ -62,7 +69,8 @@ export async function runExtractionPass(): Promise<ExtractionPassResult> {
         status: "extracting",
         bumpAttempts: true,
       });
-      const text = await documentText(document);
+      const payload = await documentPayload(document);
+      const text = payload.text;
       const chunks = chunkText(text, {
         targetChars: contentEnv.chunkTargetChars,
         overlapChars: contentEnv.chunkOverlapChars,
@@ -87,7 +95,9 @@ export async function runExtractionPass(): Promise<ExtractionPassResult> {
       result.extracted += 1;
       result.chunks += posted.chunkCount;
 
-      if (PAST_EXAM_KINDS.has(document.kind)) {
+      if (isOabExamSlug(document.examSlug)) {
+        result.drafted += await draftOabQuestions(document, payload.buffer);
+      } else if (PAST_EXAM_KINDS.has(document.kind)) {
         result.drafted += await draftPastExamQuestions(document, text);
       }
     } catch (err) {
@@ -148,6 +158,66 @@ async function importDiscoveryArtifacts(): Promise<number> {
 }
 
 /**
+ * Hands an OAB document to the specialized module. The OAB never goes through
+ * Generation: its questions are transcribed from the banca's own PDFs and keyed
+ * by the banca's own gabarito, so no model is involved and no LLM tokens are
+ * spent on them.
+ */
+async function draftOabQuestions(document: QueuedDocument, bytes: Buffer): Promise<number> {
+  const deps: OabExtractionDeps = {
+    async listDocuments(examSlug, kind) {
+      const { items } = await content.get<{ items: OabDocumentRef[] }>(
+        `/internal/documents?examSlug=${encodeURIComponent(examSlug)}&kind=${kind}`,
+      );
+      return items;
+    },
+    async documentBytes(documentId) {
+      const bytes = await content.get<{ base64: string }>(
+        `/internal/documents/${documentId}/bytes`,
+      );
+      return Buffer.from(bytes.base64, "base64");
+    },
+    async draft({ examSlug, documentId, group }) {
+      const { created } = await content.post<{ created: number }>(
+        "/internal/question-items/draft",
+        {
+          examSlug,
+          subject: group.subject,
+          locale: "pt",
+          origin: "extraction",
+          documentId,
+          questions: group.questions,
+        },
+      );
+      return created;
+    },
+  };
+
+  const ref: OabDocumentRef = {
+    id: document.id,
+    examSlug: document.examSlug,
+    kind: document.kind,
+    storageKey: document.storageKey,
+    sourceUrl: document.sourceUrl,
+    contentType: document.contentType,
+  };
+
+  const { drafted, pending } = await extractOabDocument(ref, bytes, deps);
+  if (pending) {
+    // Not a failure: the other half of the pair is usually published weeks
+    // later, and the document is re-drafted when it arrives.
+    logInfo("oab document awaiting its pair", {
+      worker: NAME,
+      documentId: document.id,
+      examSlug: document.examSlug,
+      kind: document.kind,
+      reason: pending,
+    });
+  }
+  return drafted;
+}
+
+/**
  * Drafts the questions a prova already contains. Needs an answer key, so a
  * prova whose gabarito is a separate artifact yields nothing until that document
  * is extracted too; the material still reaches Generation through its chunks.
@@ -181,22 +251,29 @@ async function draftPastExamQuestions(document: QueuedDocument, text: string): P
   return created;
 }
 
-async function documentText(document: QueuedDocument): Promise<string> {
+interface DocumentPayload {
+  /** Raw bytes, kept because the OAB parsers read PDF geometry, not flat text. */
+  buffer: Buffer;
+  contentType: string;
+  text: string;
+}
+
+async function documentPayload(document: QueuedDocument): Promise<DocumentPayload> {
+  const { buffer, contentType } = await documentBytes(document);
+  return { buffer, contentType, text: bytesToText(buffer, contentType, document.examSlug) };
+}
+
+async function documentBytes(
+  document: QueuedDocument,
+): Promise<{ buffer: Buffer; contentType: string }> {
   if (document.storageKey) {
     const bytes = await content.get<{ base64: string; contentType: string }>(
       `/internal/documents/${document.id}/bytes`,
     );
-    const buffer = Buffer.from(bytes.base64, "base64");
-    const contentType = bytes.contentType || document.contentType || "";
-    if (/html/i.test(contentType)) return extractHtmlText(buffer.toString("utf8"));
-    if (/text\/plain|charset=utf-8|^text\//i.test(contentType) || !/pdf/i.test(contentType)) {
-      // Prova/gabarito fixtures and crawler HTML-adjacent blobs often land as
-      // text/plain; forcing them through the PDF reader yields empty text.
-      if (!buffer.slice(0, 5).toString("latin1").startsWith("%PDF")) {
-        return buffer.toString("utf8");
-      }
-    }
-    return extractPdfText(buffer).text;
+    return {
+      buffer: Buffer.from(bytes.base64, "base64"),
+      contentType: bytes.contentType || document.contentType || "",
+    };
   }
 
   if (document.sourceUrl) {
@@ -205,14 +282,29 @@ async function documentText(document: QueuedDocument): Promise<string> {
       signal: AbortSignal.timeout(45_000),
     });
     if (!res.ok) throw new Error(`fetch ${res.status}`);
-    const contentType = res.headers.get("content-type") ?? "";
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (/html/i.test(contentType)) return extractHtmlText(buffer.toString("utf8"));
-    if (/text\/plain|^text\//i.test(contentType) && !buffer.slice(0, 5).toString("latin1").startsWith("%PDF")) {
-      return buffer.toString("utf8");
-    }
-    return extractPdfText(buffer).text;
+    return {
+      buffer: Buffer.from(await res.arrayBuffer()),
+      contentType: res.headers.get("content-type") ?? "",
+    };
   }
 
   throw new Error("document has neither storageKey nor sourceUrl");
 }
+
+function bytesToText(buffer: Buffer, contentType: string, examSlug: string): string {
+  if (/html/i.test(contentType)) return extractHtmlText(buffer.toString("utf8"));
+  const isPdf = buffer.subarray(0, 5).toString("latin1").startsWith("%PDF");
+  if (!isPdf && !/pdf/i.test(contentType)) {
+    // Prova/gabarito fixtures and crawler HTML-adjacent blobs often land as
+    // text/plain; forcing them through the PDF reader yields empty text.
+    return buffer.toString("utf8");
+  }
+  // OAB cadernos are two-column: the flat reader splices question 1 into
+  // question 3, so even the chunks stored for Generation come out unusable.
+  if (isOabExamSlug(examSlug)) {
+    const layout = extractLayoutText(buffer);
+    if (layout.trim() !== "") return layout;
+  }
+  return extractPdfText(buffer).text;
+}
+

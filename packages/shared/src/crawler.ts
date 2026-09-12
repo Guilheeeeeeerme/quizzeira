@@ -3,7 +3,12 @@ import { slugifyKey } from "./slug";
 
 export type CrawlerSourceStatus = "active" | "broken" | "proposed" | "disabled";
 export type CrawlerSourceTrust = "high" | "medium" | "low";
-export type CrawlerStrategy = "listing-links" | "banca-portal" | "fixture";
+/**
+ * `oab-fgv` is the one exam-specific strategy: the FGV portal renders its
+ * document list only after an ASP.NET postback, so a plain listing crawl of
+ * oab.fgv.br returns an empty page. See docs/oab-exam.md.
+ */
+export type CrawlerStrategy = "listing-links" | "banca-portal" | "fixture" | "oab-fgv";
 
 export interface CrawlerSource {
   id: string;

@@ -81,6 +81,37 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
     };
   });
 
+  /**
+   * Documents of one exam, optionally by kind. The OAB extractor needs it: a
+   * caderno is only draftable once the edition's gabarito has been ingested,
+   * and the two arrive as separate artifacts in either order.
+   */
+  app.get("/internal/documents", async (request) => {
+    const q = request.query as { examSlug?: string; kind?: string; limit?: string };
+    const examSlug = String(q.examSlug || "").trim();
+    if (!examSlug) {
+      throw Object.assign(new Error("examSlug is required"), { statusCode: 400 });
+    }
+    const items = await prisma.document.findMany({
+      where: { examSlug, kind: q.kind ? (q.kind as never) : undefined },
+      orderBy: { createdAt: "asc" },
+      take: Math.min(50, Number(q.limit || 20)),
+    });
+    return {
+      items: items.map((d) => ({
+        id: d.id,
+        examSlug: d.examSlug,
+        examTitle: d.examTitle,
+        kind: d.kind,
+        status: d.status,
+        sourceUrl: d.sourceUrl,
+        storageKey: d.storageKey,
+        contentType: d.contentType,
+        attempts: d.attempts,
+      })),
+    };
+  });
+
   /** Raw artifact bytes, base64 encoded, so the worker needs no S3 credentials. */
   app.get<{ Params: { id: string } }>("/internal/documents/:id/bytes", async (request) => {
     const document = await prisma.document.findUnique({ where: { id: request.params.id } });

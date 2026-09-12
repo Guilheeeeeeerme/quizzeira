@@ -4,10 +4,11 @@
 // quizzes, or the question bank — turning a PDF into questions is Content's job.
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
-import { listingsFingerprint } from "@quizzeira/shared";
+import { listingsFingerprint, oabEditionPageUrl } from "@quizzeira/shared";
 import { dmzGet, dmzPost, dmzPut, logError, logInfo } from "@quizzeira/worker-kit";
 import { closeBrowser, crawlSourceListings, listingsToOpenRecords } from "./browser.js";
 import { crawlerEnv } from "./env.js";
+import { crawlOabSource, type OabExamGroup } from "./oab-fgv.js";
 
 const NAME = "discovery-crawler";
 
@@ -52,6 +53,19 @@ export async function runDiscoveryPipeline(
 
     for (const source of selected) {
       try {
+        if (source.strategy === "oab-fgv") {
+          // No fixture exercises an ASP.NET postback, and the generic fixture
+          // would file its listing under OAB exam slugs. Skip instead.
+          if (crawlerEnv.fixtureMode) {
+            summary.sourcesSkipped += 1;
+            continue;
+          }
+          artifactBudget = await crawlOab(source, summary, artifactBudget);
+          await dmzPost(`/internal/sources/${source.id}/health`, { ok: true });
+          summary.sourcesOk += 1;
+          continue;
+        }
+
         const { listings, outboundDomains } = await crawlSourceListings(source);
         const fingerprint = listingsFingerprint(listings);
         const previous = await dmzGet<{ fingerprint: string | null }>(
@@ -167,13 +181,97 @@ async function finish(summary: CrawlerRunSummary): Promise<CrawlerRunSummary> {
   return summary;
 }
 
+/**
+ * Ingests the OAB portal. Unlike a listing source, the exams are known in
+ * advance: the crawl produces one open-exam row per edition and phase, and
+ * every document it carries is stored with the kind the label taxonomy gave it
+ * — which is what lets Extraction pair a caderno with its gabarito.
+ *
+ * Returns the remaining artifact budget.
+ */
+async function crawlOab(
+  source: CrawlerSource,
+  summary: CrawlerRunSummary,
+  budget: number,
+): Promise<number> {
+  const groups = await crawlOabSource(source);
+  const fingerprint = listingsFingerprint(
+    groups.flatMap((group) =>
+      group.documents.map((doc) => ({
+        title: doc.label,
+        href: doc.url,
+        textBlob: `${group.examSlug} ${doc.label}`,
+      })),
+    ),
+  );
+
+  const previous = await dmzGet<{ fingerprint: string | null }>(
+    `/internal/sources/${source.id}/listing-fingerprint`,
+  );
+  if (previous.fingerprint === fingerprint) {
+    summary.sourcesSkipped += 1;
+    return budget;
+  }
+
+  let remaining = budget;
+  for (const group of groups) {
+    const upserted = await dmzPost<{ record: OpenExamRecord; changed: boolean }>(
+      "/internal/open-exams",
+      oabOpenExamRecord(source, group),
+    );
+    if (upserted.changed) summary.openDiscovered += 1;
+
+    for (const doc of group.documents) {
+      if (remaining <= 0) break;
+      const stored = await storeArtifact({
+        examId: upserted.record.id,
+        sourceId: source.id,
+        url: doc.url,
+        kind: doc.kind,
+        withBytes: true,
+      });
+      if (stored) {
+        summary.artifactsStored += 1;
+        if (stored.downloaded) remaining -= 1;
+      }
+    }
+  }
+
+  await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
+    fingerprint,
+    listingCount: groups.reduce((total, group) => total + group.documents.length, 0),
+  });
+
+  return remaining;
+}
+
+function oabOpenExamRecord(source: CrawlerSource, group: OabExamGroup) {
+  const edital = group.documents.find((doc) => doc.kind === "edital");
+  return {
+    examSlug: group.examSlug,
+    title: group.title,
+    org: "Ordem dos Advogados do Brasil",
+    banca: "FGV",
+    emphasis: [],
+    editalUrl: edital?.url ?? null,
+    listingUrl: oabEditionPageUrl(group.edition.fgvKey),
+    // The Exame de Ordem runs about three times a year: an edition page is
+    // never "closed" material the way a one-off concurso is.
+    status: "open" as const,
+    sourceId: source.id,
+    sourceDomain: source.domain,
+  };
+}
+
 async function storeArtifact(input: {
   examId: string;
   sourceId: string;
   url: string;
   withBytes: boolean;
+  /** Set by sources that classify their own documents (oab-fgv). */
+  kind?: string;
 }): Promise<{ downloaded: boolean } | null> {
-  const kind = /edital/i.test(input.url) ? "edital" : "other";
+  const kind = input.kind ?? (/edital/i.test(input.url) ? "edital" : "other");
   let base64: string | undefined;
   let contentType: string | undefined;
 
@@ -197,11 +295,12 @@ async function storeArtifact(input: {
   }
 
   const inferredKind =
-    /edital/i.test(input.url) || /pdf/i.test(contentType ?? "")
+    input.kind ??
+    (/edital/i.test(input.url) || /pdf/i.test(contentType ?? "")
       ? kind
       : /html/i.test(contentType ?? "")
         ? "other"
-        : kind;
+        : kind);
 
   try {
     await dmzPost("/internal/artifacts", {

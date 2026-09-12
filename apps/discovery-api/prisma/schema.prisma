@@ -26,6 +26,9 @@ enum CrawlStrategy {
   listing_links
   banca_portal
   fixture
+  // FGV's OAB portal: the document list is behind an ASP.NET postback, so it
+  // needs its own crawl. See docs/oab-exam.md.
+  oab_fgv
 }
 
 enum ArtifactKind {

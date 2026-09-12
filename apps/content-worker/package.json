@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "node --import tsx --test src/**/*.spec.ts"
+    "test": "node --import tsx --test \"src/**/*.spec.ts\""
   },
   "dependencies": {
     "@quizzeira/shared": "*",
