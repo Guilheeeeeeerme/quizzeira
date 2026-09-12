@@ -4,6 +4,7 @@ import { contentApi } from "./client.js";
 import { qualityEnv } from "./env.js";
 import { decide } from "./gate.js";
 import { judgeItem, type JudgeVerdict } from "./judge.js";
+import { validateRelevance } from "./relevance.js";
 import { validateStructure } from "./structural.js";
 
 const NAME = "content-quality";
@@ -37,10 +38,13 @@ export async function runEvalPass(): Promise<EvalPassResult> {
 
   for (const item of items) {
     const structural = validateStructure(item);
+    // Rung 2 (§25.2): exam-metadata / syllabus-meta / temporal checks. Runs
+    // only on structurally sound items so reason codes stay attributable.
+    const relevance = structural.ok ? validateRelevance(item) : null;
 
-    // Only items that survived the deterministic gate cost a model call.
+    // Only items that survived the deterministic gates cost a model call.
     let judge: JudgeVerdict | null = null;
-    if (structural.ok) {
+    if (structural.ok && relevance?.ok) {
       try {
         judge = await judgeItem({
           examSlug: item.examSlug,
@@ -63,6 +67,7 @@ export async function runEvalPass(): Promise<EvalPassResult> {
 
     const verdict = decide({
       structural,
+      relevance,
       judge,
       correctIndex: item.correctIndex,
       thresholds: {
@@ -80,10 +85,12 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       notes: verdict.notes,
       reasons: verdict.reasons,
       stage: judge
-        ? "structural+judge"
-        : verdict.decision === "published"
-          ? "structural+extraction"
-          : "structural",
+        ? "structural+relevance+judge"
+        : relevance && !relevance.ok
+          ? "structural+relevance"
+          : verdict.decision === "published"
+            ? "structural+extraction"
+            : "structural",
       model: judge?.model ?? null,
     });
 

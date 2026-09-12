@@ -127,3 +127,57 @@ test("judge reasons are carried into the verdict", () => {
   });
   assert.ok(result.reasons.includes("ambiguidade na alternativa B"));
 });
+
+test("relevance hard failure fails without a judge (rung 2 before rung 4)", () => {
+  const result = decide({
+    structural: structuralOk,
+    relevance: {
+      ok: false,
+      reasons: ["tests_exam_metadata"],
+      reviewReasons: [],
+      notes: "metadata probability 0.9",
+      metadataProbability: 0.9,
+    },
+    judge: judge({ score: 1 }),
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "failed");
+  assert.deepEqual(result.reasons, ["tests_exam_metadata"]);
+});
+
+test("relevance review reasons park an otherwise publishable item", () => {
+  const relevance = {
+    ok: true,
+    reasons: [],
+    reviewReasons: ["temporally_dependent" as const],
+    notes: "answer may depend on a current year",
+    metadataProbability: 0.1,
+  };
+  const withJudge = decide({ structural: structuralOk, relevance, judge: judge(), correctIndex: 2, thresholds });
+  assert.equal(withJudge.decision, "needs_review");
+  assert.ok(withJudge.reasons.includes("temporally_dependent"));
+  const extraction = decide({
+    structural: structuralOk,
+    relevance,
+    judge: null,
+    correctIndex: 2,
+    thresholds,
+    publishExtractionWithoutJudge: true,
+    origin: "extraction",
+  });
+  assert.equal(extraction.decision, "needs_review");
+  const failing = decide({ structural: structuralOk, relevance, judge: judge({ score: 0.2 }), correctIndex: 2, thresholds });
+  assert.equal(failing.decision, "failed");
+});
+
+test("a clean relevance result changes nothing", () => {
+  const result = decide({
+    structural: structuralOk,
+    relevance: { ok: true, reasons: [], reviewReasons: [], notes: "relevance checks passed", metadataProbability: 0.05 },
+    judge: judge(),
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "published");
+});
