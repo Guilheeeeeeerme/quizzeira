@@ -1,8 +1,4 @@
-// Concept: Generation (grounded draft questions from retrieved chunks)
-//
-// Retrieval here is genuine RAG: embed a subject query, k-NN over chunk vectors,
-// feed the hits to the model. Note this is the *only* place retrieval happens —
-// the study runtime samples finished questions and never retrieves.
+// Concept: Generation (grounded draft questions from leaf KU briefs — §24)
 import {
   generateJson,
   hasLlmProvider,
@@ -16,14 +12,46 @@ import { content } from "../clients.js";
 import { contentEnv } from "../env.js";
 import { embedText } from "../embeddings/index.js";
 import {
+  buildGenerationBrief,
+  type BriefKnowledgeUnit,
+  DEFAULT_STYLE,
+} from "./brief.js";
+import {
   buildGenerationPrompt,
   GENERATION_SYSTEM_PROMPT,
   type RetrievedChunk,
 } from "./prompt.js";
 
 const NAME = "content-worker/generation";
+const MIN_KU_PER_LEAF = 4;
 
-interface QueueItem {
+interface LeafQueueItem {
+  examSlug: string;
+  examTitle: string | null;
+  syllabusNodeId: string;
+  canonicalKey: string;
+  path: string[];
+  rawText: string;
+  subject: string;
+  deficit: number;
+  knowledgeUnits: Array<{
+    id: string;
+    kind: string;
+    statement: string;
+    example: string | null;
+    qualifiers?: string[];
+  }>;
+  style?: {
+    optionCount: number;
+    stemLengthP50: number;
+    negativeStemRate: number;
+    commandVerbs: string[];
+    certoErrado: boolean;
+    difficultyProxy: number;
+  } | null;
+}
+
+interface LegacyQueueItem {
   examSlug: string;
   examTitle: string | null;
   deficit: number;
@@ -42,26 +70,54 @@ export async function runGenerationPass(): Promise<GenerationPassResult> {
     return result;
   }
 
-  const { items } = await content.get<{ items: QueueItem[] }>(
-    `/internal/generation/queue?limit=${contentEnv.examsPerGenerationPass}` +
-      `&target=${contentEnv.publishedTargetPerExam}`,
+  const leafLimit = contentEnv.examsPerGenerationPass;
+  const { items: leafItems } = await content.get<{ items: LeafQueueItem[] }>(
+    `/internal/generation/leaf-queue?limit=${leafLimit}` +
+      `&target=${contentEnv.publishedTargetPerExam}` +
+      `&minKus=${MIN_KU_PER_LEAF}`,
   );
 
-  for (const item of items) {
-    const count = Math.min(contentEnv.questionsPerGenerationRun, item.deficit);
-    if (count <= 0) continue;
-    result.runs += 1;
-    try {
-      const drafted = await generateForExam(item, count);
-      result.drafted += drafted;
-    } catch (err) {
-      result.failed += 1;
-      logWarn("generation run failed", {
-        worker: NAME,
-        examSlug: item.examSlug,
-        code: llmErrorCode(err),
-        error: err instanceof Error ? err.message : String(err),
-      });
+  if (leafItems.length > 0) {
+    for (const item of leafItems) {
+      const count = Math.min(contentEnv.questionsPerGenerationRun, item.deficit);
+      if (count <= 0) continue;
+      result.runs += 1;
+      try {
+        const drafted = await generateForLeaf(item, count);
+        result.drafted += drafted;
+      } catch (err) {
+        result.failed += 1;
+        logWarn("leaf generation run failed", {
+          worker: NAME,
+          examSlug: item.examSlug,
+          syllabusNodeId: item.syllabusNodeId,
+          code: llmErrorCode(err),
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  } else {
+    // Fallback: legacy exam-level queue while syllabus/KU coverage fills in.
+    const { items } = await content.get<{ items: LegacyQueueItem[] }>(
+      `/internal/generation/queue?limit=${leafLimit}` +
+        `&target=${contentEnv.publishedTargetPerExam}`,
+    );
+    for (const item of items) {
+      const count = Math.min(contentEnv.questionsPerGenerationRun, item.deficit);
+      if (count <= 0) continue;
+      result.runs += 1;
+      try {
+        const drafted = await generateForExamLegacy(item, count);
+        result.drafted += drafted;
+      } catch (err) {
+        result.failed += 1;
+        logWarn("generation run failed", {
+          worker: NAME,
+          examSlug: item.examSlug,
+          code: llmErrorCode(err),
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
@@ -69,7 +125,93 @@ export async function runGenerationPass(): Promise<GenerationPassResult> {
   return result;
 }
 
-async function generateForExam(item: QueueItem, count: number): Promise<number> {
+async function generateForLeaf(item: LeafQueueItem, count: number): Promise<number> {
+  const subject = item.subject || item.path[0] || "geral";
+  const knowledge: BriefKnowledgeUnit[] = item.knowledgeUnits.map((k) => ({
+    id: k.id,
+    kind: (k.kind as BriefKnowledgeUnit["kind"]) || "fact",
+    statement: k.statement,
+    example: k.example,
+    qualifiers: k.qualifiers ?? [],
+  }));
+
+  const brief = buildGenerationBrief({
+    examTitle: item.examTitle ?? item.examSlug,
+    syllabusPath: item.path.length ? item.path : [subject],
+    syllabusRawText: item.rawText || subject,
+    syllabusNodeId: item.syllabusNodeId,
+    canonicalKey: item.canonicalKey,
+    knowledge,
+    style: item.style ?? DEFAULT_STYLE,
+    count,
+  });
+
+  const { run } = await content.post<{ run: { id: string } }>("/internal/generation/runs", {
+    examSlug: item.examSlug,
+    subject,
+    requested: count,
+    syllabusNodeId: item.syllabusNodeId,
+    briefKey: item.canonicalKey,
+  });
+
+  try {
+    const prompt = buildGenerationPrompt({
+      examSlug: item.examSlug,
+      examTitle: item.examTitle,
+      subject,
+      locale: "pt",
+      count,
+      chunks: [],
+      syllabusPath: item.path.join(" › "),
+      knowledgeUnits: brief.knowledge.map((k) => k.statement),
+      brief,
+    });
+
+    const response = await generateJson<{ questions: unknown }>(
+      GENERATION_SYSTEM_PROMPT,
+      prompt,
+      { temperature: 0.4, requiredKeys: ["questions"] },
+    );
+    const questions = normalizeQuestions(response.questions);
+
+    for (const q of questions) {
+      screenModelStrings(q.prompt, q.explanation, ...(q.options ?? []));
+    }
+
+    const drafted = questions.length
+      ? await content.post<{ created: number }>("/internal/question-items/draft", {
+          examSlug: item.examSlug,
+          subject,
+          locale: "pt",
+          origin: "generation",
+          generationRunId: run.id,
+          syllabusNodeId: item.syllabusNodeId,
+          canonicalKey: item.canonicalKey,
+          knowledgeUnitIds: brief.knowledge.map((k) => k.id),
+          questions,
+        })
+      : { created: 0 };
+
+    await content.patch(`/internal/generation/runs/${run.id}`, {
+      status: drafted.created > 0 ? "ok" : "partial",
+      drafted: drafted.created,
+      chunksUsed: brief.knowledge.length,
+      finishedAt: new Date().toISOString(),
+    });
+    return drafted.created;
+  } catch (err) {
+    await content
+      .patch(`/internal/generation/runs/${run.id}`, {
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+        finishedAt: new Date().toISOString(),
+      })
+      .catch(() => undefined);
+    throw err;
+  }
+}
+
+async function generateForExamLegacy(item: LegacyQueueItem, count: number): Promise<number> {
   const subject = "geral";
   const { run } = await content.post<{ run: { id: string } }>("/internal/generation/runs", {
     examSlug: item.examSlug,
@@ -80,8 +222,6 @@ async function generateForExam(item: QueueItem, count: number): Promise<number> 
   try {
     const chunks = await retrieveChunks(item, subject);
     if (chunks.length === 0) {
-      // No embedded material yet: the embedding pass has not caught up. Not an
-      // error — the run closes empty and the queue will offer it again.
       await content.patch(`/internal/generation/runs/${run.id}`, {
         status: "ok",
         drafted: 0,
@@ -107,7 +247,6 @@ async function generateForExam(item: QueueItem, count: number): Promise<number> 
     );
     const questions = normalizeQuestions(response.questions);
 
-    // Output-side guardrail (OWASP LLM10) before anything is persisted.
     for (const q of questions) {
       screenModelStrings(q.prompt, q.explanation, ...(q.options ?? []));
     }
@@ -142,10 +281,9 @@ async function generateForExam(item: QueueItem, count: number): Promise<number> 
   }
 }
 
-async function retrieveChunks(item: QueueItem, subject: string): Promise<RetrievedChunk[]> {
-  const query = [item.examTitle ?? item.examSlug, subject, "conteúdo programático e requisitos"]
-    .filter(Boolean)
-    .join(" — ");
+async function retrieveChunks(item: LegacyQueueItem, subject: string): Promise<RetrievedChunk[]> {
+  // Prefer durable subject knowledge — never seek admin/edital metadata (§24).
+  const query = [subject, "conteúdo programático", "regras", "conceitos"].join(" — ");
   const embedding = await embedText(query);
   const { matches } = await content.post<{ matches: RetrievedChunk[] }>(
     "/internal/chunks/search",

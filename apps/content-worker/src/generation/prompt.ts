@@ -1,4 +1,7 @@
-// Concept: Generation (prompt assembly) — syllabus-knowledge focused (§24).
+// Concept: Generation prompt assembly — GenerationBrief-driven (§24.2).
+import type { GenerationBrief } from "./brief.js";
+import { briefToPromptPayload } from "./brief.js";
+
 export interface RetrievedChunk {
   id: string;
   text: string;
@@ -14,11 +17,13 @@ export interface GenerationPromptInput {
   chunks: RetrievedChunk[];
   syllabusPath?: string | null;
   knowledgeUnits?: string[];
+  brief?: GenerationBrief | null;
 }
 
 export const GENERATION_SYSTEM_PROMPT = [
   "Você é um elaborador de itens de concurso público brasileiro.",
   "Escreva apenas itens que testem conhecimento durável do conteúdo programático.",
+  "Use somente as unidades de conhecimento do brief; não invente regras ausentes.",
   "Nunca elabore itens sobre metadados do concurso (vagas, salário, taxa, inscrição, banca, edital, cronograma, cargo oferecido, organização).",
   "Nunca pergunte quais assuntos constam no programa.",
   "Nunca invente números de lei, artigos ou datas que não estejam no material.",
@@ -26,6 +31,41 @@ export const GENERATION_SYSTEM_PROMPT = [
 ].join(" ");
 
 export function buildGenerationPrompt(input: GenerationPromptInput): string {
+  if (input.brief) {
+    const optionCount = input.brief.constraints.optionCount || 5;
+    return [
+      "Brief de geração (fonte autoritativa — elabore a partir das knowledge units):",
+      briefToPromptPayload(input.brief),
+      "",
+      `Elabore ${input.brief.constraints.count} questões de múltipla escolha com ${optionCount} alternativas cada.`,
+      "Regras:",
+      "- Exatamente uma alternativa correta por questão.",
+      "- Alternativas plausíveis e mutuamente exclusivas; não use 'todas as anteriores'.",
+      "- O enunciado deve ser autocontido, sem referência a 'o trecho acima'.",
+      "- Inclua uma explicação curta citando a regra/fato (não cite o edital).",
+      "- Cada questão deve ser rastreável a pelo menos uma knowledge unit do brief.",
+      "- PROIBIDO: perguntas sobre vagas, remuneração, taxa, inscrição, banca, datas, cargos oferecidos, organização do concurso.",
+      "",
+      "Formato de saída (JSON):",
+      JSON.stringify(
+        {
+          questions: [
+            {
+              type: "MULTIPLE_CHOICE",
+              prompt: "…",
+              options: Array.from({ length: optionCount }, () => "…"),
+              correctIndex: 0,
+              explanation: "…",
+              knowledgeUnitIds: ["ku_id"],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    ].join("\n");
+  }
+
   const material = input.chunks
     .map((c, i) => `[trecho ${i + 1}]\n${c.text}`)
     .join("\n\n")

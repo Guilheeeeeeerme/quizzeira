@@ -2,6 +2,7 @@
 //
 // Pure function on purpose: the decision rule is the most consequential logic
 // in the pipeline, so it is testable without a model or a database.
+import type { GroundingResult } from "./grounding.js";
 import type { JudgeVerdict } from "./judge.js";
 import type { RelevanceResult } from "./relevance.js";
 import type { StructuralResult } from "./structural.js";
@@ -12,6 +13,8 @@ export interface GateInput {
   structural: StructuralResult;
   /** Rung 2 (§25.2). Optional so legacy call sites keep working. */
   relevance?: RelevanceResult | null;
+  /** Rung 3 (§25.3). Optional; when provided and failing, hard-fails before judge. */
+  grounding?: GroundingResult | null;
   /** Null when the judge could not run (no provider, budget hit, outage). */
   judge: JudgeVerdict | null;
   /** The item's own claimed answer, for agreement checking. */
@@ -64,6 +67,19 @@ export function decide(input: GateInput): GateResult {
       notes: relevance.notes,
     };
   }
+
+  // Rung 3: generated items must be supported by cited knowledge evidence.
+  // Extraction items often have no KU citations; skip when grounding is omitted.
+  const grounding = input.grounding ?? null;
+  if (grounding && !grounding.ok) {
+    return {
+      decision: "failed",
+      score: 0,
+      reasons: grounding.reasons,
+      notes: `grounding overlap=${grounding.overlap.toFixed(3)}`,
+    };
+  }
+
   const review = relevance?.reviewReasons ?? [];
   const parked = (result: GateResult): GateResult =>
     review.length && result.decision === "published"

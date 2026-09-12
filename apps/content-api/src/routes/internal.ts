@@ -403,6 +403,121 @@ app.get("/internal/knowledge-units/count", async (request) => {
     return { count };
   });
 
+  app.post<{ Body: Record<string, unknown> }>("/internal/knowledge-units", async (request) => {
+    const body = request.body ?? {};
+    const units = (body.units as Array<Record<string, unknown>>) || [];
+    const created: string[] = [];
+    for (const u of units) {
+      const statement = String(u.statement || "").trim();
+      const syllabusNodeId = String(u.syllabusNodeId || body.syllabusNodeId || "");
+      if (!statement || !syllabusNodeId) continue;
+      const row = await prisma.knowledgeUnit.create({
+        data: {
+          syllabusNodeId,
+          canonicalKey: String(u.canonicalKey || body.canonicalKey || ""),
+          kind: String(u.kind || "fact"),
+          statement,
+          example: (u.example as string) || null,
+          qualifiers: (u.qualifiers as never) || [],
+          evidence: (u.evidence as never) || { chunkIds: [] },
+          status: "active",
+          extraction: (u.extraction as never) || { method: "heuristic", confidence: 0.7 },
+        },
+      });
+      created.push(row.id);
+    }
+    return { created: created.length, ids: created };
+  });
+
+  /**
+   * Leaf-level generation queue (§24.1): nodes with enough active KUs and a
+   * published+pending deficit below target.
+   */
+  app.get("/internal/generation/leaf-queue", async (request) => {
+    const q = request.query as { limit?: string; target?: string; minKus?: string };
+    const target = Math.max(1, Number(q.target || 8));
+    const limit = Math.min(20, Number(q.limit || 3));
+    const minKus = Math.max(1, Number(q.minKus || 4));
+
+    const nodes = await prisma.syllabusNode.findMany({
+      where: { status: "active", depth: { gte: 1 } },
+      take: 200,
+      orderBy: { ordinal: "asc" },
+    });
+
+    const items: Array<Record<string, unknown>> = [];
+    for (const node of nodes) {
+      const kus = await prisma.knowledgeUnit.findMany({
+        where: { syllabusNodeId: node.id, status: "active" },
+        take: 24,
+      });
+      if (kus.length < minKus) continue;
+
+      const syllabus = await prisma.syllabus.findUnique({ where: { id: node.syllabusId } });
+      if (!syllabus || syllabus.status !== "active") continue;
+      if (examSlugPriority(syllabus.examSlug) < 0) continue;
+
+      const [published, pending] = await Promise.all([
+        prisma.questionItem.count({
+          where: { syllabusNodeId: node.id, status: "published" },
+        }),
+        prisma.questionItem.count({
+          where: { syllabusNodeId: node.id, status: { in: ["draft", "needs_review"] } },
+        }),
+      ]);
+      const deficit = target - published - pending;
+      if (deficit <= 0) continue;
+
+      const pathParts = node.pathSlug ? node.pathSlug.split("/").filter(Boolean) : [node.title];
+      const styleRow = await prisma.examStyleProfile.findFirst({
+        where: { canonicalSubjectId: node.canonicalSubjectId ?? node.canonicalKey },
+        orderBy: { updatedAt: "desc" },
+      });
+      const styleProfile =
+        styleRow?.profile && typeof styleRow.profile === "object"
+          ? (styleRow.profile as Record<string, unknown>)
+          : null;
+
+      const doc = await prisma.document.findFirst({
+        where: { examSlug: syllabus.examSlug },
+        select: { examTitle: true },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      items.push({
+        examSlug: syllabus.examSlug,
+        examTitle: doc?.examTitle ?? null,
+        syllabusNodeId: node.id,
+        canonicalKey: node.canonicalKey,
+        path: pathParts.length ? pathParts : [node.title],
+        rawText: node.rawText,
+        subject: pathParts[0] ?? node.title,
+        deficit,
+        knowledgeUnits: kus.map((k) => ({
+          id: k.id,
+          kind: k.kind,
+          statement: k.statement,
+          example: k.example,
+          qualifiers: k.qualifiers,
+        })),
+        style: styleProfile
+          ? {
+              optionCount: Number(styleProfile.optionCount ?? 5),
+              stemLengthP50: Number(styleProfile.stemLengthP50 ?? 120),
+              negativeStemRate: Number(styleProfile.negativeStemRate ?? 0.15),
+              commandVerbs: Array.isArray(styleProfile.commandVerbs)
+                ? (styleProfile.commandVerbs as string[])
+                : ["Assinale"],
+              certoErrado: Boolean(styleProfile.certoErrado),
+              difficultyProxy: Number(styleProfile.difficultyProxy ?? 0.5),
+            }
+          : null,
+      });
+      if (items.length >= limit) break;
+    }
+    return { items };
+  });
+
   // ── Generation ────────────────────────────────────────────────────────────
 
   /**
@@ -470,9 +585,16 @@ function examSlugPriority(slug: string): number {
   if (s.length >= 12) score += 3;
   return score;
 }
-  app.post<{ Body: { examSlug: string; subject: string; requested?: number; model?: string } }>(
-    "/internal/generation/runs",
-    async (request) => {
+  app.post<{
+    Body: {
+      examSlug: string;
+      subject: string;
+      requested?: number;
+      model?: string;
+      syllabusNodeId?: string;
+      briefKey?: string;
+    };
+  }>("/internal/generation/runs", async (request) => {
       const body = request.body ?? { examSlug: "", subject: "" };
       const run = await prisma.generationRun.create({
         data: {
@@ -481,6 +603,8 @@ function examSlugPriority(slug: string): number {
           status: "running",
           requested: Number(body.requested || 0),
           model: body.model ?? null,
+          syllabusNodeId: body.syllabusNodeId ? String(body.syllabusNodeId) : null,
+          briefKey: body.briefKey ? String(body.briefKey) : null,
         },
       });
       return { run };
@@ -511,9 +635,14 @@ function examSlugPriority(slug: string): number {
    * The only way a QuestionItem enters the system, and it always lands as
    * `draft`. Content cannot publish — that is the Eval stage's decision.
    */
-  app.post<{ Body: DraftQuestionsRequest & { generationRunId?: string } }>(
-    "/internal/question-items/draft",
-    async (request) => {
+  app.post<{
+    Body: DraftQuestionsRequest & {
+      generationRunId?: string;
+      syllabusNodeId?: string;
+      canonicalKey?: string;
+      knowledgeUnitIds?: string[];
+    };
+  }>("/internal/question-items/draft", async (request) => {
       const body = request.body;
       const examSlug = String(body?.examSlug || "").trim();
       if (!examSlug) {
@@ -523,6 +652,9 @@ function examSlugPriority(slug: string): number {
       const slug = toSubjectSlug(subject);
       const ids: string[] = [];
       let skipped = 0;
+      const batchKuIds = Array.isArray(body.knowledgeUnitIds)
+        ? body.knowledgeUnitIds.map(String)
+        : [];
 
       for (const q of body.questions ?? []) {
         if (!q.prompt?.trim()) {
@@ -540,6 +672,11 @@ function examSlugPriority(slug: string): number {
           skipped += 1;
           continue;
         }
+        const perQuestionKus = Array.isArray(
+          (q as unknown as { knowledgeUnitIds?: unknown }).knowledgeUnitIds,
+        )
+          ? ((q as unknown as { knowledgeUnitIds: unknown[] }).knowledgeUnitIds).map(String)
+          : batchKuIds;
         const created = await prisma.questionItem.create({
           data: {
             fingerprint,
@@ -558,6 +695,9 @@ function examSlugPriority(slug: string): number {
             locale: body.locale || "pt",
             documentId: body.documentId ?? null,
             generationRunId: body.generationRunId ?? null,
+            syllabusNodeId: body.syllabusNodeId ? String(body.syllabusNodeId) : null,
+            canonicalKey: body.canonicalKey ? String(body.canonicalKey) : null,
+            knowledgeUnitIds: perQuestionKus,
           },
         });
         ids.push(created.id);
@@ -577,8 +717,15 @@ function examSlugPriority(slug: string): number {
       orderBy: { createdAt: "asc" },
       take: Math.min(50, Number(q.limit || 10)),
     });
-    return {
-      items: items.map((i) => ({
+
+    const enriched = [];
+    for (const i of items) {
+      const kuIds = Array.isArray(i.knowledgeUnitIds) ? (i.knowledgeUnitIds as string[]) : [];
+      const kus =
+        kuIds.length > 0
+          ? await prisma.knowledgeUnit.findMany({ where: { id: { in: kuIds } } })
+          : [];
+      enriched.push({
         id: i.id,
         examSlug: i.examSlug,
         subject: i.subject,
@@ -591,8 +738,12 @@ function examSlugPriority(slug: string): number {
         locale: i.locale,
         origin: i.origin,
         documentId: i.documentId,
-      })),
-    };
+        syllabusNodeId: i.syllabusNodeId,
+        knowledgeUnitIds: kuIds,
+        evidenceTexts: kus.map((k) => `${k.statement}${k.example ? ` ${k.example}` : ""}`),
+      });
+    }
+    return { items: enriched };
   });
 
   /**

@@ -181,3 +181,40 @@ test("a clean relevance result changes nothing", () => {
   });
   assert.equal(result.decision, "published");
 });
+
+test("grounding hard failure fails before judge (rung 3)", () => {
+  const result = decide({
+    structural: structuralOk,
+    relevance: {
+      ok: true,
+      reasons: [],
+      reviewReasons: [],
+      notes: "ok",
+      metadataProbability: 0.05,
+    },
+    grounding: { ok: false, reasons: ["ungrounded_answer"], overlap: 0.02 },
+    judge: judge({ score: 1 }),
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "failed");
+  assert.deepEqual(result.reasons, ["ungrounded_answer"]);
+});
+
+test("successful grounding does not block publish", () => {
+  const result = decide({
+    structural: structuralOk,
+    relevance: {
+      ok: true,
+      reasons: [],
+      reviewReasons: [],
+      notes: "ok",
+      metadataProbability: 0.05,
+    },
+    grounding: { ok: true, reasons: [], overlap: 0.4 },
+    judge: judge(),
+    correctIndex: 2,
+    thresholds,
+  });
+  assert.equal(result.decision, "published");
+});

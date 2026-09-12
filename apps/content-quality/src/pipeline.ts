@@ -3,6 +3,7 @@ import { llmErrorCode, logInfo, logWarn } from "@quizzeira/worker-kit";
 import { contentApi } from "./client.js";
 import { qualityEnv } from "./env.js";
 import { decide } from "./gate.js";
+import { validateGrounding } from "./grounding.js";
 import { judgeItem, type JudgeVerdict } from "./judge.js";
 import { validateRelevance } from "./relevance.js";
 import { validateStructure } from "./structural.js";
@@ -20,6 +21,8 @@ interface PendingItem {
   referenceAnswer: string | null;
   explanation: string | null;
   origin?: "extraction" | "generation" | string | null;
+  knowledgeUnitIds?: string[];
+  evidenceTexts?: string[];
 }
 
 export interface EvalPassResult {
@@ -42,9 +45,25 @@ export async function runEvalPass(): Promise<EvalPassResult> {
     // only on structurally sound items so reason codes stay attributable.
     const relevance = structural.ok ? validateRelevance(item) : null;
 
+    // Rung 3 (§25.3): generation items with evidence texts must ground.
+    // Extraction without KU citations skips this check (grounding omitted).
+    const evidenceTexts = item.evidenceTexts ?? [];
+    const grounding =
+      structural.ok &&
+      relevance?.ok &&
+      (item.origin === "generation" || evidenceTexts.length > 0)
+        ? validateGrounding({
+            prompt: item.prompt,
+            options: item.options,
+            correctIndex: item.correctIndex,
+            explanation: item.explanation,
+            evidenceTexts,
+          })
+        : null;
+
     // Only items that survived the deterministic gates cost a model call.
     let judge: JudgeVerdict | null = null;
-    if (structural.ok && relevance?.ok) {
+    if (structural.ok && relevance?.ok && (!grounding || grounding.ok)) {
       try {
         judge = await judgeItem({
           examSlug: item.examSlug,
@@ -68,6 +87,7 @@ export async function runEvalPass(): Promise<EvalPassResult> {
     const verdict = decide({
       structural,
       relevance,
+      grounding,
       judge,
       correctIndex: item.correctIndex,
       thresholds: {
@@ -78,19 +98,23 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       origin: item.origin,
     });
 
+    const stage = judge
+      ? "structural+relevance+grounding+judge"
+      : grounding && !grounding.ok
+        ? "structural+relevance+grounding"
+        : relevance && !relevance.ok
+          ? "structural+relevance"
+          : verdict.decision === "published"
+            ? "structural+extraction"
+            : "structural";
+
     await contentApi.post("/internal/question-items/verdict", {
       itemId: item.id,
       decision: verdict.decision,
       score: verdict.score,
       notes: verdict.notes,
       reasons: verdict.reasons,
-      stage: judge
-        ? "structural+relevance+judge"
-        : relevance && !relevance.ok
-          ? "structural+relevance"
-          : verdict.decision === "published"
-            ? "structural+extraction"
-            : "structural",
+      stage,
       model: judge?.model ?? null,
     });
 
