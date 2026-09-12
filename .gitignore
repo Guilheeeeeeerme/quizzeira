@@ -8,3 +8,17 @@ apps/api/prisma/migrations/**/migration_lock.toml
 
 # Prisma clients generated at build/migrate time
 apps/*/src/generated/
+
+# ---- AI / agent tooling state ----
+.agents/
+.aider*
+.claude/
+.codex/
+.cursor/
+.devin/
+.playwright-mcp/
+.serena/
+.superpowers/
+.tokensave/
+.windsurf/
+skills-lock.json
