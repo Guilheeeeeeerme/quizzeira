@@ -2,7 +2,12 @@ import { workerEnv } from "./env";
 import { llmError, type LlmErrorCode } from "./errors";
 import { extractJson, geminiProvider, type LlmProvider } from "./gemini";
 import { openaiProvider } from "./openai";
-import { fenceUntrusted, renderPrompt, screenUntrusted } from "./guardrails";
+import {
+  fenceUntrusted,
+  neutralizeUntrusted,
+  renderPrompt,
+  screenUntrusted,
+} from "./guardrails";
 import { rankFor } from "./model-rank";
 import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
 
@@ -176,17 +181,22 @@ export async function generateJson<T>(
   user: string,
   opts: GenerateJsonOptions = {},
 ): Promise<T> {
-  screenUntrusted(user);
+  // Neutralize first so invisible-character obfuscation cannot carry a payload
+  // past the policy screen (OWASP LLM01 encoding axis).
+  const cleanUser = neutralizeUntrusted(user);
+  screenUntrusted(cleanUser);
   const providers = providerOrder();
   if (providers.length === 0) {
     throw llmError("llm_unavailable", "llm_unavailable: no provider API key configured");
   }
-  await consumeBudget(Date.now(), { calls: 1 });
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
-  const fencedUser = fenceUntrusted(user);
+  const fencedUser = fenceUntrusted(cleanUser);
   const index = Math.max(0, opts.attempt ?? 0);
   let lastError: unknown;
   for (const provider of providers) {
+    // Every failover attempt is a separate billable call, so charge each one
+    // rather than the request as a whole (OWASP LLM06).
+    await consumeBudget(Date.now(), { calls: 1 });
     const rank = rankFor(provider.name);
     const model = rank[index] ?? provider.defaultModel();
     try {

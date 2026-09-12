@@ -19,5 +19,6 @@ export {
   screenModelOutput,
   screenModelStrings,
   fenceUntrusted,
+  neutralizeUntrusted,
 } from "./guardrails";
 export { rankFor } from "./model-rank";

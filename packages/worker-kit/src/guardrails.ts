@@ -213,8 +213,30 @@ export function renderPrompt(
   );
 }
 
+/**
+ * Fence markers the payload must never be able to emit itself. A crawled page
+ * that contains END_UNTRUSTED_QUIZ_DATA would otherwise close the data block
+ * early and have the rest of its text read as instructions (OWASP LLM01).
+ */
+const FENCE_MARKERS = /(BEGIN|END)_UNTRUSTED_QUIZ_DATA/g;
+
+/**
+ * Characters that are invisible to a reviewer but not to the model: Unicode
+ * tag block (used to smuggle ASCII), zero-width joiners/spaces, and bidi
+ * overrides. OWASP LLM01 lists these as the encoding axis of injection.
+ */
+const INVISIBLE_CHARS =
+  /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\u{E0000}-\u{E007F}]/gu;
+
+/** Strip invisible characters and defang fence markers in untrusted text. */
+export function neutralizeUntrusted(payload: string): string {
+  return payload
+    .replace(INVISIBLE_CHARS, "")
+    .replace(FENCE_MARKERS, "$1_UNTRUSTED_QUIZ_DATA_NEUTRALIZED");
+}
+
 export function fenceUntrusted(payload: string): string {
-  return renderPrompt("context.fence", { payload });
+  return renderPrompt("context.fence", { payload: neutralizeUntrusted(payload) });
 }
 
 export function screenUntrusted(payload: string): void {

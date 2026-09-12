@@ -9,6 +9,7 @@ import {
   logInfo,
   logWarn,
   runLoop,
+  screenModelStrings,
   workerEnv,
 } from "@quizzeira/worker-kit";
 
@@ -57,6 +58,17 @@ async function tick(): Promise<void> {
     if (!Array.isArray(result.answers) || typeof result.generalComment !== "string") {
       throw new Error("Invalid correction payload from model");
     }
+
+    // Correction text is rendered back to the learner, so it gets the same
+    // output-side screen as generated and judged content (OWASP LLM10).
+    screenModelStrings(
+      result.generalComment,
+      ...result.answers.flatMap((a) => [
+        a.comment,
+        a.explanation,
+        a.correctAnswerSummary,
+      ]),
+    );
 
     const completed = await dmzPost<{ attemptId: string; score: number }>(
       `/internal/reviews/${attempt.attemptId}/complete`,
