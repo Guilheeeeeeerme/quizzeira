@@ -245,7 +245,7 @@ const ORG_RE =
 const BANCA_RE =
   /\b(cesgranrio|fgv|fcc|cebraspe|cespe|vunesp|ibfc|iades|fundatec|ibamsp)\b/i;
 const OPEN_RE =
-  /\b(inscri[cç][oõ]es?\s+abertas?|edital\s+publicado|concurso\s+aberto|aceita\s+inscri|prazo\s+de\s+inscri)/i;
+  /\b(inscri[cç][oõ]es?\s+abertas?|edital\s+(?:publicado|de\s+abertura)|concurso\s+(?:aberto|p[uú]blico)|aceita\s+inscri|prazo\s+de\s+inscri)/i;
 const EMPHASIS_RE =
   /\b(administra[cç][aã]o|engenharia(?:\s+\w+)?|direito|contabilidade|tecnologia\s+da\s+informa[cç][aã]o|\bTI\b|enfermagem|medicina)\b/gi;
 
@@ -263,13 +263,14 @@ export function looksOpen(text: string): boolean {
   return OPEN_RE.test(text);
 }
 
-/** Banca detail pages like /concurso/transpetro-2026/ for a recent year. */
+/** Banca detail pages like /concurso/transpetro-2026/ or /concursos/pms2026. */
 export function looksOpenExamUrl(href: string): boolean {
-  const m = href.match(/\/concurso\/[^/?#]+-(20\d{2})(?:\/|$)/i);
-  if (!m?.[1]) return false;
-  const year = Number(m[1]);
   const current = new Date().getUTCFullYear();
-  return year >= current - 1 && year <= current + 1;
+  const inWindow = (year: number) => year >= current - 1 && year <= current + 1;
+  const hyphenated = href.match(/\/concursos?\/[^/?#]+-(20\d{2})(?:\/|$)/i);
+  if (hyphenated?.[1] && inWindow(Number(hyphenated[1]))) return true;
+  const trailing = href.match(/\/concursos?\/[^/?#]*?(20\d{2})(?:\/|$)/i);
+  return Boolean(trailing?.[1] && inWindow(Number(trailing[1])));
 }
 
 export function extractEmphasisHints(text: string): string[] {
