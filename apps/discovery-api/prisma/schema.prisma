@@ -1,4 +1,5 @@
 // Concept: Ingestion + Source registry + Document store (metadata)
+// Redesign: SourceKind / DiscoveryMode / ExamKind / TopicQuery / role hints (§29.1)
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -31,12 +32,65 @@ enum CrawlStrategy {
   oab_fgv
 }
 
+enum SourceKind {
+  banca_portal
+  org_portal
+  aggregator
+  official_gazette
+  legislation
+  educational_site
+  open_textbook
+  standards_body
+  question_bank_public
+  exam_specific
+  fixture
+}
+
+enum DiscoveryMode {
+  listing
+  topic_query
+  direct
+  custom
+}
+
+enum ExamKind {
+  concurso
+  oab
+  certification
+  vestibular
+  other
+}
+
 enum ArtifactKind {
   edital
   prova
   gabarito
   programa
+  listing
   other
+}
+
+enum ArtifactKindHint {
+  edital
+  retificacao
+  programa
+  prova
+  gabarito
+  padrao_resposta
+  apostila
+  lei
+  artigo
+  manual
+  listing
+  unknown
+}
+
+enum RoleHint {
+  specification
+  evidence
+  knowledge
+  administrative
+  unknown
 }
 
 enum ExamStatus {
@@ -53,25 +107,31 @@ enum CrawlRunStatus {
 }
 
 model Source {
-  id            String       @id
+  id            String         @id
   domain        String
   name          String
   startUrls     Json
-  strategy      CrawlStrategy @default(listing_links)
+  strategy      CrawlStrategy  @default(listing_links)
+  kind          SourceKind     @default(aggregator)
+  discoveryMode DiscoveryMode  @default(listing)
+  allowedRoles  Json           @default("[]")
+  authorityScore Float?
+  licenseNote   String?
+  robotsCache   Json?
   linkSelector  String?
   linkPatterns  Json
   openPatterns  Json
-  trust         SourceTrust  @default(medium)
-  status        SourceStatus @default(active)
-  enabled       Boolean      @default(true)
-  intervalSec   Int          @default(1800)
-  politenessMs  Int          @default(1000)
-  failCount     Int          @default(0)
+  trust         SourceTrust    @default(medium)
+  status        SourceStatus   @default(active)
+  enabled       Boolean        @default(true)
+  intervalSec   Int            @default(1800)
+  politenessMs  Int            @default(1000)
+  failCount     Int            @default(0)
   lastOkAt      DateTime?
   lastError     String?
   notes         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   exams         Exam[]
   artifacts     Artifact[]
   proposals     SourceProposal[] @relation("ProposedFrom")
@@ -80,6 +140,7 @@ model Source {
 
   @@index([status])
   @@index([domain])
+  @@index([kind, discoveryMode])
 }
 
 model SourceProposal {
@@ -98,57 +159,107 @@ model SourceProposal {
 }
 
 model Exam {
-  id           String     @id
-  examSlug     String
-  title        String
-  org          String?
-  banca        String?
-  emphasis     Json
-  editalUrl    String?
-  listingUrl   String
-  status       ExamStatus @default(open)
-  sourceId     String
-  source       Source     @relation(fields: [sourceId], references: [id])
-  sourceDomain String
-  discoveredAt DateTime   @default(now())
-  lastSeenAt   DateTime   @default(now())
-  artifacts    Artifact[]
+  id               String     @id
+  examSlug         String
+  title            String
+  org              String?
+  banca            String?
+  kind             ExamKind   @default(concurso)
+  editionKey       String?
+  detailUrl        String?
+  registrationEnd  DateTime?
+  statusSource     String?
+  positions        Json?
+  emphasis         Json
+  editalUrl        String?
+  listingUrl       String
+  status           ExamStatus @default(open)
+  sourceId         String
+  source           Source     @relation(fields: [sourceId], references: [id])
+  sourceDomain     String
+  discoveredAt     DateTime   @default(now())
+  lastSeenAt       DateTime   @default(now())
+  artifacts        Artifact[]
 
   @@unique([examSlug, listingUrl])
   @@index([status])
   @@index([examSlug])
+  @@index([kind, status])
 }
 
 model Artifact {
-  id          String       @id @default(cuid())
-  examId      String?
-  exam        Exam?        @relation(fields: [examId], references: [id])
-  sourceId    String?
-  source      Source?      @relation(fields: [sourceId], references: [id])
-  kind        ArtifactKind
-  url         String?
-  storageKey  String?
-  checksum    String?
-  contentType String?
-  byteSize    Int?
-  fetchedAt   DateTime     @default(now())
-  published   Boolean      @default(false)
+  id           String           @id @default(cuid())
+  examId       String?
+  exam         Exam?            @relation(fields: [examId], references: [id])
+  sourceId     String?
+  source       Source?          @relation(fields: [sourceId], references: [id])
+  kind         ArtifactKind
+  kindHint     ArtifactKindHint @default(unknown)
+  roleHint     RoleHint         @default(unknown)
+  anchorLabel  String?
+  topicQueryId String?
+  topicQuery   TopicQuery?      @relation(fields: [topicQueryId], references: [id])
+  url          String?
+  storageKey   String?
+  checksum     String?
+  contentHash  String?
+  etag         String?
+  lastModified DateTime?
+  contentType  String?
+  byteSize     Int?
+  fetchSignals Json?
+  fetchedAt    DateTime         @default(now())
+  published    Boolean          @default(false)
 
   @@index([examId])
   @@index([kind, published])
+  @@index([roleHint])
+  @@index([contentHash])
+  @@index([topicQueryId])
+}
+
+model TopicQuery {
+  id               String     @id @default(cuid())
+  examId           String
+  examSlug         String     @default("")
+  syllabusNodeId   String
+  canonicalKey     String
+  queries          Json
+  status           String     @default("queued") // queued|running|done|failed
+  candidatesFound  Int        @default(0)
+  candidatesStored Int        @default(0)
+  attempts         Int        @default(0)
+  nextRunAt        DateTime?
+  createdAt        DateTime   @default(now())
+  finishedAt       DateTime?
+  artifacts        Artifact[]
+
+  @@index([status, nextRunAt])
+  @@index([examId, syllabusNodeId])
+  @@index([canonicalKey])
+}
+
+model DomainStats {
+  domain           String   @id
+  fetched          Int      @default(0)
+  becameKnowledge  Int      @default(0)
+  rejectedLowValue Int      @default(0)
+  avgDensity       Float?
+  authority        Float?
+  updatedAt        DateTime @updatedAt
 }
 
 /// Per-source listing digest. A crawl pass that matches the stored digest is
 /// skipped entirely, so unchanged portals cost one page fetch instead of a full
 /// re-ingest. History rows make "this portal went stale" visible in admin.
 model ListingFingerprint {
-  id          String   @id @default(cuid())
-  sourceId    String
-  source      Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  startUrl    String
-  fingerprint String
-  listingCount Int     @default(0)
-  seenAt      DateTime @default(now())
+  id           String   @id @default(cuid())
+  sourceId     String
+  source       Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  startUrl     String
+  fingerprint  String
+  listingCount Int      @default(0)
+  seenAt       DateTime @default(now())
 
   @@unique([sourceId, startUrl])
   @@index([sourceId, seenAt])
@@ -163,15 +274,15 @@ model ControlFlag {
 }
 
 model CrawlRun {
-  id               String         @id
-  sourceId         String?
-  source           Source?        @relation(fields: [sourceId], references: [id])
-  startedAt        DateTime
-  finishedAt       DateTime?
-  status           CrawlRunStatus @default(running)
-  sourcesOk        Int            @default(0)
-  sourcesFailed    Int            @default(0)
-  openDiscovered   Int            @default(0)
-  proposedSources  Int            @default(0)
-  errors           Json
+  id              String         @id
+  sourceId        String?
+  source          Source?        @relation(fields: [sourceId], references: [id])
+  startedAt       DateTime
+  finishedAt      DateTime?
+  status          CrawlRunStatus @default(running)
+  sourcesOk       Int            @default(0)
+  sourcesFailed   Int            @default(0)
+  openDiscovered  Int            @default(0)
+  proposedSources Int            @default(0)
+  errors          Json
 }

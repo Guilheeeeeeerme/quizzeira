@@ -90,6 +90,7 @@ export interface CrawlerSource {
   lastOkAt?: string | null;
   lastError?: string | null;
   notes?: string;
+  robotsCache?: { fetchedAt: string; disallow: string[]; allowAll?: boolean } | null;
   createdAt: string;
   updatedAt: string;
 }
