@@ -4,6 +4,7 @@
 // study API never writes here — Discovery owns Source registry + Document store.
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { crawlerSourceId, domainFromUrl, openExamId } from "@quizzeira/shared";
+import { classifyExamKind, extractEditionKey, extractPositionsFromText } from "@quizzeira/shared";
 import { env } from "../lib/env";
 import { prisma } from "../lib/prisma";
 import { putArtifactObject } from "../lib/storage";
@@ -20,6 +21,11 @@ function strategyToWire(value: string): string {
   return value.replace("_", "-");
 }
 
+/**
+ * `kind` is derived from the title until the discovery schema gains the
+ * persisted identity columns (spec §29.1); it is what lets the study catalog
+ * drop certifications and vestibulares today.
+ */
 function examToWire(row: {
   id: string;
   examSlug: string;
@@ -41,7 +47,12 @@ function examToWire(row: {
     title: row.title,
     org: row.org,
     banca: row.banca,
-    emphasis: row.emphasis,
+    kind: classifyExamKind(row.title),
+    editionKey: extractEditionKey(row.title),
+    detailUrl: null,
+    registrationEnd: null,
+    statusSource: null,
+    positions: extractPositionsFromText(row.title),
     editalUrl: row.editalUrl,
     listingUrl: row.listingUrl,
     status: row.status === "open" ? ("open" as const) : ("unknown" as const),
