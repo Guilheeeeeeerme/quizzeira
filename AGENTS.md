@@ -16,6 +16,7 @@ Coding-agent rules for this repository. Project map: [CLAUDE.md](./CLAUDE.md), [
 - **LLM**: workers use `LLM_USE_HEADROOM=false` by design; do not point them at Headroom without fixing network/auth (see infra `docs/quizzeira-headroom.md`). Follow [docs/guardrails.md](./docs/guardrails.md).
 - **Keys**: scoped `INTERNAL_API_KEY_*`; never commit real secrets or leave default internal keys for prod.
 - **Env**: `.env.sample` → `.env`; never commit `.env`.
+- **Crawler redesign source of truth**: [`docs/crawler-redesign-spec.md`](./docs/crawler-redesign-spec.md) is canonical. [`specs/001-crawler-redesign/spec.md`](./specs/001-crawler-redesign/spec.md) exists only for Ralph compatibility. If they disagree, **`docs/crawler-redesign-spec.md` wins**.
 - **Ralph**: `.agents/skills/ralph-wiggum` and `.specify/memory/constitution.md` apply only when that autonomous flow is invoked — ordinary agent chats still ask before commits unless the user requested otherwise.
 
 ## Verification

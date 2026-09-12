@@ -73,4 +73,5 @@ Jenkins (via infra): `npm run test:shared && npm run test:i18n`.
 - Only Eval-approved items reach Study Sampling.
 - Internal service keys: scoped `INTERNAL_API_KEY_*` — never ship defaults in production.
 - Align LLM calls with [docs/guardrails.md](./docs/guardrails.md) (Promptdesk-compatible contracts).
-- Ralph / crawler redesign autonomy is governed by `.specify/memory/constitution.md` and `docs/crawler-redesign-spec.md` when that skill/flow is active — do not apply unattended-commit rules to ordinary chat work unless asked.
+- **Crawler redesign**: [`docs/crawler-redesign-spec.md`](./docs/crawler-redesign-spec.md) is the canonical source of truth. [`specs/001-crawler-redesign/spec.md`](./specs/001-crawler-redesign/spec.md) exists only for Ralph compatibility. On any disagreement, **`docs/crawler-redesign-spec.md` wins**.
+- Ralph autonomy is governed by `.specify/memory/constitution.md` when that skill/flow is active — do not apply unattended-commit rules to ordinary chat work unless asked.
