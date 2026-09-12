@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decide } from "./gate";
 import type { JudgeVerdict } from "./judge";
+import { validateRelevance } from "./relevance";
 import type { StructuralResult } from "./structural";
 
 const thresholds = { publish: 0.8, fail: 0.5 };
@@ -126,4 +127,23 @@ test("judge reasons are carried into the verdict", () => {
     thresholds,
   });
   assert.ok(result.reasons.includes("ambiguidade na alternativa B"));
+});
+
+test("listing trivia fails on relevance before judge", () => {
+  const relevance = validateRelevance({
+    prompt: "O Tribunal de Contas do Estado de Goiás está com inscrições abertas para qual cargo?",
+    options: ["Técnico", "Auditor", "Analista", "Procurador", "Delegado"],
+    origin: "generation",
+    syllabusNodeId: "leaf",
+    knowledgeUnitIds: [],
+  });
+  const result = decide({
+    structural: structuralOk,
+    relevance,
+    judge: null,
+    correctIndex: 0,
+    thresholds,
+    origin: "generation",
+  });
+  assert.equal(result.decision, "failed");
 });

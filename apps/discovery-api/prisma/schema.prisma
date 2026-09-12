@@ -39,6 +39,58 @@ enum ArtifactKind {
   other
 }
 
+enum SourceKind {
+  banca_portal
+  org_portal
+  aggregator
+  official_gazette
+  legislation
+  educational_site
+  open_textbook
+  standards_body
+  question_bank_public
+  exam_specific
+  fixture
+}
+
+enum DiscoveryMode {
+  listing
+  topic_query
+  direct
+  custom
+}
+
+enum ExamKind {
+  concurso
+  oab
+  certification
+  vestibular
+  other
+}
+
+enum ArtifactKindHint {
+  edital
+  retificacao
+  programa
+  prova
+  gabarito
+  padrao_resposta
+  apostila
+  lei
+  artigo
+  manual
+  listing
+  unknown
+}
+
+enum RoleHint {
+  specification
+  evidence
+  knowledge
+  administrative
+  unknown
+}
+
 enum ExamStatus {
   open
   closed
@@ -70,6 +122,12 @@ model Source {
   lastOkAt      DateTime?
   lastError     String?
   notes         String?
+  kind          SourceKind     @default(aggregator)
+  discoveryMode DiscoveryMode  @default(listing)
+  allowedRoles  Json?
+  authorityScore Float?
+  licenseNote   String?
+  robotsCache   Json?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   exams         Exam[]
@@ -110,6 +168,12 @@ model Exam {
   sourceId     String
   source       Source     @relation(fields: [sourceId], references: [id])
   sourceDomain String
+  kind         ExamKind   @default(concurso)
+  editionKey   String?
+  detailUrl    String?
+  registrationEnd DateTime?
+  statusSource String?
+  positions    Json?
   discoveredAt DateTime   @default(now())
   lastSeenAt   DateTime   @default(now())
   artifacts    Artifact[]
@@ -117,6 +181,7 @@ model Exam {
   @@unique([examSlug, listingUrl])
   @@index([status])
   @@index([examSlug])
+  @@index([kind])
 }
 
 model Artifact {
@@ -126,9 +191,18 @@ model Artifact {
   sourceId    String?
   source      Source?      @relation(fields: [sourceId], references: [id])
   kind        ArtifactKind
+  kindHint    ArtifactKindHint @default(unknown)
+  roleHint    RoleHint         @default(unknown)
+  anchorLabel String?
+  topicQueryId String?
+  topicQuery  TopicQuery?  @relation(fields: [topicQueryId], references: [id])
   url         String?
   storageKey  String?
   checksum    String?
+  contentHash String?
+  etag        String?
+  lastModified DateTime?
+  fetchSignals Json?
   contentType String?
   byteSize    Int?
   fetchedAt   DateTime     @default(now())
@@ -136,6 +210,37 @@ model Artifact {
 
   @@index([examId])
   @@index([kind, published])
+  @@index([roleHint])
+  @@index([topicQueryId])
+}
+
+model TopicQuery {
+  id               String    @id @default(cuid())
+  examId           String
+  syllabusNodeId   String
+  canonicalKey     String
+  queries          Json
+  status           String    @default("queued")
+  candidatesFound  Int       @default(0)
+  candidatesStored Int       @default(0)
+  attempts         Int       @default(0)
+  nextRunAt        DateTime?
+  createdAt        DateTime  @default(now())
+  finishedAt       DateTime?
+  artifacts        Artifact[]
+
+  @@index([status, nextRunAt])
+  @@index([examId, syllabusNodeId])
+}
+
+model DomainStats {
+  domain           String   @id
+  fetched          Int      @default(0)
+  becameKnowledge  Int      @default(0)
+  rejectedLowValue Int      @default(0)
+  avgDensity       Float?
+  authority        Float?
+  updatedAt        DateTime @updatedAt
 }
 
 /// Per-source listing digest. A crawl pass that matches the stored digest is

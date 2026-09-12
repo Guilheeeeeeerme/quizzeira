@@ -203,8 +203,99 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
   // ── Generation ────────────────────────────────────────────────────────────
 
   /**
+   * Leaf/syllabus generation queue (§24.1). Requires KnowledgeUnits mapped to
+   * active syllabus leaves. Replaces exam-level `"geral"` generation.
+   */
+  app.get("/internal/generation/leaf-queue", async (request) => {
+    const q = request.query as { limit?: string; minKu?: string };
+    const limit = Math.min(20, Number(q.limit || 5));
+    const minKu = Math.max(1, Number(q.minKu || 4));
+
+    const leaves = await prisma.syllabusNode.findMany({
+      where: {
+        status: "active",
+        depth: { gte: 1 },
+        syllabus: { status: "active" },
+      },
+      include: { syllabus: { select: { examSlug: true } } },
+      take: 200,
+      orderBy: { ordinal: "asc" },
+    });
+
+    const items: Array<{
+      examSlug: string;
+      examTitle: string | null;
+      syllabusNodeId: string;
+      canonicalKey: string;
+      path: string[];
+      title: string;
+      rawText: string;
+      deficit: number;
+      knowledgeUnits: Array<{
+        id: string;
+        kind: string;
+        statement: string;
+        example: string | null;
+        qualifiers: string[];
+      }>;
+    }> = [];
+
+    for (const leaf of leaves) {
+      const children = await prisma.syllabusNode.count({
+        where: { parentId: leaf.id, status: "active" },
+      });
+      // Prefer true leaves (no active children).
+      if (children > 0) continue;
+
+      const kus = await prisma.knowledgeUnit.findMany({
+        where: {
+          status: "active",
+          OR: [{ syllabusNodeId: leaf.id }, { canonicalKey: leaf.canonicalKey }],
+        },
+        take: 12,
+        orderBy: { createdAt: "desc" },
+      });
+      if (kus.length < minKu) continue;
+
+      const [published, pending] = await Promise.all([
+        prisma.questionItem.count({
+          where: { syllabusNodeId: leaf.id, status: "published" },
+        }),
+        prisma.questionItem.count({
+          where: { syllabusNodeId: leaf.id, status: { in: ["draft", "needs_review"] } },
+        }),
+      ]);
+      const target = Math.max(4, Math.min(40, leaf.questionCount ? Math.round(leaf.questionCount * 0.4) : 8));
+      const deficit = target - published - pending;
+      if (deficit <= 0) continue;
+
+      const pathSlugParts = leaf.pathSlug.split("/").filter(Boolean);
+      items.push({
+        examSlug: leaf.syllabus.examSlug,
+        examTitle: null,
+        syllabusNodeId: leaf.id,
+        canonicalKey: leaf.canonicalKey,
+        path: pathSlugParts.length ? pathSlugParts : [leaf.title],
+        title: leaf.title,
+        rawText: leaf.rawText,
+        deficit,
+        knowledgeUnits: kus.map((ku) => ({
+          id: ku.id,
+          kind: ku.kind,
+          statement: ku.statement,
+          example: ku.example,
+          qualifiers: Array.isArray(ku.qualifiers) ? (ku.qualifiers as string[]) : [],
+        })),
+      });
+      if (items.length >= limit) break;
+    }
+
+    return { items };
+  });
+
+  /**
    * Exam/subject pairs that have extracted, embedded material but too few
-   * published questions. This is the worker's Generation work list.
+   * published questions. Legacy transitional queue — disabled by default in worker.
    */
   app.get("/internal/generation/queue", async (request) => {
     const q = request.query as { limit?: string; target?: string };
@@ -212,7 +303,7 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
     const limit = Math.min(20, Number(q.limit || 3));
 
     const documents = await prisma.document.findMany({
-      where: { status: "extracted" },
+      where: { status: "extracted", role: "knowledge" },
       select: { examSlug: true, examTitle: true },
       distinct: ["examSlug"],
       orderBy: { updatedAt: "desc" },
@@ -239,8 +330,6 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
           where: { examSlug: doc.examSlug, status: { in: ["draft", "needs_review"] } },
         }),
       ]);
-      // Drafts already in flight count against the target so we do not queue
-      // the same work twice while Eval is still catching up.
       const deficit = target - published - pending;
       if (deficit > 0) {
         items.push({ examSlug: doc.examSlug, examTitle: doc.examTitle, published, pending, deficit });
@@ -267,14 +356,24 @@ function examSlugPriority(slug: string): number {
   if (s.length >= 12) score += 3;
   return score;
 }
-  app.post<{ Body: { examSlug: string; subject: string; requested?: number; model?: string } }>(
-    "/internal/generation/runs",
-    async (request) => {
+  app.post<{
+    Body: {
+      examSlug: string;
+      subject: string;
+      requested?: number;
+      model?: string;
+      syllabusNodeId?: string;
+      promptVersion?: string;
+    };
+  }>("/internal/generation/runs", async (request) => {
       const body = request.body ?? { examSlug: "", subject: "" };
+      const subject = String(body.subject || "").trim() || "conhecimento";
       const run = await prisma.generationRun.create({
         data: {
           examSlug: String(body.examSlug || ""),
-          subject: String(body.subject || "geral"),
+          subject,
+          syllabusNodeId: body.syllabusNodeId ? String(body.syllabusNodeId) : null,
+          promptVersion: body.promptVersion ? String(body.promptVersion) : null,
           status: "running",
           requested: Number(body.requested || 0),
           model: body.model ?? null,
@@ -308,15 +407,24 @@ function examSlugPriority(slug: string): number {
    * The only way a QuestionItem enters the system, and it always lands as
    * `draft`. Content cannot publish — that is the Eval stage's decision.
    */
-  app.post<{ Body: DraftQuestionsRequest & { generationRunId?: string } }>(
-    "/internal/question-items/draft",
-    async (request) => {
+  app.post<{
+    Body: DraftQuestionsRequest & {
+      generationRunId?: string;
+      syllabusNodeId?: string;
+      canonicalKey?: string;
+    };
+  }>("/internal/question-items/draft", async (request) => {
       const body = request.body;
       const examSlug = String(body?.examSlug || "").trim();
       if (!examSlug) {
         throw Object.assign(new Error("examSlug is required"), { statusCode: 400 });
       }
-      const subject = body.subject?.trim() || "geral";
+      const subject = body.subject?.trim() || "conhecimento";
+      if (/^geral$/i.test(subject)) {
+        throw Object.assign(new Error("subject 'geral' is not allowed for new drafts"), {
+          statusCode: 400,
+        });
+      }
       const slug = toSubjectSlug(subject);
       const ids: string[] = [];
       let skipped = 0;
@@ -337,6 +445,8 @@ function examSlugPriority(slug: string): number {
           skipped += 1;
           continue;
         }
+        const kuIdsRaw = (q as { knowledgeUnitIds?: unknown }).knowledgeUnitIds;
+        const kuIds = Array.isArray(kuIdsRaw) ? kuIdsRaw.map(String) : [];
         const created = await prisma.questionItem.create({
           data: {
             fingerprint,
@@ -355,6 +465,9 @@ function examSlugPriority(slug: string): number {
             locale: body.locale || "pt",
             documentId: body.documentId ?? null,
             generationRunId: body.generationRunId ?? null,
+            syllabusNodeId: body.syllabusNodeId ?? null,
+            canonicalKey: body.canonicalKey ?? null,
+            knowledgeUnitIds: kuIds,
           },
         });
         ids.push(created.id);
@@ -388,6 +501,8 @@ function examSlugPriority(slug: string): number {
         locale: i.locale,
         origin: i.origin,
         documentId: i.documentId,
+        syllabusNodeId: i.syllabusNodeId,
+        knowledgeUnitIds: i.knowledgeUnitIds ?? [],
       })),
     };
   });
@@ -434,6 +549,68 @@ function examSlugPriority(slug: string): number {
       ]);
 
       return { item };
+    },
+  );
+
+  /** Demote legacy generation-origin published items to needs_review (§50 #4). */
+  app.post("/internal/question-items/demote-legacy-generation", async () => {
+    const result = await prisma.questionItem.updateMany({
+      where: { status: "published", origin: "generation", syllabusNodeId: null },
+      data: { status: "needs_review", publishedAt: null },
+    });
+    return { demoted: result.count };
+  });
+
+  /** Persist normalize + classify output from content-worker. */
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/internal/documents/:id/normalize",
+    async (request) => {
+      const body = request.body ?? {};
+      const document = await prisma.document.update({
+        where: { id: request.params.id },
+        data: {
+          role: (body.role as never) || "unknown",
+          roleConfidence: body.roleConfidence != null ? Number(body.roleConfidence) : null,
+          roleMethod: (body.roleMethod as string) || null,
+          subtype: (body.subtype as string) || null,
+          language: (body.language as string) || null,
+          normalizerVersion: (body.normalizerVersion as string) || null,
+          stats: body.stats ?? undefined,
+          status: "extracted",
+        },
+      });
+
+      const sections = Array.isArray(body.sections) ? body.sections : [];
+      for (const section of sections as Array<Record<string, unknown>>) {
+        await prisma.section.upsert({
+          where: {
+            documentId_ordinal: {
+              documentId: document.id,
+              ordinal: Number(section.ordinal || 0),
+            },
+          },
+          create: {
+            documentId: document.id,
+            ordinal: Number(section.ordinal || 0),
+            path: section.path ?? [],
+            heading: (section.heading as string) || null,
+            level: Number(section.level || 0),
+            role: (section.role as never) || "other",
+            scores: section.scores ?? undefined,
+            charCount: Number(section.charCount || 0),
+          },
+          update: {
+            path: section.path ?? [],
+            heading: (section.heading as string) || null,
+            level: Number(section.level || 0),
+            role: (section.role as never) || "other",
+            scores: section.scores ?? undefined,
+            charCount: Number(section.charCount || 0),
+          },
+        });
+      }
+
+      return { document, sectionCount: sections.length };
     },
   );
 }

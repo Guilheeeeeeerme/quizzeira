@@ -68,21 +68,26 @@ export async function searchChunks(input: {
     FROM "Chunk" c
     JOIN "Document" d ON d."id" = c."documentId"
     WHERE c."embedding" IS NOT NULL
+      AND c."eligibility" = 'eligible'
+      AND d."role" = 'knowledge'
     ${scope}
     ORDER BY c."embedding" <=> ${literal}::vector
     LIMIT ${limit}
   `;
 }
 
-/** Chunks still waiting for an embedding, oldest first. */
+/** Chunks still waiting for an embedding, oldest first — eligible knowledge only. */
 export async function listUnembeddedChunks(limit: number): Promise<
   Array<{ id: string; text: string; documentId: string }>
 > {
   return prisma.$queryRaw<Array<{ id: string; text: string; documentId: string }>>`
-    SELECT "id", "text", "documentId"
-    FROM "Chunk"
-    WHERE "embedding" IS NULL
-    ORDER BY "createdAt" ASC
+    SELECT c."id", c."text", c."documentId"
+    FROM "Chunk" c
+    JOIN "Document" d ON d."id" = c."documentId"
+    WHERE c."embedding" IS NULL
+      AND c."eligibility" = 'eligible'
+      AND d."role" = 'knowledge'
+    ORDER BY c."createdAt" ASC
     LIMIT ${Math.max(1, Math.min(limit, 200))}
   `;
 }

@@ -33,6 +33,8 @@ export interface CrawlerSource {
   updatedAt: string;
 }
 
+export type ExamKind = "concurso" | "oab" | "certification" | "vestibular" | "other";
+
 export interface OpenExamRecord {
   id: string;
   examSlug: string;
@@ -47,6 +49,12 @@ export interface OpenExamRecord {
   sourceDomain: string;
   discoveredAt: string;
   lastSeenAt: string;
+  /** Spec §11 / §29 — concurso vs certification / other. */
+  kind?: ExamKind;
+  editionKey?: string | null;
+  detailUrl?: string | null;
+  registrationEnd?: string | null;
+  positions?: string[];
 }
 
 export interface CrawlerRunSummary {
@@ -191,6 +199,50 @@ export function listingsFingerprint(
   return sha256Hex(rows.join("\n"));
 }
 
+const NON_CONCURSO_RE =
+  /\b(certifica[cç][aã]o|certifica[cç][aã]o\s+cfp|exame\s+para\s+certifica|processo\s+seletivo\s+de\s+direito|vestibular|mba|p[oó]s-?gradua[cç][aã]o|curso\s+livre)\b/i;
+
+/** Spec §11 — reject certification / non-concurso listings from concurso pipeline. */
+export function classifyExamKind(title: string, href = ""): ExamKind {
+  const blob = `${title} ${href}`;
+  if (/\boab\b|exame\s+de\s+ordem/i.test(blob)) return "oab";
+  if (/\bvestibular\b/i.test(blob)) return "vestibular";
+  if (NON_CONCURSO_RE.test(blob)) return "certification";
+  if (/concurso|edital|tribunal|prefeitura|secretari/i.test(blob)) return "concurso";
+  return "other";
+}
+
+export function isConcursoEligible(kind: ExamKind): boolean {
+  return kind === "concurso" || kind === "oab";
+}
+
+/** Build edition key from year / edital number hints. */
+export function extractEditionKey(text: string, href = ""): string | null {
+  const blob = `${text} ${href}`;
+  const edital = blob.match(/edital\s*n[ºo°]?\s*(\d+)\s*\/?\s*(20\d{2})/i);
+  if (edital) return `edital-${edital[1]}-${edital[2]}`;
+  const year = blob.match(/\b(20\d{2})\b/);
+  if (year) {
+    const edition = blob.match(/\b(\d{1,2})[ªa]?\s*(edi[cç][aã]o|fase)/i);
+    if (edition) return `${year[1]}-${edition[1]}`;
+    return year[1];
+  }
+  return null;
+}
+
+/** Exam identity = org + edition (§11.2), not bare anchor text. */
+export function examSlugFromIdentity(org: string | null, editionKey: string | null, fallbackTitle: string): string {
+  const orgPart = org ? slugifyKey(org) : "";
+  const editionPart = editionKey ? slugifyKey(editionKey) : "";
+  if (orgPart && editionPart) return `${orgPart}-${editionPart}`;
+  // Without an edition key, prefer the listing title so distinct rows do not
+  // collapse onto the org slug alone (legacy Transpetro nav poison).
+  const titleSlug = slugifyKey(fallbackTitle.slice(0, 80));
+  if (titleSlug) return titleSlug;
+  if (orgPart) return orgPart;
+  return "exam";
+}
+
 /** Normalize a discovered listing into bank-friendly identity fields. */
 export function normalizeOpenExam(input: {
   title: string;
@@ -199,6 +251,11 @@ export function normalizeOpenExam(input: {
   sourceDomain: string;
   orgHint?: string | null;
   bancaHint?: string | null;
+  editionKey?: string | null;
+  detailUrl?: string | null;
+  registrationEnd?: string | null;
+  positions?: string[];
+  kind?: ExamKind;
 }): Omit<OpenExamRecord, "id" | "discoveredAt" | "lastSeenAt"> {
   const title = input.title.replace(/\s+/g, " ").trim();
   const org =
@@ -206,15 +263,13 @@ export function normalizeOpenExam(input: {
     extractKnownOrg(title) ||
     extractKnownOrg(input.sourceDomain);
   const banca = input.bancaHint?.trim() || extractKnownBanca(title);
-  const slugParts = [org, banca].filter(Boolean).map(String);
-  // Prefer /concurso/<slug>/ path identity. Fall back to the listing title —
-  // not org alone — so Transpetro.org nav pages do not all collapse to
-  // examSlug "transpetro" and poison the Content bank.
+  const kind = input.kind ?? classifyExamKind(title, input.href);
+  const editionKey = input.editionKey ?? extractEditionKey(title, input.href);
+  // Prefer /concurso/<slug>/ path, then org+edition identity (§11.2).
   const pathSlug = concursoPathSlug(input.href);
   const examSlug =
     pathSlug ||
-    slugifyKey(title.slice(0, 80)) ||
-    slugifyKey(slugParts.join(" ") || "exam");
+    examSlugFromIdentity(org, editionKey, title);
   const emphasis = extractEmphasisHints(title);
   const editalUrl = /edital|pdf/i.test(input.href) ? input.href : null;
 
@@ -229,6 +284,11 @@ export function normalizeOpenExam(input: {
     status: looksOpen(title) || looksOpenExamUrl(input.href) ? "open" : "unknown",
     sourceId: input.sourceId,
     sourceDomain: input.sourceDomain,
+    kind,
+    editionKey,
+    detailUrl: input.detailUrl ?? input.href,
+    registrationEnd: input.registrationEnd ?? null,
+    positions: input.positions ?? [],
   };
 }
 
