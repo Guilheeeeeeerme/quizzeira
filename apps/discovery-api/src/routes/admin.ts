@@ -20,9 +20,12 @@ function strategyToWire(value: string): string {
   return value.replace("_", "-");
 }
 
-function strategyFromWire(value: string): "listing_links" | "banca_portal" | "fixture" {
+function strategyFromWire(
+  value: string,
+): "listing_links" | "banca_portal" | "fixture" | "oab_fgv" {
   if (value === "banca-portal" || value === "banca_portal") return "banca_portal";
   if (value === "fixture") return "fixture";
+  if (value === "oab-fgv" || value === "oab_fgv") return "oab_fgv";
   return "listing_links";
 }
 
