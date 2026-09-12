@@ -54,6 +54,11 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         name: s.name,
         startUrls: s.startUrls,
         strategy: strategyToWire(String(s.strategy)),
+        kind: s.kind,
+        discoveryMode: s.discoveryMode,
+        allowedRoles: s.allowedRoles,
+        authorityScore: s.authorityScore,
+        licenseNote: s.licenseNote,
         linkSelector: s.linkSelector,
         linkPatterns: s.linkPatterns,
         openPatterns: s.openPatterns,
@@ -100,6 +105,14 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         intervalSec: Number(body.intervalSec || 1800),
         politenessMs: Number(body.politenessMs || 1000),
         notes: (body.notes as string) || null,
+        kind: (body.kind as never) || undefined,
+        discoveryMode: (body.discoveryMode as never) || undefined,
+        allowedRoles: body.allowedRoles !== undefined ? asStringArray(body.allowedRoles) : undefined,
+        authorityScore:
+          body.authorityScore != null && body.authorityScore !== ""
+            ? Number(body.authorityScore)
+            : undefined,
+        licenseNote: body.licenseNote != null ? String(body.licenseNote) : undefined,
       },
       update: {
         domain,
@@ -114,6 +127,14 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         intervalSec: Number(body.intervalSec || 1800),
         politenessMs: Number(body.politenessMs || 1000),
         notes: (body.notes as string) || null,
+        kind: (body.kind as never) || undefined,
+        discoveryMode: (body.discoveryMode as never) || undefined,
+        allowedRoles: body.allowedRoles !== undefined ? asStringArray(body.allowedRoles) : undefined,
+        authorityScore:
+          body.authorityScore != null && body.authorityScore !== ""
+            ? Number(body.authorityScore)
+            : undefined,
+        licenseNote: body.licenseNote != null ? String(body.licenseNote) : undefined,
       },
     });
     return { source };
@@ -137,11 +158,43 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
             body.linkPatterns !== undefined ? asStringArray(body.linkPatterns) : undefined,
           openPatterns:
             body.openPatterns !== undefined ? asStringArray(body.openPatterns) : undefined,
+          kind: (body.kind as never) || undefined,
+          discoveryMode: (body.discoveryMode as never) || undefined,
+          allowedRoles:
+            body.allowedRoles !== undefined ? asStringArray(body.allowedRoles) : undefined,
+          authorityScore:
+            body.authorityScore != null && body.authorityScore !== ""
+              ? Number(body.authorityScore)
+              : undefined,
+          licenseNote: body.licenseNote !== undefined ? String(body.licenseNote) : undefined,
         },
       });
       return { source };
     },
   );
+
+  app.get("/admin/topic-queries", async (request) => {
+    const q = request.query as { status?: string; limit?: string };
+    const items = await prisma.topicQuery.findMany({
+      where: q.status ? { status: String(q.status) } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: Math.min(200, Number(q.limit || 50)),
+    });
+    return {
+      items: items.map((t) => ({
+        id: t.id,
+        examId: t.examId,
+        syllabusNodeId: t.syllabusNodeId,
+        canonicalKey: t.canonicalKey,
+        queries: t.queries,
+        status: t.status,
+        candidatesFound: t.candidatesFound,
+        candidatesStored: t.candidatesStored,
+        createdAt: t.createdAt.toISOString(),
+        finishedAt: t.finishedAt?.toISOString() ?? null,
+      })),
+    };
+  });
 
   app.delete<{ Params: { id: string } }>("/admin/sources/:id", async (request) => {
     await prisma.source.delete({ where: { id: request.params.id } });

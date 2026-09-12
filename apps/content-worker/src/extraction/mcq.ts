@@ -8,24 +8,43 @@ export interface ExtractedMcq {
   number: number;
   prompt: string;
   options: string[];
-  correctIndex: number;
+  /** Null when the key marks the item annulled (§18.2). */
+  correctIndex: number | null;
+  status: "ok" | "annulled";
+  /** Shared base text from "Texto para as questões N a M" (§18.2). */
+  passage: string | null;
 }
+
+export type AnswerKeyEntry =
+  | { kind: "ok"; index: number }
+  | { kind: "annulled" };
 
 const OPTION_LABELS = ["a", "b", "c", "d", "e"];
 const MIN_OPTIONS = 4;
 
 /**
  * Reads an answer key in the notations Brazilian bancas use: `1 - A`, `01) B`,
- * `12. C`, `3 (D)`. Returns question number → option index.
+ * `12. C`, `3 (D)`, plus `ANULADA` / `*` (§18.2).
  */
-export function parseAnswerKey(rawText: string): Map<number, number> {
-  const key = new Map<number, number>();
-  const pattern = /(?:^|[\n;,\s])(\d{1,3})\s*[-.):]?\s*\(?([A-Ea-e])\)?(?=[\s,;]|$)/g;
-  for (const match of rawText.replace(/\r\n/g, "\n").matchAll(pattern)) {
+export function parseAnswerKey(rawText: string): Map<number, AnswerKeyEntry> {
+  const key = new Map<number, AnswerKeyEntry>();
+  const text = rawText.replace(/\r\n/g, "\n");
+
+  const annulled =
+    /(?:^|[\n;,\s])(\d{1,3})\s*[-.):]?\s*(?:\*|anulad\w*)(?=[\s,;]|$)/gi;
+  for (const match of text.matchAll(annulled)) {
+    const number = Number(match[1]);
+    if (!Number.isFinite(number) || number < 1) continue;
+    if (!key.has(number)) key.set(number, { kind: "annulled" });
+  }
+
+  const pattern =
+    /(?:^|[\n;,\s])(\d{1,3})\s*[-.):]?\s*\(?([A-Ea-e])\)?(?=[\s,;]|$)/g;
+  for (const match of text.matchAll(pattern)) {
     const number = Number(match[1]);
     const index = OPTION_LABELS.indexOf(match[2].toLowerCase());
     if (!Number.isFinite(number) || number < 1 || index < 0) continue;
-    if (!key.has(number)) key.set(number, index);
+    if (!key.has(number)) key.set(number, { kind: "ok", index });
   }
   return key;
 }
@@ -49,22 +68,59 @@ interface QuestionBlock {
   options: string[];
 }
 
+/**
+ * Maps question numbers to shared passage text from
+ * `Texto para as questões N a M` markers (§18.2).
+ */
+export function extractPassageMap(body: string): Map<number, string> {
+  const text = body.replace(/\r\n/g, "\n");
+  const passages = new Map<number, string>();
+  const marker =
+    /Texto\s+para\s+as\s+quest(?:ões|oes)\s+(\d+)\s+a\s+(\d+)\s*[:.\-]?\s*/gi;
+  const headers = [...text.matchAll(/(?:^|\n)\s*(?:quest(?:ão|ao)\s*)?(\d{1,3})\s*[-.)]\s+/gi)];
+
+  for (const match of text.matchAll(marker)) {
+    if (match.index == null) continue;
+    const from = Number(match[1]);
+    const to = Number(match[2]);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from < 1 || to < from) continue;
+    const contentStart = match.index + match[0].length;
+    const nextHeader = headers.find((h) => h.index != null && h.index >= contentStart);
+    const contentEnd = nextHeader?.index ?? text.length;
+    const passage = text.slice(contentStart, contentEnd).replace(/\s+/g, " ").trim();
+    if (!passage) continue;
+    for (let n = from; n <= to; n += 1) passages.set(n, passage);
+  }
+  return passages;
+}
+
 /** Splits a prova body into numbered question blocks with lettered options. */
 export function parseQuestionBlocks(body: string): QuestionBlock[] {
   const text = body.replace(/\r\n/g, "\n");
   const starts: Array<{ number: number; at: number; headerLength: number }> = [];
-  const header = /(?:^|\n)\s*(?:quest(?:ão|ao)\s*)?(\d{1,3})\s*[-.)]\s+/gi;
+  // Allow "01." / "Questão 1)" / "1 -" headers; keep Number() so 01 → 1.
+  const header = /(?:^|\n)\s*(?:quest(?:ão|ao)\s*)?(\d{1,3})\s*[-.)]\s*/gi;
   for (const match of text.matchAll(header)) {
     if (match.index == null) continue;
     const number = Number(match[1]);
     if (!Number.isFinite(number) || number < 1) continue;
+    // Skip matches that look like decimal numbers inside prose (e.g. "8.666").
+    const after = text.slice(match.index + match[0].length, match.index + match[0].length + 1);
+    if (/^\d$/.test(after)) continue;
     starts.push({ number, at: match.index, headerLength: match[0].length });
   }
 
+  // Drop nested false headers that sit inside a previous question's option text.
+  const deduped: typeof starts = [];
+  for (const start of starts) {
+    if (deduped.some((s) => s.number === start.number)) continue;
+    deduped.push(start);
+  }
+
   const blocks: QuestionBlock[] = [];
-  for (let i = 0; i < starts.length; i += 1) {
-    const start = starts[i];
-    const end = i + 1 < starts.length ? starts[i + 1].at : text.length;
+  for (let i = 0; i < deduped.length; i += 1) {
+    const start = deduped[i];
+    const end = i + 1 < deduped.length ? deduped[i + 1].at : text.length;
     const raw = text.slice(start.at + start.headerLength, end).trim();
     if (!raw) continue;
     const parsed = parseOptions(raw);
@@ -75,12 +131,18 @@ export function parseQuestionBlocks(body: string): QuestionBlock[] {
 }
 
 function parseOptions(block: string): { prompt: string; options: string[] } | null {
-  const marker = /(?:^|\n)\s*\(?([A-Ea-e])\)\s*|(?:^|\n)\s*([A-Ea-e])\s*[-.)]\s+/g;
+  // Prefer parenthesised labels (A)/(A) mid-line. Bare "A." only at line start —
+  // otherwise trailing "é B." inside option text is a false marker (Q2 golden).
+  const marker =
+    /(?:^|[\n\s])\(([A-Ea-e])\)\s+|(?:^|[\n\s])([A-Ea-e])\)\s+|(?:^|\n)\s*([A-Ea-e])\s*[.)]\s+/g;
   const found: Array<{ label: string; at: number; length: number }> = [];
   for (const match of block.matchAll(marker)) {
     if (match.index == null) continue;
-    const label = (match[1] ?? match[2] ?? "").toLowerCase();
-    if (label) found.push({ label, at: match.index, length: match[0].length });
+    const label = (match[1] ?? match[2] ?? match[3] ?? "").toLowerCase();
+    if (!label) continue;
+    const raw = match[0];
+    const lead = raw.match(/^\s*/)?.[0].length ?? 0;
+    found.push({ label, at: match.index + lead, length: raw.length - lead });
   }
   // Option markers must run a, b, c, d… in order. Anything else is prose that
   // happens to contain a parenthesised letter.
@@ -98,13 +160,13 @@ function parseOptions(block: string): { prompt: string; options: string[] } | nu
     if (!value) return null;
     options.push(value);
   }
-  return { prompt, options: options.slice(0, MIN_OPTIONS) };
+  return { prompt, options: options.slice(0, Math.max(MIN_OPTIONS, ordered.length)) };
 }
 
 /**
  * Full pass: prova body plus answer key → multiple-choice items. `extraKeyText`
- * carries the key when it arrives as a separate gabarito document. Only
- * questions whose answer is known survive, so callers can draft them directly.
+ * carries the key when it arrives as a separate gabarito document. Annulled
+ * keys are kept with `status=annulled`; unknown keys are dropped.
  */
 export function extractMcqs(rawText: string, extraKeyText = ""): ExtractedMcq[] {
   if (!rawText.trim()) return [];
@@ -112,13 +174,35 @@ export function extractMcqs(rawText: string, extraKeyText = ""): ExtractedMcq[] 
   const answers = parseAnswerKey(`${key}\n${extraKeyText}`);
   if (answers.size === 0) return [];
 
+  const passages = extractPassageMap(body);
   const questions: ExtractedMcq[] = [];
   for (const block of parseQuestionBlocks(body)) {
-    const correctIndex = answers.get(block.number);
-    if (correctIndex == null || correctIndex >= block.options.length) continue;
+    const answer = answers.get(block.number);
+    if (!answer) continue;
     const distinct = new Set(block.options.map((option) => option.trim().toLowerCase()));
     if (distinct.size !== block.options.length) continue;
-    questions.push({ number: block.number, prompt: block.prompt, options: block.options, correctIndex });
+
+    if (answer.kind === "annulled") {
+      questions.push({
+        number: block.number,
+        prompt: block.prompt,
+        options: block.options,
+        correctIndex: null,
+        status: "annulled",
+        passage: passages.get(block.number) ?? null,
+      });
+      continue;
+    }
+
+    if (answer.index >= block.options.length) continue;
+    questions.push({
+      number: block.number,
+      prompt: block.prompt,
+      options: block.options,
+      correctIndex: answer.index,
+      status: "ok",
+      passage: passages.get(block.number) ?? null,
+    });
   }
   return questions;
 }

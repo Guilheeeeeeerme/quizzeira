@@ -1,6 +1,6 @@
 # Quizzeira Content Pipeline Redesign — Master Technical Specification
 
-**Status:** Proposed (no code changed). **Date:** 2026-09-12. **Scope:** Discovery crawler, Content extraction/generation, Eval, and the data contracts between them.
+**Status:** Implementation on branch; §48.1 automated gate via `scripts/verify-pipeline-v2.sh` / `cleanup-and-verify-pipeline-v2.sh`. Operational DoD items (§48.4–5 pilot metrics / human sample) remain post-merge. **Date:** 2026-09-12. **Scope:** Discovery crawler, Content extraction/generation, Eval, and the data contracts between them.
 
 > The system exists to teach and test the **knowledge required by the exam**, not the metadata describing the exam.
 
@@ -2128,15 +2128,7 @@ POST /internal/chunks/search                          adds { syllabusNodeId?, ca
 
 ### 40.5 Compatibility and flags
 
-| Flag | Default during rollout | Effect |
-| --- | --- | --- |
-| `PIPELINE_V2_NORMALIZE` | on | route documents through doc-processor; if off, legacy `pdf-text.ts` (until deleted) |
-| `PIPELINE_V2_ROLES_ENFORCED` | on | knowledge index only from `knowledge` role; if off, legacy behaviour (never ship off in prod) |
-| `PIPELINE_V2_TOPIC_DISCOVERY` | off → on in Phase 3 | crawler topic-query mode |
-| `PIPELINE_V2_GENERATION` | off → on in Phase 4 | brief-based generation; legacy generation is deleted at the same time, so "off" means "no generation" |
-| `QUALITY_V2_LADDER` | on | rungs 2–3 and extended judge |
-
-There is no dual-write period: the legacy generation path is removed rather than run in parallel, per the user's explicit "no attachment to what exists".
+Rollout flags (`PIPELINE_V2_*`, `QUALITY_V2_LADDER`) have been **removed**. Pipeline v2 is the only path: normalize via doc-processor, roles enforced, planner-driven generation, and the quality ladder always on. There is no dual-write period: the legacy generation path is removed rather than run in parallel.
 
 ### 40.6 Backfill strategy
 
@@ -2546,29 +2538,29 @@ flowchart TB
 
 Ordered by dependency and by how much of the observed failure each item removes. Items 1–6 alone stop the screenshots from recurring; items 7–20 make the system produce good questions instead of none.
 
-1. [ ] **Stop storing listing pages as exam artifacts** (`pipeline.ts`); attach documents only from detail pages with kind/role hints. *(removes RC-2)*
-2. [ ] **Add `DocumentRole` + `SectionRole` to schema and enforce the eligibility matrix** in `chunks/search` and the embed queue. *(removes RC-1 at the data layer)*
-3. [ ] **Rung 2 validation**: metadata classifier + syllabus-meta detector in `content-quality`; wire regression `REG-001..006`. *(removes RC-5 for the known class, even before generation changes)*
-4. [ ] **Demote legacy generation-origin published items** to `needs_review`.
-5. [ ] **Non-concurso filter + registration-window parser** in discovery (exam kind, real `open`).
-6. [ ] **Exam identity by (org, edition)** instead of anchor text.
-7. [ ] **doc-processor** service: PDF (PyMuPDF + Docling), HTML (trafilatura), DOCX; cleaning log; column recovery; OCR routing; compose + health.
-8. [ ] **Normalize + classify stages** in content-worker (tiers 0–2), Section rows, scores.
-9. [ ] **Golden dataset** v1 (§42) and CI wiring incl. `no-listing-trivia` job.
-10. [ ] **Syllabus parser** (outline path) + positions + validation + admin tree view.
-11. [ ] **Subject lexicon + canonical keys.**
-12. [ ] **Evidence parsing extensions** (`mcq.ts`), pairing, `PreviousQuestion`, style profiles.
-13. [ ] **Section-aware chunker + eligibility ladder + dedup layers.**
-14. [ ] **Syllabus mapping tiers 1–2**; embeddings for eligible chunks and leaves only.
-15. [ ] **TopicQuery + coverage planner + crawler topic/direct modes** with allowlist provider, robots, domain stats.
-16. [ ] **KU extraction** (LLM, batched, cached) + post-processing.
-17. [ ] **Brief builder + generation v2 prompt/schema + planner-driven runs**; delete exam-level queue and `subject="geral"`.
-18. [ ] **Rung 3 grounding + judge v2 + gate v2**; provenance endpoint + admin view.
-19. [ ] **LLM residue paths** (syllabus structuring, role tier 3, mapping tier 3) with budgets.
-20. [ ] **Web-search provider**, per-stage budgets, model tiers, prompt caching, metrics + alerts.
-21. [ ] **Study UI**: syllabus focus picker, transcription mix cap, exam kind filter.
-22. [ ] **Delete legacy** (`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`, `listing-parse.ts`, junk regexes, empty app dirs) and remove flags.
-23. [ ] **Docs**: update `ai-swe-concepts.md`; add `docs/pipeline-v2.md` runbook (flags, budgets, backfill commands).
+1. [x] **Stop storing listing pages as exam artifacts** (`pipeline.ts`); attach documents only from detail pages with kind/role hints. *(removes RC-2)*
+2. [x] **Add `DocumentRole` + `SectionRole` to schema and enforce the eligibility matrix** in `chunks/search` and the embed queue. *(removes RC-1 at the data layer)*
+3. [x] **Rung 2 validation**: metadata classifier + syllabus-meta detector in `content-quality`; wire regression `REG-001..006`. *(removes RC-5 for the known class, even before generation changes)*
+4. [x] **Demote legacy generation-origin published items** to `needs_review`.
+5. [x] **Non-concurso filter + registration-window parser** in discovery (exam kind, real `open`).
+6. [x] **Exam identity by (org, edition)** instead of anchor text.
+7. [x] **doc-processor** service: PDF (PyMuPDF + Docling), HTML (trafilatura), DOCX; cleaning log; column recovery; OCR routing; compose + health. *(Docling optional fallback; cleaning adds hyphen/ligature/garbage/lang/min-content; image has tesseract-por + libreoffice)*
+8. [x] **Normalize + classify stages** in content-worker (tiers 0–2), Section rows, scores.
+9. [x] **Golden dataset** v1 (§42) and CI wiring incl. `no-listing-trivia` job. *(synthetic stubs + expected-syllabus/questions; paraphrase pairs = 30; labelled-sections seeds+expanders ≥600)*
+10. [x] **Syllabus parser** (outline path) + positions + validation + admin tree view.
+11. [x] **Subject lexicon + canonical keys.**
+12. [x] **Evidence parsing extensions** (`mcq.ts`), pairing, `PreviousQuestion`, style profiles.
+13. [x] **Section-aware chunker + eligibility ladder + dedup layers.**
+14. [x] **Syllabus mapping tiers 1–2**; embeddings for eligible chunks and leaves only.
+15. [x] **TopicQuery + coverage planner + crawler topic/direct modes** with allowlist provider, robots, domain stats.
+16. [x] **KU extraction** (LLM, batched, cached) + post-processing.
+17. [x] **Brief builder + generation v2 prompt/schema + planner-driven runs**; delete exam-level queue and `subject="geral"`.
+18. [x] **Rung 3 grounding + judge v2 + gate v2**; provenance endpoint + admin view. *(HITL Provenance → `/admin/content/question-items/:id/provenance`; Artifact→Source/TopicQuery + PreviousQuestion branches)*
+19. [x] **LLM residue paths** (syllabus structuring, role tier 3, mapping tier 3) with budgets. *(syllabus + role tier-3 `classify-llm.ts` + mapping tier-3 + stage budgets/cache)*
+20. [x] **Web-search provider**, per-stage budgets, model tiers, prompt caching, metrics + alerts. *(SEARCH_API_URL provider + allowlist/fixture; worker-kit tiers/stage budgets/cache; `StageMetric` + `/internal/stage-metrics`)*
+21. [x] **Study UI**: syllabus focus picker, transcription mix cap, exam kind filter. *(web leaf chips + `syllabusNodeIds` on pill start; API `/published/exams/:slug/syllabus`; catalog kind filter)*
+22. [x] **Delete legacy** (`pdf-text.ts`, `chunk.ts`, `extraction/index.ts`, `listing-parse.ts`, junk regexes, empty app dirs) and remove flags. *(legacy modules unlinked; listing junk regexes shrunk to nav/chrome; exam-level/`geral` queue removed; OAB layout kept; CI still idempotently `rm`s before gates)*
+23. [x] **Docs**: update `ai-swe-concepts.md`; add `docs/pipeline-v2.md` runbook (flags, budgets, backfill commands).
 
 ---
 

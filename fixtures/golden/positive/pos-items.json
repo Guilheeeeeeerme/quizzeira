@@ -1,0 +1,121 @@
+{
+  "description": "§41.5 POS-001..005 — must pass structural, relevance, grounding with KU citations",
+  "items": [
+    {
+      "id": "POS-001",
+      "syllabusNodeId": "fixture:lingua-portuguesa/sintaxe/concordancia-verbal",
+      "prompt": "Assinale a alternativa em que a concordância verbal está de acordo com a norma-padrão.",
+      "options": [
+        "Fazem dois anos que ele partiu.",
+        "Havia muitas pessoas na sala.",
+        "Existe problemas no projeto.",
+        "Bateu oito horas no relógio.",
+        "Já deve haverem soluções."
+      ],
+      "correctIndex": 1,
+      "explanation": "Com haver no sentido de existir, o verbo fica no singular.",
+      "distractorRationale": [
+        "Fazem concorda incorretamente com o predicativo temporal.",
+        "Existe deveria flexionar no plural: existem problemas.",
+        "Bateu deveria ser bateram para horas.",
+        "Haver impessoal não admite haverem."
+      ],
+      "knowledgeUnitIds": ["ku-concordancia-haver"],
+      "knowledgeUnitStatements": [
+        "Quando o verbo haver significa existir, emprega-se na forma impessoal singular: havia muitas pessoas."
+      ]
+    },
+    {
+      "id": "POS-002",
+      "syllabusNodeId": "fixture:lingua-portuguesa/interpretacao",
+      "requiresPassage": true,
+      "passage": "A cidade acordou sob uma névoa densa. Os moradores, acostumados ao sol, caminhavam mais devagar, como se o ar espesso pedisse cautela.",
+      "prompt": "Infere-se do texto que a névoa alterou o ritmo habitual dos moradores.",
+      "options": [
+        "Os moradores aceleraram o passo por causa do frio.",
+        "A névoa levou os moradores a caminhar com mais cautela.",
+        "O sol forte obrigou todos a permanecer em casa.",
+        "A cidade ficou deserta durante a manhã.",
+        "Os moradores ignoraram completamente a névoa."
+      ],
+      "correctIndex": 1,
+      "explanation": "O texto liga a névoa densa ao caminhar mais devagar e à cautela.",
+      "distractorRationale": [
+        "O texto não fala em acelerar o passo.",
+        "Não há menção a sol forte ou reclusão.",
+        "Não se afirma que a cidade ficou deserta.",
+        "Os moradores reagiram à névoa, não a ignoraram."
+      ],
+      "knowledgeUnitIds": ["ku-inferencia-textual"],
+      "knowledgeUnitStatements": [
+        "Inferência textual: o leitor conclui informações implícitas a partir de pistas do enunciado."
+      ]
+    },
+    {
+      "id": "POS-003",
+      "syllabusNodeId": "fixture:matematica/porcentagem",
+      "prompt": "Um produto de R$ 250,00 sofreu dois aumentos sucessivos de 10%. O preço final é:",
+      "options": ["R$ 275,00", "R$ 300,00", "R$ 302,50", "R$ 310,00", "R$ 325,00"],
+      "correctIndex": 2,
+      "explanation": "250 × 1,1 × 1,1 = 302,50.",
+      "distractorRationale": [
+        "275 seria um único aumento de 10%.",
+        "300 seria aumento linear de 20% sem composição.",
+        "310 não corresponde à composição correta.",
+        "325 seria aumento de 30%."
+      ],
+      "knowledgeUnitIds": ["ku-porcentagem-composta"],
+      "knowledgeUnitStatements": [
+        "Aumentos percentuais sucessivos multiplicam os fatores: preço final = P × (1+i1) × (1+i2). Exemplo: R$ 250,00 × 1,1 × 1,1 = R$ 302,50 (dois aumentos de 10%)."
+      ]
+    },
+    {
+      "id": "POS-004",
+      "syllabusNodeId": "fixture:direito-administrativo/licitacoes/modalidades",
+      "prompt": "Nos termos da Lei 14.133/2021, a modalidade de licitação obrigatória para aquisição de bens e serviços comuns, em regra, é:",
+      "options": [
+        "Concorrência pública ordinária",
+        "Tomada de preços clássica",
+        "Pregão eletrônico ou presencial",
+        "Convite a três fornecedores",
+        "Leilão de bens públicos"
+      ],
+      "correctIndex": 2,
+      "explanation": "A Lei 14.133/2021 prevê o pregão para bens e serviços comuns.",
+      "distractorRationale": [
+        "Concorrência não é a regra para bens comuns.",
+        "Tomada de preços não é modalidade da Lei 14.133 nesse sentido.",
+        "Convite foi extinguido no novo regime.",
+        "Leilão destina-se a alienação de bens."
+      ],
+      "knowledgeUnitIds": ["ku-lei-14133-pregao"],
+      "knowledgeUnitStatements": [
+        "Nos termos da Lei 14.133/2021, a modalidade pregão é obrigatória para aquisição de bens e serviços comuns."
+      ]
+    },
+    {
+      "id": "POS-005",
+      "syllabusNodeId": "fixture:raciocinio-logico/proposicoes",
+      "prompt": "Considere a proposição 'Se chove, então a rua fica molhada'. Sua contrapositiva é:",
+      "options": [
+        "Se a rua fica molhada, então chove.",
+        "Se não chove, então a rua não fica molhada.",
+        "Se a rua não fica molhada, então não chove.",
+        "Chove se e somente se a rua fica molhada.",
+        "Se chove, a rua não fica molhada."
+      ],
+      "correctIndex": 2,
+      "explanation": "A contrapositiva de p→q é ¬q→¬p.",
+      "distractorRationale": [
+        "Essa é a conversa, não a contrapositiva.",
+        "Essa é a inversa.",
+        "Bicondicional não é a contrapositiva.",
+        "Negação do consequente sem negar o antecedente."
+      ],
+      "knowledgeUnitIds": ["ku-contrapositiva"],
+      "knowledgeUnitStatements": [
+        "A contrapositiva de uma condicional p→q é a proposição ¬q→¬p, logicamente equivalente à original."
+      ]
+    }
+  ]
+}

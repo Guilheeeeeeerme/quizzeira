@@ -30,7 +30,7 @@ export interface LlmCompletion {
 }
 
 export interface LlmProvider {
-  name: "gemini" | "openai";
+  name: "gemini" | "openai" | "fixture";
   available(): boolean;
   defaultModel(): string;
   complete(input: ProviderCompleteInput): Promise<LlmCompletion>;

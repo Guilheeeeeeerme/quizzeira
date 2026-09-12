@@ -1,0 +1,35 @@
+{
+  "fixtureId": "PRO-002",
+  "layout": "two-column",
+  "gabarito": "separate",
+  "questions": [
+    {
+      "number": 1,
+      "stem": "A crase é obrigatória em:",
+      "options": ["Fui a Bahia.", "Refiro-me a ela.", "Vou a escola.", "Entreguei a carta a Ana.", "Cheguei a tempo."],
+      "answerKey": "C",
+      "subjectHint": "Língua Portuguesa ▸ Sintaxe ▸ Crase"
+    },
+    {
+      "number": 2,
+      "stem": "Em lógica, a negação de \"Todo A é B\" é:",
+      "options": ["Todo A não é B.", "Nenhum A é B.", "Algum A não é B.", "Algum A é B.", "Todo B é A."],
+      "answerKey": "C",
+      "subjectHint": "Raciocínio Lógico ▸ Lógica proposicional ▸ Negação"
+    },
+    {
+      "number": 3,
+      "stem": "Licitação é procedimento destinado a:",
+      "options": ["nomear servidor.", "selecionar proposta mais vantajosa.", "editar decreto.", "julgar recurso.", "fixar imposto."],
+      "answerKey": "B",
+      "subjectHint": "Direito Administrativo ▸ Licitações"
+    },
+    {
+      "number": 4,
+      "stem": "O sujeito de \"Choveu ontem\" é:",
+      "options": ["ontem", "indeterminado", "inexistente / oração sem sujeito", "oculto", "composto"],
+      "answerKey": "C",
+      "subjectHint": "Língua Portuguesa ▸ Sintaxe ▸ Tipos de sujeito"
+    }
+  ]
+}

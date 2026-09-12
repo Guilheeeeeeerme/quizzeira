@@ -29,10 +29,12 @@ Eval. Nothing else in the system can publish.
 - **Definition** — Acquiring raw source material from the outside world and
   recording it, without interpreting it.
 - **In Quizzeira** — A polite crawler visits registered exam portals, discovers
-  open exams, and downloads editais into object storage. It parses listings only
-  far enough to identify an exam; it never reads the PDF's meaning.
-- **Code** — `apps/discovery-api/`, `apps/discovery-crawler/`. Database
-  `quizzeira_discovery`. Header comment: `// Concept: Ingestion`.
+  open exams via listing → detail pages, and downloads typed documents (edital,
+  prova, …) into object storage with role/kind hints. Listing pages are never
+  attached as exam study artifacts.
+- **Code** — `apps/discovery-api/`, `apps/discovery-crawler/` (`listing.ts`,
+  `detail.ts`, `topic.ts`, `direct.ts`). Database `quizzeira_discovery`. Header
+  comment: `// Concept: Ingestion`.
 - **Not to confuse with** — **Extraction**. Ingestion gets the bytes; Extraction
   turns bytes into text. Discovery has no idea what a question is.
 
@@ -84,34 +86,115 @@ Eval. Nothing else in the system can publish.
 - **Not to confuse with** — the **Question bank**. The document store holds source
   material; the question bank holds finished questions.
 
+## NormalizedDocument
+
+- **Definition** — A versioned, extractor-neutral JSON representation of a source
+  file after format detection, cleaning, and sectioning.
+- **In Quizzeira** — Produced by `doc-processor` (Python) and validated at the
+  boundary by Zod in `@quizzeira/shared`. Node orchestration reads sections and
+  blocks; it does not parse raw PDF bytes except on the OAB legacy path.
+- **Code** — `packages/shared/src/pipeline/normalized-document.ts`;
+  `apps/doc-processor/`; consumed in `apps/content-worker/src/stages/normalize.ts`.
+- **Not to confuse with** — a **Chunk**. NormalizedDocument is whole-document
+  structure; chunks are retrieval units cut from eligible sections later.
+
+## DocumentRole
+
+- **Definition** — A typed label for what a document is *for* in the pipeline
+  (specification, evidence, knowledge, administrative, mixed, unknown).
+- **In Quizzeira** — Drives the eligibility matrix: only `knowledge` (and parts of
+  `mixed`) may embed or feed generation; `specification` feeds syllabus extraction;
+  `evidence` feeds previous-question parse and style profiles; `administrative`
+  never indexes.
+- **Code** — `packages/shared/src/pipeline/roles.ts` (`ROLE_ELIGIBILITY`,
+  `isEmbedEligible`, `isGenerationEligible`); persisted on `Document.role` in
+  content-api; assigned in `apps/content-worker/src/stages/classify.ts`.
+- **Not to confuse with** — **RoleHint** on Discovery artifacts. Hints are Tier 0
+  provenance; `DocumentRole` is the content-plane decision after classification.
+
+## Syllabus
+
+- **Definition** — The structured, versioned curriculum extracted from an edital
+  (subjects, topics, subtopics, scoped to positions).
+- **In Quizzeira** — Parsed from `specification` documents into `Syllabus`,
+  `Position`, and `SyllabusNode` rows. Generation and Eval link each question to
+  a syllabus leaf — a syllabus link alone is not sufficient for publish.
+- **Code** — `apps/content-api/prisma/schema.prisma` (`Syllabus`, `SyllabusNode`);
+  `apps/content-worker/src/stages/syllabus/`; upsert via `POST /internal/syllabi`.
+- **Not to confuse with** — the old per-level curriculum model. The bank is keyed by
+  exam + syllabus leaf, not difficulty pools.
+
+## KnowledgeUnit
+
+- **Definition** — An atomic, citeable fact distilled from eligible knowledge
+  material and mapped to one syllabus leaf.
+- **In Quizzeira** — Generation must cite `knowledgeUnitIds`; Eval rung 2–3 reject
+  generation-origin drafts with missing or ungrounded citations. Units are the
+  grounding surface for brief-based prompts, not raw chunks.
+- **Code** — `KnowledgeUnit` model in content-api; extraction in
+  `apps/content-worker/src/stages/knowledge/distill.ts`; served at
+  `GET /internal/knowledge-units`.
+- **Not to confuse with** — a **Chunk**. Chunks are indexed text spans; knowledge
+  units are curated statements the generator must reference.
+
+## ExamStyleProfile
+
+- **Definition** — Aggregated stylistic statistics of how a banca writes questions
+  for a subject (stem length, option count, passage rate, etc.).
+- **In Quizzeira** — Built from `PreviousQuestion` rows parsed out of `evidence`
+  documents. Feeds generation constraints so new items match banca form without
+  copying prior stems verbatim.
+- **Code** — `ExamStyleProfile` in content-api; built in
+  `apps/content-worker/src/stages/evidence/style-profile.ts`; upsert at
+  `POST /internal/style-profiles`.
+- **Not to confuse with** — **LLM-as-judge**. The profile is deterministic
+  aggregation; the judge scores individual draft quality.
+
+## Coverage Planner
+
+- **Definition** — A scheduler that picks syllabus leaves where published +
+  pending question counts fall below target and enough knowledge units exist.
+- **In Quizzeira** — Replaces exam-level `"geral"` generation queues. Each run is
+  keyed by `syllabusNodeId`; deficits respect `MIN_KU` and per-leaf targets. The
+  planner may also enqueue topic queries for knowledge discovery.
+- **Code** — `GET /internal/generation/planner-queue` in content-api;
+  `apps/content-worker/src/stages/planner.ts` and `generation/index.ts` (v2 path).
+- **Not to confuse with** — **Sampling**. The planner creates new drafts offline;
+  Sampling draws finished published items for learners.
+
 ## Extraction
 
 - **Definition** — Converting a source artifact into clean, model-usable text.
-- **In Quizzeira** — Inflate PDF content streams, read the text-showing
-  operators, normalize whitespace, then split into overlapping chunks. Image-only
-  PDFs produce no text and are marked `failed` with a reason rather than silently
-  yielding nothing — OCR would be a separate stage, not a hidden fallback.
-- **Code** — `apps/content-worker/src/extraction/` (`pdf-text.ts`, `chunk.ts`).
+- **In Quizzeira** — Non-OAB documents go through Python `doc-processor`
+  (PyMuPDF / optional Docling / trafilatura / DOCX) into a versioned
+  `NormalizedDocument`, then role classification and section-aware chunking.
+  OAB keeps its geometry-based PDF readers. Image-only PDFs without OCR
+  eligibility are marked `failed`.
+- **Code** — `apps/doc-processor/`; `apps/content-worker/src/stages/normalize.ts`,
+  `classify.ts`, `knowledge/chunker.ts`. OAB: `extraction/oab/pdf-layout.ts`.
 - **Not to confuse with** — **Generation**. Extraction never invents text; if the
-  PDF does not say it, it does not appear.
+  source does not say it, it does not appear.
 
 ## Chunking
 
 - **Definition** — Splitting a document into retrieval-sized units.
-- **In Quizzeira** — Paragraph-boundary packing to a ~3000 character target with
-  ~300 characters of carried overlap, hard-splitting only runaway blocks. Chunks
-  are the unit that gets embedded and retrieved.
-- **Code** — `apps/content-worker/src/extraction/chunk.ts`.
-- **Not to confuse with** — pagination. Chunk boundaries follow meaning, not page
-  breaks.
+- **In Quizzeira** — Section-aware packing: chunks never cross section boundaries.
+  Within a section, paragraphs pack to ~3000 characters (no overlap carry — the
+  section already provides context). Only `content` / `legal_article` sections
+  from generation-eligible documents may become `eligible` for embedding.
+- **Code** — `apps/content-worker/src/stages/knowledge/chunker.ts` +
+  `eligibility.ts`.
+- **Not to confuse with** — pagination. Chunk boundaries follow section structure,
+  not page breaks.
 
 ## Embeddings
 
 - **Definition** — Dense vector representations that make text searchable by
   meaning rather than keyword.
-- **In Quizzeira** — Each chunk gets a 768-dimension vector stored in a pgvector
-  column, searched by cosine distance. The dimension is pinned in both the
-  worker and the column; a mismatch fails loudly instead of writing garbage.
+- **In Quizzeira** — Each **eligible** chunk gets a 768-dimension vector stored in
+  a pgvector column, searched by cosine distance. Writes and searches join
+  Document/Section roles so administrative and specification text cannot enter
+  the knowledge index (invariant 1).
 - **Code** — `apps/content-worker/src/embeddings/`,
   `apps/content-api/src/lib/vectors.ts`, `Chunk.embedding`.
 - **Not to confuse with** — full-text search. Embeddings match meaning; they are
@@ -121,25 +204,93 @@ Eval. Nothing else in the system can publish.
 
 - **Definition** — Fetching relevant context at inference time and putting it in
   the prompt, so the model answers from provided facts.
-- **In Quizzeira** — Retrieval happens **only during Generation**: embed a
-  subject query, k-NN over chunk vectors, feed the top hits to the model as
-  fenced untrusted material.
-- **Code** — `searchChunks()` in `apps/content-api/src/lib/vectors.ts`, called
-  from `apps/content-worker/src/generation/index.ts`.
-- **Not to confuse with** — **Sampling**. This is the single most common mistake
-  in this codebase's history: serving a quiz is *not* RAG. See Sampling below.
+- **In Quizzeira** — Generation no longer embeds a subject string for k-NN over
+  the whole exam. The unit of work is a syllabus leaf: the coverage planner
+  selects leaves with KU deficit; the brief loads cited `KnowledgeUnit`s (and
+  style/exemplars). Chunk search remains available for diagnostics with
+  `eligibleOnly` default true.
+- **Code** — `buildGenerationBrief` / `planner-queue` /
+  `apps/content-worker/src/generation/`; `searchChunks()` in
+  `apps/content-api/src/lib/vectors.ts`.
+- **Not to confuse with** — **Sampling**. Serving a quiz is *not* RAG. See
+  Sampling below.
 
 ## Generation
 
 - **Definition** — Using a model to produce new artifacts from provided context.
-- **In Quizzeira** — Produces multiple-choice draft questions grounded in
-  retrieved chunks. Output is shape-validated before persistence, and screened
-  by the output guardrail. Every generated item lands as `draft` — Generation
+- **In Quizzeira** — Produces multiple-choice draft questions from a **generation
+  brief** (syllabus leaf + knowledge units + style + avoid stems). Output is
+  shape-validated (`syllabusNodeId`, `knowledgeUnitIds`, `distractorRationale`)
+  before persistence. Every generated item lands as `draft` — Generation
   **cannot publish**.
-- **Code** — `apps/content-worker/src/generation/` (`prompt.ts`, `index.ts`),
-  `GenerationRun` model.
+- **Code** — `apps/content-worker/src/generation/` (`brief.ts`, `prompt.ts`,
+  `index.ts`), `GenerationRun` model; queue is
+  `GET /internal/generation/planner-queue`.
 - **Not to confuse with** — **Eval**. Generation writes; Eval judges. Keeping the
   writer unable to approve its own work is the point.
+
+## SectionRole
+
+- **Definition** — Fine-grained label for a document section (syllabus, content,
+  registration, question_block, …).
+- **In Quizzeira** — Assigned during classification; only `content` and
+  `legal_article` may feed the knowledge index.
+- **Code** — `packages/shared/src/pipeline/roles.ts`; `Section.role` in content-api.
+- **Not to confuse with** — **DocumentRole**, which labels the whole document.
+
+## Eligibility ladder
+
+- **Definition** — Deterministic gate that parks or rejects chunks before embed.
+- **In Quizzeira** — Document role → section role → language → noise/metadata →
+  size → dedup → syllabus map score. Only `eligible` chunks are embedded.
+- **Code** — `apps/content-worker/src/stages/knowledge/eligibility.ts`.
+- **Not to confuse with** — the Eval publish gate (which judges finished questions).
+
+## TopicQuery
+
+- **Definition** — A scheduled web-search work item to discover knowledge pages
+  for under-covered syllabus leaves.
+- **In Quizzeira** — Coverage planner enqueues queries; discovery-crawler topic
+  mode runs allowlisted/web search and stores knowledge artifacts.
+- **Code** — `TopicQuery` in discovery-api; `apps/discovery-crawler/src/topic.ts`;
+  templates in `packages/shared/src/curriculum/queries.ts`.
+- **Not to confuse with** — listing crawl, which discovers exams, not study text.
+
+## Validation ladder
+
+- **Definition** — Ordered Eval rungs: structural → relevance → grounding →
+  LLM judge → gate.
+- **In Quizzeira** — Rung 2 kills exam-metadata trivia; rung 3 requires KU
+  citations for generation; only `decide()` may write `published`.
+- **Code** — `apps/content-quality/src/{structural,relevance,grounding,judge,gate}.ts`.
+- **Not to confuse with** — chunk eligibility (upstream of generation).
+
+## Provenance
+
+- **Definition** — The explainable chain from a published question back to
+  sources.
+- **In Quizzeira** — `GET /internal/question-items/:id/provenance` returns
+  question → KUs → document/sections → generation run → reviews, including the
+  discovery **Artifact→Source / TopicQuery** branch when the document came from
+  crawl. Workers also propagate `x-run-id` on internal calls so one tick can be
+  followed across discovery → content → quality (§31.3).
+- **Code** — content-api provenance route (`discovery-client` resolves Artifact
+  → Source/TopicQuery); admin HITL Provenance control;
+  `packages/worker-kit/src/run-id.ts`.
+- **Not to confuse with** — **RoleHint** (Tier-0 crawl metadata only).
+
+## Listing trivia
+
+- **Definition** — Exam-portal metadata questions (fees, vacancies, banca name,
+  inscription dates) that look like study items but teach nothing durable.
+- **In Quizzeira** — Listing pages stay `administrative`; generation and Eval
+  reject stems matching the shared denylist so REG-001..006 never republish.
+- **Code** — `looksLikeListingTriviaStem` in
+  `packages/shared/src/pipeline/listing-trivia.ts` (re-exported from
+  `@quizzeira/shared`); rung 2 relevance + generation brief checks;
+  `fixtures/golden/regression/listing-trivia/`.
+- **Not to confuse with** — real knowledge stems about law or grammar that
+  happen to mention an exam name in passing.
 
 ## Question bank
 

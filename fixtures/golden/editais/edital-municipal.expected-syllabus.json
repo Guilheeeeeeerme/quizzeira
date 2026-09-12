@@ -1,0 +1,40 @@
+{
+  "fixtureId": "EDT-003",
+  "banco": "municipal",
+  "positions": [
+    {
+      "title": "Agente Administrativo",
+      "subjects": [
+        {
+          "name": "Português",
+          "topics": [
+            { "name": "Gramática", "subtopics": ["Ortografia", "Concordância nominal"] },
+            { "name": "Leitura", "subtopics": ["Leitura e interpretação"] }
+          ]
+        },
+        {
+          "name": "Matemática",
+          "topics": [
+            { "name": "Aritmética", "subtopics": ["Operações fundamentais", "Porcentagem", "Razão e proporção"] }
+          ]
+        },
+        {
+          "name": "Direito Administrativo",
+          "topics": [
+            { "name": "Fundamentos", "subtopics": ["Princípios constitucionais da Administração", "Poderes administrativos"] }
+          ]
+        }
+      ],
+      "leaves": [
+        "Português ▸ Gramática ▸ Ortografia",
+        "Português ▸ Gramática ▸ Concordância nominal",
+        "Português ▸ Leitura ▸ Leitura e interpretação",
+        "Matemática ▸ Aritmética ▸ Operações fundamentais",
+        "Matemática ▸ Aritmética ▸ Porcentagem",
+        "Matemática ▸ Aritmética ▸ Razão e proporção",
+        "Direito Administrativo ▸ Fundamentos ▸ Princípios constitucionais da Administração",
+        "Direito Administrativo ▸ Fundamentos ▸ Poderes administrativos"
+      ]
+    }
+  ]
+}

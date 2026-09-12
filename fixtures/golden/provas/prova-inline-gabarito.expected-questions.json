@@ -1,0 +1,46 @@
+{
+  "fixtureId": "PRO-004",
+  "layout": "single-column",
+  "gabarito": "inline",
+  "questions": [
+    {
+      "number": 1,
+      "stem": "O artigo 37 da CF/88 elenca os princípios da Administração. Assinale o correto.",
+      "options": [
+        "legalidade, impessoalidade, moralidade, publicidade e eficiência",
+        "somente legalidade",
+        "legalidade e economicidade",
+        "hierarquia e disciplina",
+        "livre iniciativa"
+      ],
+      "answerKey": "A",
+      "subjectHint": "Direito Administrativo ▸ Princípios"
+    },
+    {
+      "number": 2,
+      "stem": "Em \"Havia flores no jardim\", o verbo haver:",
+      "options": [
+        "concorda com flores",
+        "fica no singular (impessoal)",
+        "exige plural obrigatório",
+        "é auxiliar",
+        "é de ligação"
+      ],
+      "answerKey": "B",
+      "subjectHint": "Língua Portuguesa ▸ Sintaxe ▸ Concordância verbal"
+    },
+    {
+      "number": 3,
+      "stem": "Diagrama de Venn serve para:",
+      "options": [
+        "calcular juros",
+        "representar conjuntos e relações lógicas",
+        "redigir atas",
+        "medir área",
+        "classificar cargos"
+      ],
+      "answerKey": "B",
+      "subjectHint": "Raciocínio Lógico ▸ Diagramas"
+    }
+  ]
+}

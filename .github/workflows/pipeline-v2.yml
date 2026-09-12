@@ -1,0 +1,62 @@
+name: Pipeline v2 gates
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Prisma generate only — no live DB required for these gates.
+  CONTENT_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/content
+  DISCOVERY_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/discovery
+  DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/study
+
+jobs:
+  node-gates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Remove §48.8 legacy tombstones
+        run: |
+          set -euo pipefail
+          rm -f \
+            apps/content-worker/src/extraction/pdf-text.ts \
+            apps/content-worker/src/extraction/chunk.ts \
+            apps/content-worker/src/extraction/index.ts \
+            apps/discovery-crawler/src/listing-parse.ts \
+            apps/discovery-crawler/src/listing-parse.spec.ts
+          test ! -e apps/content-worker/src/extraction/pdf-text.ts
+          test ! -e apps/discovery-crawler/src/listing-parse.ts
+      - run: npm run build -w @quizzeira/shared
+      - run: npm run db:generate
+      - run: npm run test:shared
+      - run: npm run test:worker-kit
+      - run: npm run test:regression
+      - run: npm run test:quality
+      - run: npm run test:discovery
+      - run: npm run test:content
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
+  doc-processor:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r apps/doc-processor/requirements.txt
+      - run: npm run test:doc-processor

@@ -25,20 +25,33 @@ async function ensureBucket(): Promise<void> {
   bucketReady = true;
 }
 
+export function contentAddressedArtifactKey(checksumHex: string, contentType?: string): string {
+  const ext =
+    contentType?.includes("pdf")
+      ? ".pdf"
+      : contentType?.includes("html")
+        ? ".html"
+        : contentType?.includes("word") || contentType?.includes("docx")
+          ? ".docx"
+          : "";
+  return `artifacts/${checksumHex}${ext}`;
+}
+
 export async function putArtifactObject(
-  key: string,
+  key: string | null | undefined,
   body: Buffer,
   contentType: string,
 ): Promise<{ storageKey: string; checksum: string; byteSize: number }> {
   await ensureBucket();
   const checksum = createHash("sha256").update(body).digest("hex");
+  const storageKey = key?.trim() || contentAddressedArtifactKey(checksum, contentType);
   await client.send(
     new PutObjectCommand({
       Bucket: env.s3Bucket,
-      Key: key,
+      Key: storageKey,
       Body: body,
       ContentType: contentType,
     }),
   );
-  return { storageKey: key, checksum, byteSize: body.byteLength };
+  return { storageKey, checksum, byteSize: body.byteLength };
 }

@@ -1,0 +1,42 @@
+{
+  "description": "Hand-exported field catalogue for NormalizedDocument (§41.2). Full JSON Schema via apps/doc-processor/scripts/export_schema.py.",
+  "schemaVersion": "1",
+  "requiredTopLevelKeys": [
+    "schemaVersion",
+    "documentId",
+    "contentHash",
+    "source",
+    "extractor",
+    "stats",
+    "metadata",
+    "blocks",
+    "sections",
+    "tables",
+    "cleaningLog"
+  ],
+  "extractorEngines": [
+    "pymupdf",
+    "docling",
+    "trafilatura",
+    "python-docx",
+    "libreoffice+docling",
+    "ebooklib",
+    "plain"
+  ],
+  "blockTypes": [
+    "heading",
+    "paragraph",
+    "list_item",
+    "table",
+    "caption",
+    "footnote",
+    "page_artifact"
+  ],
+  "sectionFlags": [
+    "boilerplate",
+    "garbage",
+    "non_pt",
+    "table_only",
+    "legal_article"
+  ]
+}

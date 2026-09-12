@@ -2,6 +2,7 @@
 // everything else to Content. worker-kit's dmz helpers assume a single
 // INTERNAL_API_URL, which does not fit a stage that spans two services.
 import { contentEnv } from "./env.js";
+import { currentRunId } from "@quizzeira/worker-kit";
 
 async function call<T>(
   baseUrl: string,
@@ -10,11 +11,13 @@ async function call<T>(
   init?: RequestInit,
 ): Promise<T> {
   const hasBody = init?.body != null && init.body !== "";
+  const runId = currentRunId();
   const res = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       ...(hasBody ? { "content-type": "application/json" } : {}),
       "x-internal-key": apiKey,
+      ...(runId ? { "x-run-id": runId } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -28,6 +31,11 @@ async function call<T>(
 
 export const discovery = {
   get: <T>(path: string) => call<T>(contentEnv.discoveryApiUrl, contentEnv.discoveryApiKey, path),
+  post: <T>(path: string, body?: unknown) =>
+    call<T>(contentEnv.discoveryApiUrl, contentEnv.discoveryApiKey, path, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
   patch: <T>(path: string, body: unknown) =>
     call<T>(contentEnv.discoveryApiUrl, contentEnv.discoveryApiKey, path, {
       method: "PATCH",

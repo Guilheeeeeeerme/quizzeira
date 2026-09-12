@@ -1,0 +1,41 @@
+{
+  "fixtureId": "EDT-002",
+  "banco": "estadual-tribunal",
+  "positions": [
+    {
+      "title": "Técnico de Controle Externo",
+      "subjects": [
+        {
+          "name": "Língua Portuguesa",
+          "topics": [
+            { "name": "Leitura", "subtopics": ["Interpretação de texto"] },
+            { "name": "Sintaxe", "subtopics": ["Concordância verbal", "Crase"] }
+          ]
+        },
+        {
+          "name": "Controle Externo",
+          "topics": [
+            { "name": "Institucional", "subtopics": ["Competências dos Tribunais de Contas"] },
+            { "name": "Contas", "subtopics": ["Tomada e prestação de contas", "Fiscalização contábil e financeira"] }
+          ]
+        },
+        {
+          "name": "Direito Administrativo",
+          "topics": [
+            { "name": "Organização", "subtopics": ["Organização administrativa", "Servidores públicos"] }
+          ]
+        }
+      ],
+      "leaves": [
+        "Língua Portuguesa ▸ Leitura ▸ Interpretação de texto",
+        "Língua Portuguesa ▸ Sintaxe ▸ Concordância verbal",
+        "Língua Portuguesa ▸ Sintaxe ▸ Crase",
+        "Controle Externo ▸ Institucional ▸ Competências dos Tribunais de Contas",
+        "Controle Externo ▸ Contas ▸ Tomada e prestação de contas",
+        "Controle Externo ▸ Contas ▸ Fiscalização contábil e financeira",
+        "Direito Administrativo ▸ Organização ▸ Organização administrativa",
+        "Direito Administrativo ▸ Organização ▸ Servidores públicos"
+      ]
+    }
+  ]
+}
