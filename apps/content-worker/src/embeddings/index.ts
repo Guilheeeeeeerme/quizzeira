@@ -98,6 +98,8 @@ export async function embedText(text: string): Promise<number[]> {
 
 async function embedGemini(text: string): Promise<number[]> {
   const model = contentEnv.geminiEmbeddingModel;
+  // Key goes in the header, never the query string: URLs end up in proxy and
+  // error logs, which would turn a log read into a credential leak (LLM02).
   const res = await fetch(
     `${workerEnv.geminiBaseUrl}/v1beta/models/${model}:embedContent`,
     {
