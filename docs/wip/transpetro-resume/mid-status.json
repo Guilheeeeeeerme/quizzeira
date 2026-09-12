@@ -1,0 +1,294 @@
+{
+  "crawl_summary": {
+    "sources_ok": 16,
+    "open": 70,
+    "artifacts": 32,
+    "skipped": 1,
+    "failed": 0
+  },
+  "sources": [
+    {
+      "id": "58aef992e785654c6478afba",
+      "name": "Cebraspe Concursos",
+      "domain": "cebraspe.org.br",
+      "startUrls": [
+        "https://www.cebraspe.org.br/concursos/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:30.116Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "97772d6733b9057b1376d1b4",
+      "name": "Cesgranrio BB Escriturario",
+      "domain": "cesgranrio.org.br",
+      "startUrls": [
+        "https://www.cesgranrio.org.br/concursos/bb-escriturario/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:15.792Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "47be74b235e460a129d54698",
+      "name": "Cesgranrio Caixa Tecnico",
+      "domain": "cesgranrio.org.br",
+      "startUrls": [
+        "https://www.cesgranrio.org.br/concursos/caixa-tecnico/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:12.668Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "ba072ffddfe48bbffc8af001",
+      "name": "Cesgranrio Concursos",
+      "domain": "cesgranrio.org.br",
+      "startUrls": [
+        "https://www.cesgranrio.org.br/concursos/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:34.558Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "283a7e50a927d15884db7d0d",
+      "name": "Cesgranrio Evento 1",
+      "domain": "cesgranrio.org.br",
+      "startUrls": [
+        "https://www.cesgranrio.org.br/concursos/evento/1"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:05.916Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "d0112d67bb4ce757f15100b7",
+      "name": "Cesgranrio Evento Edital PDF",
+      "domain": "cesgranrio.org.br",
+      "startUrls": [
+        "https://www.cesgranrio.org.br/concursos/evento/edital.pdf"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:09.239Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "fceac79be4b3bf130937cedc",
+      "name": "Cesgranrio Transpetro PSP Terra Edital",
+      "domain": "cesgranrio.org.br",
+      "startUrls": [
+        "https://www.cesgranrio.org.br/concursos/transpetro-psp-terra/edital.pdf"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:18.926Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "70459892cc858ef0c174d32a",
+      "name": "Correios Concursos Edital",
+      "domain": "correios.com.br",
+      "startUrls": [
+        "https://www.correios.com.br/sobre-correios/trabalhe-conosco/concursos/edital.pdf"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:37:54.472Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "9afbb532b1a6a03019226f5d",
+      "name": "FCC Arquivo Antigo",
+      "domain": "fcc.org.br",
+      "startUrls": [
+        "https://www.fcc.org.br/concursos/arquivo-antigo/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:00.958Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "97f7a58ba04ea59546fbcbeb",
+      "name": "FCC Concursos",
+      "domain": "fcc.org.br",
+      "startUrls": [
+        "https://www.fcc.org.br/concursos/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:32.493Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "b7fcbf32e44d651900b208c1",
+      "name": "FGV Conhecimento",
+      "domain": "conhecimento.fgv.br",
+      "startUrls": [
+        "https://conhecimento.fgv.br/concursos"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:28.075Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "d1ed90b4e3c8cfbf715a6f2b",
+      "name": "GovBR Concursos Trabalho",
+      "domain": "gov.br",
+      "startUrls": [
+        "https://www.gov.br/pt-br/categorias/trabalho-e-previdencia/trabalho/concursos"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:21.718Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "f1275573d703aaf4edfcaa1e",
+      "name": "IBAMSP Concursos 179",
+      "domain": "ibamsp-concursos.org.br",
+      "startUrls": [
+        "https://www.ibamsp-concursos.org.br/informacoes/179/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:26.163Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "3b473f96b6634f7e01972c26",
+      "name": "PCI Concursos Home",
+      "domain": "pciconcursos.com.br",
+      "startUrls": [
+        "https://www.pciconcursos.com.br/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:37.996Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "4c9cebd99ddce547fb86c869",
+      "name": "PCI Concursos Provas",
+      "domain": "pciconcursos.com.br",
+      "startUrls": [
+        "https://www.pciconcursos.com.br/provas/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:40.849Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    },
+    {
+      "id": "97aa39f5aa65585d075e4f15",
+      "name": "Transpetro Selections",
+      "domain": "transpetro.com.br",
+      "startUrls": [
+        "https://transpetro.com.br/"
+      ],
+      "enabled": true,
+      "status": "active",
+      "failCount": 0,
+      "lastOkAt": "2026-09-12T14:38:23.606Z",
+      "lastError": null,
+      "examCount": 0,
+      "examSample": []
+    }
+  ],
+  "transpetro_exams": [
+    {
+      "id": "d8e3da8a0f4c6531d3df3a9c",
+      "examSlug": "transpetro",
+      "title": "Jovem Aprendiz",
+      "status": "unknown",
+      "listingUrl": "https://transpetro.com.br/transpetro-institucional/quem-somos/carreiras/jovem-aprendiz.htm",
+      "editalUrl": null,
+      "org": "transpetro",
+      "banca": null
+    },
+    {
+      "id": "bef65f208b56bda2ddbadc4f",
+      "examSlug": "transpetro",
+      "title": "Concursos",
+      "status": "unknown",
+      "listingUrl": "https://transpetro.com.br/transpetro-institucional/quem-somos/carreiras/concursos.htm",
+      "editalUrl": null,
+      "org": "transpetro",
+      "banca": null
+    },
+    {
+      "id": "26892f5499679aa5400c3746",
+      "examSlug": "transpetro",
+      "title": "Carreiras",
+      "status": "unknown",
+      "listingUrl": "https://transpetro.com.br/transpetro-institucional/quem-somos/carreiras.htm",
+      "editalUrl": null,
+      "org": "transpetro",
+      "banca": null
+    },
+    {
+      "id": "7a0e06731dfdfae6f9405311",
+      "examSlug": "transpetro",
+      "title": "Transpetro 2026",
+      "status": "open",
+      "listingUrl": "https://www.cesgranrio.org.br/concurso/transpetro-2026/",
+      "editalUrl": null,
+      "org": "Transpetro",
+      "banca": null
+    }
+  ],
+  "exam_total": 72
+}
