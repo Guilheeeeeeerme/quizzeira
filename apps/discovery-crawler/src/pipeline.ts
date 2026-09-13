@@ -44,7 +44,10 @@ export async function runDiscoveryPipeline(
 
   await dmzPost("/internal/runs", summary).catch(() => undefined);
 
+  // Exam documents and topic-query knowledge have separate budgets: topic
+  // sources run first and must not starve edital/prova discovery.
   let artifactBudget = crawlerEnv.maxArtifactsPerRun;
+  let topicBudget = crawlerEnv.maxArtifactsPerRun;
 
   try {
     // Forced admin crawls must see broken sources too — a prior failure must not
@@ -67,7 +70,11 @@ export async function runDiscoveryPipeline(
     for (const source of selected) {
       try {
         bindRobotsSource(source.domain, source.id);
-        artifactBudget = await crawlSource(source, summary, artifactBudget, onlySourceId);
+        if (source.discoveryMode === "topic_query") {
+          topicBudget = await crawlSource(source, summary, topicBudget, onlySourceId);
+        } else {
+          artifactBudget = await crawlSource(source, summary, artifactBudget, onlySourceId);
+        }
         await dmzPost(`/internal/sources/${source.id}/health`, { ok: true });
         summary.sourcesOk += 1;
       } catch (err) {

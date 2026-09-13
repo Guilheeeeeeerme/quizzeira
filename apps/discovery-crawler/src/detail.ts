@@ -97,8 +97,12 @@ export function parseDetailHtml(
 ): DetailPageParse {
   const pageText = textOf(html);
   const title = extractConcursoHeadline(pageText) ?? titleFromHtml(html, listingTitle);
-  const org = extractKnownOrg(pageText) || extractKnownOrg(title);
-  const banca = extractKnownBanca(pageText) || extractKnownBanca(title);
+  // Identity comes from the title block, not the whole page: banca sites put
+  // every current concurso in the nav/banner, which made SEMA-MT resolve to
+  // "transpetro-2026" (§11.2.2 exam identity = org + edition key).
+  const titleBlock = `${title} ${pageText.slice(0, 600)}`;
+  const org = extractKnownOrg(title) || extractKnownOrg(titleBlock);
+  const banca = extractKnownBanca(title) || extractKnownBanca(titleBlock) || extractKnownBanca(pageText);
   const editionKey =
     editalNumberEditionKey(pageText) || extractEditionKey(title, detailUrl);
   const examSlug = editionKey ? buildEditionSlug(org, editionKey, "") || null : null;
