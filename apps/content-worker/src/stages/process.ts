@@ -249,7 +249,10 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
       }
 
       let chunkDrafts = isGenerationEligibleRole(classification.role)
-        ? chunkSections(classification.sections, { maxChars: contentEnv.chunkTargetChars })
+        ? chunkSections(classification.sections, { maxChars: contentEnv.chunkTargetChars }).slice(
+            0,
+            contentEnv.maxChunksPerDocument,
+          )
         : [];
 
       const deduped = dedupeChunks(chunkDrafts);

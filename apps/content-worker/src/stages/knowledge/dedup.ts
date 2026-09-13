@@ -1,28 +1,35 @@
 // Concept: Exact contentHash + MinHash near-dup (§26).
 
-import { isNearDuplicateMinhash, normalizeDedupText } from "@quizzeira/shared";
+import { estimateJaccard, minhashSignature } from "@quizzeira/shared";
 import type { KnowledgeChunkDraft } from "./chunker.js";
 
 export interface DedupResult {
   chunks: Array<KnowledgeChunkDraft & { duplicateOfOrdinal: number | null }>;
 }
 
+const NEAR_DUP_JACCARD = 0.85;
+
+/**
+ * Signatures are computed once per chunk and compared pairwise. Recomputing
+ * both MinHash signatures per comparison made this O(n² · perms · tokens) and
+ * pinned the worker for minutes on long PDFs.
+ */
 export function dedupeChunks(chunks: KnowledgeChunkDraft[]): DedupResult {
   const seenHash = new Map<string, number>();
-  const canonicalTexts: string[] = [];
+  const canonical: Array<{ ordinal: number; sig: number[] }> = [];
   const out: Array<KnowledgeChunkDraft & { duplicateOfOrdinal: number | null }> = [];
 
   for (const chunk of chunks) {
-    const norm = normalizeDedupText(chunk.text);
     if (seenHash.has(chunk.contentHash)) {
       out.push({ ...chunk, duplicateOfOrdinal: seenHash.get(chunk.contentHash)! });
       continue;
     }
 
+    const sig = minhashSignature(chunk.text);
     let nearDup: number | null = null;
-    for (let i = 0; i < canonicalTexts.length; i += 1) {
-      if (isNearDuplicateMinhash(norm, canonicalTexts[i])) {
-        nearDup = i;
+    for (const c of canonical) {
+      if (estimateJaccard(sig, c.sig) >= NEAR_DUP_JACCARD) {
+        nearDup = c.ordinal;
         break;
       }
     }
@@ -33,7 +40,7 @@ export function dedupeChunks(chunks: KnowledgeChunkDraft[]): DedupResult {
     }
 
     seenHash.set(chunk.contentHash, chunk.ordinal);
-    canonicalTexts.push(norm);
+    canonical.push({ ordinal: chunk.ordinal, sig });
     out.push({ ...chunk, duplicateOfOrdinal: null });
   }
 

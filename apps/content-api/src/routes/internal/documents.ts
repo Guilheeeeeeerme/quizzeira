@@ -3,6 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
 import { getArtifactObject, getJsonObject, putObject } from "../../lib/storage";
 
+const STALE_EXTRACTING_MS = 15 * 60 * 1000;
+
 function stripNul(text: string): string {
   return text.replace(/\u0000/g, "");
 }
@@ -44,8 +46,14 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
 
   app.get("/internal/extraction/queue", async (request) => {
     const q = request.query as { limit?: string };
+    // A worker restart mid-pass leaves rows in `extracting`; reclaim them after
+    // a grace period so they retry on the next pass (§34 normalization retry).
+    const staleBefore = new Date(Date.now() - STALE_EXTRACTING_MS);
     const items = await prisma.document.findMany({
-      where: { status: "pending", attempts: { lt: 3 } },
+      where: {
+        attempts: { lt: 3 },
+        OR: [{ status: "pending" }, { status: "extracting", updatedAt: { lt: staleBefore } }],
+      },
       orderBy: { createdAt: "asc" },
       take: Math.min(50, Number(q.limit || 5)),
     });
