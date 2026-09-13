@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import {
   NORMALIZED_DOCUMENT_SCHEMA_VERSION,
+  parseNormalizedDocument,
   normalizedDocumentSchema,
 } from "./normalized-document.js";
 
