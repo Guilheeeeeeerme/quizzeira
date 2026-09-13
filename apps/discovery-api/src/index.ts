@@ -5,7 +5,9 @@ import { registerInternalRoutes } from "./routes/internal";
 import { registerAdminRoutes } from "./routes/admin";
 
 async function bootstrap() {
-  const app = Fastify({ logger: true });
+  // Artifacts arrive as base64 JSON; a 920 KB edital PDF exceeds Fastify's
+  // 1 MiB default and was dropped with 413. Matches content-api.
+  const app = Fastify({ logger: true, bodyLimit: 32 * 1024 * 1024 });
   app.get("/health", async () => ({ ok: true, service: "discovery-api" }));
   await registerInternalRoutes(app);
   await registerAdminRoutes(app);

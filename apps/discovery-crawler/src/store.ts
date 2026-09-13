@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import type { ArtifactKindHint, RoleHint } from "@quizzeira/shared";
 import { kindHintToArtifactKind } from "@quizzeira/shared";
-import { dmzPost } from "@quizzeira/worker-kit";
+import { dmzPost, logWarn } from "@quizzeira/worker-kit";
+
+const NAME = "discovery-crawler";
 import { crawlerEnv } from "./env.js";
 import { fetchBytes } from "./fetch.js";
 import { htmlToRoughText, rejectAfterFetch } from "./search/postfetch.js";
@@ -110,7 +112,14 @@ export async function storeArtifact(
       fetchSignals: input.fetchSignals ?? null,
     });
     return { downloaded: Boolean(base64) };
-  } catch {
+  } catch (err) {
+    // §33: never swallow silently — a 413/5xx here loses the edital.
+    logWarn("artifact store failed", {
+      worker: NAME,
+      url: input.url,
+      bytes: base64 ? Math.round((base64.length * 3) / 4) : 0,
+      error: err instanceof Error ? err.message.slice(0, 200) : String(err),
+    });
     return null;
   }
 }
