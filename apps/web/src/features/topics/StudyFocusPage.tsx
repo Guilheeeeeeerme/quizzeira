@@ -110,7 +110,7 @@ export function StudyFocusPage() {
           syllabusNodeIds: selectedLeaves,
           durationMinutes,
           // Sample from the exam bank locale, not the UI chrome language.
-          locale: topic.preferredLocale ?? locale,
+          locale: topic?.preferredLocale ?? locale,
         }),
       });
       setGenerating(true);
