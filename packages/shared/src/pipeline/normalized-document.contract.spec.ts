@@ -116,9 +116,10 @@ describe("doc-processor null tolerance", () => {
     blocks: [{ type: "heading", text: "ANEXO II", level: null, page: null, bbox: null, fontStats: null }],
     sections: [{ id: "s0", ordinal: 0, path: [], heading: "ANEXO II", level: 1, text: "x".repeat(30), charCount: 30, blockRange: [0, 1], pageRange: null, flags: [] }],
     tables: [{ id: "t0", page: null, rows: [["a"]], markdown: "|a|" }],
-    cleaningLog: [],
+    cleaningLog: [{ step: "ocr_routing", removed: 0, sample: null }],
   });
   assert.equal(doc.blocks[0]!.level, undefined);
   assert.equal(doc.sections[0]!.pageRange, undefined);
+  assert.equal(doc.cleaningLog[0]!.sample, undefined);
 });
 });

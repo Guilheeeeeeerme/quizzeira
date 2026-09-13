@@ -76,7 +76,10 @@ const tableSchema = z.object({
 const cleaningLogEntrySchema = z.object({
   step: z.string(),
   removed: z.number().int(),
-  sample: z.string().optional(),
+  sample: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 export const normalizedDocumentSchema = z.object({
