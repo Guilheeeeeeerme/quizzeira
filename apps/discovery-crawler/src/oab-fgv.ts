@@ -115,23 +115,37 @@ export function groupByExam(
 export async function renderEditionPage(page: Page, edition: OabEdition): Promise<string> {
   await page.goto(oabEditionPageUrl(edition.fgvKey), { waitUntil: "domcontentloaded" });
 
-  const select = page.locator("select").first();
-  if ((await select.count()) > 0) {
-    const values = await select
-      .locator("option")
-      .evaluateAll((options) =>
-        options.map((o) => (o as HTMLOptionElement).value).filter((v) => v && v !== "0"),
-      );
-    if (values.length > 0) {
-      await Promise.all([
-        page.waitForLoadState("domcontentloaded"),
-        select.selectOption(values[0]),
-      ]).catch(() => undefined);
-      // The postback replaces the document, so give the new anchors a moment.
-      await page.waitForSelector("a[href$='.pdf'], a[href*='/arq/']", { timeout: 15_000 })
-        .catch(() => undefined);
-    }
+  // ASP.NET AutoPostBack: changing the seccional select posts to NovoSec.aspx
+  // with the national document list. The placeholder value is "-1".
+  const select = page.locator("#ContentPlaceHolder1_listSeccional");
+  if ((await select.count()) === 0) {
+    return page.content();
   }
+
+  const values = await select
+    .locator("option")
+    .evaluateAll((options) =>
+      options
+        .map((o) => (o as HTMLOptionElement).value)
+        .filter((v) => v && v !== "0" && v !== "-1"),
+    );
+  if (values.length === 0) {
+    return page.content();
+  }
+
+  // Arm navigation *with* selectOption. Prefer NovoSec.aspx (postback target).
+  await Promise.all([
+    Promise.race([
+      page.waitForURL(/NovoSec\.aspx/i, { timeout: 60_000 }),
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 60_000 }),
+    ]),
+    select.selectOption(values[0]!),
+  ]);
+  await page
+    .waitForSelector("a[href$='.pdf'], a[href*='/arq/'], a[href*='.pdf']", {
+      timeout: 30_000,
+    })
+    .catch(() => undefined);
 
   return page.content();
 }
@@ -147,9 +161,11 @@ export async function crawlOabSource(source: CrawlerSource): Promise<OabExamGrou
     .slice(0, crawlerEnv.maxOabEditionsPerRun);
 
   const browser = await getBrowser();
+  // FGV's ASP.NET postback is flaky with a custom bot UA; use a normal browser
+  // profile (verified: Chrome UA + selectOption+waitForNavigation yields PDFs).
   const context = await browser.newContext({
     userAgent:
-      "QuizzeiraExamCrawler/0.1 (+https://quizzeira.local; research; polite)",
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     locale: "pt-BR",
   });
   const page = await context.newPage();

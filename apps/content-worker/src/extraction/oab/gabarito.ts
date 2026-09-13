@@ -51,11 +51,16 @@ function lettersOnly(line: string): number[] | null {
  * Bands are matched pairwise — a numbers row immediately followed by a letters
  * row of the same width — rather than by counting columns, because the bands
  * are 20 wide in recent editions and have been narrower before.
+ *
+ * Recent preliminary keys print `PROVA TIPO` on its own line (type implied by
+ * order) and later reprint types as a lone `1`/`2`/`3`/`4` above the remaining
+ * number bands. Both forms must be accepted.
  */
 function parseAnswerGrids(lines: string[]): Map<number, Map<number, number>> {
   const byType = new Map<number, Map<number, number>>();
   let currentType: number | null = null;
   let pendingNumbers: number[] | null = null;
+  let sequentialType = 0;
 
   for (const line of lines) {
     const heading = TYPE_HEADING_RE.exec(line);
@@ -63,6 +68,21 @@ function parseAnswerGrids(lines: string[]): Map<number, Map<number, number>> {
       const type = Number(heading[1]);
       currentType = (OAB_BOOKLET_TYPES as readonly number[]).includes(type) ? type : null;
       pendingNumbers = null;
+      continue;
+    }
+    // `PROVA TIPO` with no digit — types arrive in order 1..4.
+    if (/^prova\s+tipo\s*$/i.test(line.trim())) {
+      sequentialType += 1;
+      currentType = (OAB_BOOKLET_TYPES as readonly number[]).includes(sequentialType)
+        ? sequentialType
+        : null;
+      pendingNumbers = null;
+      continue;
+    }
+    // Lone booklet-type marker between bands (seen under "PROVAS DO DIA …").
+    const loneType = line.trim().match(/^([1-4])$/);
+    if (loneType && !pendingNumbers) {
+      currentType = Number(loneType[1]);
       continue;
     }
     if (currentType == null) continue;
@@ -77,8 +97,10 @@ function parseAnswerGrids(lines: string[]): Map<number, Map<number, number>> {
     if (letters && pendingNumbers && letters.length === pendingNumbers.length) {
       const answers = byType.get(currentType) ?? new Map<number, number>();
       for (let i = 0; i < letters.length; i += 1) {
-        const number = pendingNumbers[i];
-        if (number >= 1 && number <= OAB_OBJECTIVE_QUESTION_COUNT) answers.set(number, letters[i]);
+        const number = pendingNumbers[i]!;
+        if (number >= 1 && number <= OAB_OBJECTIVE_QUESTION_COUNT) {
+          answers.set(number, letters[i]!);
+        }
       }
       byType.set(currentType, answers);
     }

@@ -267,7 +267,13 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
     Body: { chunks: Array<{ text: string; tokenCount?: number }> };
   }>("/internal/documents/:id/chunks", async (request) => {
     const documentId = request.params.id;
-    const chunks = (request.body?.chunks ?? []).filter((c) => c.text?.trim());
+    const chunks = (request.body?.chunks ?? [])
+      .map((c) => ({
+        ...c,
+        // PDF extractors sometimes emit NUL bytes; Postgres UTF-8 rejects 0x00.
+        text: (c.text ?? "").replace(/\u0000/g, ""),
+      }))
+      .filter((c) => c.text?.trim());
     await prisma.chunk.deleteMany({ where: { documentId } });
     if (chunks.length > 0) {
       await prisma.chunk.createMany({

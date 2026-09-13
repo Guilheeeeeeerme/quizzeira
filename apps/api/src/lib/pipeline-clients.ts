@@ -119,7 +119,14 @@ export async function samplePublishedForAttempt(input: {
       },
     );
     return data.questions ?? [];
-  } catch {
+  } catch (err) {
+    // Surface upstream failures in logs; callers still get BANK_EMPTY (empty []).
+    console.warn(
+      "[samplePublishedForAttempt]",
+      input.examSlug,
+      input.locale,
+      err instanceof Error ? err.message : err,
+    );
     return [];
   }
 }

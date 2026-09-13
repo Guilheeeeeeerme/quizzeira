@@ -685,7 +685,7 @@ async function documentBytes(
 
 async function processOabLegacy(document: QueuedDocument): Promise<void> {
   const { buffer, contentType } = await documentBytes(document);
-  const text = bytesToText(buffer, contentType, document.examSlug);
+  const text = bytesToText(buffer, contentType, document.examSlug).replace(/\u0000/g, "");
   const chunks = text
     .split(/\n{2,}/)
     .map((t) => t.trim())

@@ -38,7 +38,9 @@ export async function startPill(
     );
   }
 
-  const locale = normalizeLocale(input.locale ?? topic.preferredLocale ?? "en");
+  // Bank locale follows the exam topic (concurso content is usually pt), not the
+  // UI chrome language. Sending useLocale()="en" against a pt bank yields BANK_EMPTY.
+  const locale = normalizeLocale(topic.preferredLocale ?? input.locale ?? "pt");
   const focusText = input.focusText?.trim() || null;
   const durationMinutes =
     input.durationMinutes === null || input.durationMinutes === undefined

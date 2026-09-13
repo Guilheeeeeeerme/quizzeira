@@ -109,7 +109,8 @@ export function StudyFocusPage() {
           focusText: withFocus ? focusText.trim() || null : null,
           syllabusNodeIds: selectedLeaves,
           durationMinutes,
-          locale,
+          // Sample from the exam bank locale, not the UI chrome language.
+          locale: topic.preferredLocale ?? locale,
         }),
       });
       setGenerating(true);

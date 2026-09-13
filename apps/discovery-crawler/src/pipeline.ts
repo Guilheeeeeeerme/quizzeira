@@ -39,9 +39,12 @@ export async function runDiscoveryPipeline(
   let artifactBudget = crawlerEnv.maxArtifactsPerRun;
 
   try {
-    const { items: sources } = await dmzGet<{ items: CrawlerSource[] }>(
-      "/internal/sources?status=active",
-    );
+    // Forced admin crawls must see broken sources too — a prior failure must not
+    // hide the target behind `status=active` (that produced empty-registry no-ops).
+    const sourcesPath = onlySourceId
+      ? "/internal/sources"
+      : "/internal/sources?status=active";
+    const { items: sources } = await dmzGet<{ items: CrawlerSource[] }>(sourcesPath);
 
     if (sources.length === 0) {
       logInfo("source registry empty", { worker: NAME, runId });
@@ -105,7 +108,7 @@ async function crawlSource(
       summary.sourcesSkipped += 1;
       return budget;
     }
-    return crawlOab(source, summary, budget);
+    return crawlOab(source, summary, budget, onlySourceId);
   }
 
   const discoveryMode = source.discoveryMode;
@@ -278,6 +281,7 @@ async function crawlOab(
   source: CrawlerSource,
   summary: CrawlerRunSummary,
   budget: number,
+  onlySourceId?: string | null,
 ): Promise<number> {
   const groups = await crawlOabSource(source);
   const fingerprint = listingsFingerprint(
@@ -293,7 +297,8 @@ async function crawlOab(
   const previous = await dmzGet<{ fingerprint: string | null }>(
     `/internal/sources/${source.id}/listing-fingerprint`,
   );
-  if (previous.fingerprint === fingerprint) {
+  // Admin force (onlySourceId) must re-download even if the edition list is unchanged.
+  if (!onlySourceId && previous.fingerprint === fingerprint) {
     summary.sourcesSkipped += 1;
     return budget;
   }
