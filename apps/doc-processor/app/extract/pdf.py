@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 
 from app.layout.columns import RawBlock, join_lines_to_paragraphs, order_blocks_in_reading_order
@@ -36,8 +38,14 @@ def extract_pdf(data: bytes, role_hint: str | None = None) -> PdfExtractResult:
         tables: list[Table] = []
         page_count = doc.page_count
         pages_with_text = 0
+        # Bound the work per document (DOC_PROCESSOR_MAX_PAGES); editais are
+        # < 200 pages, longer PDFs are candidate lists / gazettes.
+        try:
+            max_pages = max(1, int(os.environ.get("DOC_PROCESSOR_MAX_PAGES", "300")))
+        except ValueError:
+            max_pages = 300
 
-        for page_idx in range(page_count):
+        for page_idx in range(min(page_count, max_pages)):
             page = doc.load_page(page_idx)
             page_num = page_idx + 1
             plain = page.get_text("text").strip()

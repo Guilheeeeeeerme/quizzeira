@@ -54,6 +54,11 @@ export async function processDocumentWithDocProcessor(
       signal: AbortSignal.timeout(120_000),
     });
   } catch (err) {
+    // A per-document timeout is this document's problem (scanned/huge PDF):
+    // fail it with a reason instead of an endless processor_unavailable loop.
+    if (err instanceof Error && /aborted due to timeout|TimeoutError/i.test(`${err.name} ${err.message}`)) {
+      throw new Error(`normalize_timeout: doc-processor exceeded 120s for ${input.documentId}`);
+    }
     if (isTransportFailure(err) || err instanceof Error) {
       throw new ProcessorUnavailableError(
         `doc-processor unreachable: ${err instanceof Error ? err.message : String(err)}`.slice(

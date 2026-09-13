@@ -2,18 +2,39 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import os
 import shutil
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from app import __version__
 from app.processor import process_document
 from app.schema import NormalizedDocument, ProcessJsonRequest
 
 app = FastAPI(title="Quizzeira doc-processor", version=__version__)
+
+
+async def _process_bounded(data: bytes, **kwargs: Any) -> NormalizedDocument:
+    """Run the CPU-bound extractor off the event loop (keeps /health alive) and
+    bound it; the worker gives up at 120s, so answer 422 before that instead of
+    leaving the row in an endless processor_unavailable retry."""
+    try:
+        timeout_s = float(os.environ.get("DOC_PROCESSOR_TIMEOUT_S", "100"))
+    except ValueError:
+        timeout_s = 100.0
+    try:
+        return await asyncio.wait_for(
+            run_in_threadpool(process_document, data, **kwargs), timeout=timeout_s
+        )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"processing_timeout: exceeded {timeout_s:.0f}s"
+        ) from exc
 
 
 def _engine_status() -> list[str]:
@@ -79,7 +100,7 @@ async def process_endpoint(request: Request) -> NormalizedDocument:
             ct = str(form.get("contentType") or upload.content_type or "application/octet-stream")
             url = str(form.get("url")) if form.get("url") else None
             role_hint = str(form.get("roleHint")) if form.get("roleHint") else None
-            return process_document(
+            return await _process_bounded(
                 data,
                 document_id=doc_id,
                 content_type=ct,
@@ -98,7 +119,7 @@ async def process_endpoint(request: Request) -> NormalizedDocument:
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"invalid base64: {exc}") from exc
 
-        return process_document(
+        return await _process_bounded(
             data,
             document_id=payload.documentId,
             content_type=payload.contentType,
@@ -118,7 +139,7 @@ async def process_upload(
     roleHint: str | None = Form(None),
 ) -> NormalizedDocument:
     data = await file.read()
-    return process_document(
+    return await _process_bounded(
         data,
         document_id=documentId,
         content_type=contentType or file.content_type or "application/octet-stream",

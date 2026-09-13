@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import hashlib
 import re
 from datetime import datetime, timezone
@@ -46,8 +48,21 @@ def _total_chars(blocks: list[Block]) -> int:
     return sum(len(b.text) for b in blocks)
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.environ.get(name, default)))
+    except ValueError:
+        return default
+
+
 def _try_ocr_pdf(data: bytes) -> tuple[list[Block], float | None]:
-    """Best-effort OCR via PyMuPDF Tessseract integration when available."""
+    """Best-effort OCR via PyMuPDF Tessseract integration when available.
+
+    OCR is seconds per page; a 300-page scanned "relação de candidatos" pinned
+    the single-worker service for minutes and starved every other document.
+    Skip OCR on long documents and cap the pages OCR'd (§33 unsupported/corrupt
+    rather than an unbounded job).
+    """
     try:
         import fitz
     except ImportError:
@@ -58,10 +73,16 @@ def _try_ocr_pdf(data: bytes) -> tuple[list[Block], float | None]:
     except Exception:
         return [], None
 
+    skip_above = _env_int("DOC_PROCESSOR_OCR_SKIP_ABOVE_PAGES", 80)
+    max_pages = _env_int("DOC_PROCESSOR_OCR_MAX_PAGES", 20)
+    if doc.page_count > skip_above or max_pages == 0:
+        doc.close()
+        return [], None
+
     blocks: list[Block] = []
     confidences: list[float] = []
     try:
-        for page_idx in range(doc.page_count):
+        for page_idx in range(min(doc.page_count, max_pages)):
             page = doc.load_page(page_idx)
             try:
                 tp = page.get_textpage_ocr()  # type: ignore[attr-defined]
