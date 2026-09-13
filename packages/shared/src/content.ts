@@ -19,7 +19,7 @@ export type ExtractionStatus = "pending" | "extracting" | "extracted" | "failed"
 
 export type GenerationRunStatus = "queued" | "running" | "ok" | "partial" | "failed";
 
-export type QuestionItemOrigin = "extraction" | "generation";
+export type QuestionItemOrigin = "extraction" | "generation" | "transcription";
 
 export interface ChunkDto {
   id: string;
@@ -58,6 +58,10 @@ export interface QuestionItemDto {
   explanation: string | null;
   locale: LocaleCode;
   documentId: string | null;
+  /** Syllabus leaf this item assesses (§29.2). */
+  syllabusNodeId: string | null;
+  /** Knowledge units cited for generation-origin items. */
+  knowledgeUnitIds: string[];
   /** Populated by content-quality; null until the Eval stage has run. */
   qualityScore: number | null;
   qualityNotes: string | null;
@@ -67,16 +71,35 @@ export interface QuestionItemDto {
   publishedAt: string | null;
 }
 
-/** Payload content-worker posts after extraction or generation. */
-export interface DraftQuestionsRequest {
+interface DraftQuestionsRequestBase {
   examSlug: string;
   subject: string;
   emphasis?: string | null;
   locale: LocaleCode;
-  origin: QuestionItemOrigin;
   documentId?: string | null;
+  /** Shared style exemplar when every draft in the batch cites the same PQ (§30). */
+  previousQuestionId?: string | null;
   questions: GeneratedQuestionInput[];
 }
+
+/** Extraction / transcription drafts — syllabus link optional. */
+export interface DraftQuestionsExtractionRequest extends DraftQuestionsRequestBase {
+  origin: "extraction" | "transcription";
+  syllabusNodeId?: string | null;
+  knowledgeUnitIds?: string[];
+}
+
+/** Generation drafts — syllabus leaf + KU citations are mandatory (§24, §25.1). */
+export interface DraftQuestionsGenerationRequest extends DraftQuestionsRequestBase {
+  origin: "generation";
+  syllabusNodeId: string;
+  knowledgeUnitIds: string[];
+}
+
+/** Payload content-worker posts after extraction or generation. */
+export type DraftQuestionsRequest =
+  | DraftQuestionsExtractionRequest
+  | DraftQuestionsGenerationRequest;
 
 export interface DraftQuestionsResponse {
   created: number;

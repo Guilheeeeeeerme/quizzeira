@@ -27,7 +27,9 @@ export async function runEmbeddingPass(): Promise<EmbeddingPassResult> {
 
   const { items } = await content.get<{
     items: Array<{ id: string; text: string; documentId: string }>;
-  }>(`/internal/embeddings/queue?limit=${contentEnv.chunksPerEmbedPass}`);
+  }>(
+    `/internal/embeddings/queue?limit=${contentEnv.chunksPerEmbedPass}&eligibleOnly=true`,
+  );
 
   for (const chunk of items) {
     try {
@@ -43,6 +45,33 @@ export async function runEmbeddingPass(): Promise<EmbeddingPassResult> {
       });
       // A provider outage will fail every remaining chunk the same way; stop
       // the pass instead of burning the whole queue on it.
+      break;
+    }
+  }
+
+  // Syllabus leaf embeddings for mapping tier 2 (§21.2).
+  const { items: leaves } = await content
+    .get<{ items: Array<{ id: string; pathSlug: string; title: string }> }>(
+      `/internal/embeddings/syllabus-leaves?limit=${contentEnv.chunksPerEmbedPass}`,
+    )
+    .catch(() => ({ items: [] as Array<{ id: string; pathSlug: string; title: string }> }));
+
+  for (const leaf of leaves) {
+    try {
+      const parts = leaf.pathSlug.split("/").filter(Boolean);
+      const S = parts[0] ?? leaf.title;
+      const T = parts[1] ?? leaf.title;
+      const text = `${S} — ${T} — ${leaf.title}`;
+      const embedding = await embedText(text);
+      await content.put(`/internal/syllabus-nodes/${leaf.id}/embedding`, { embedding });
+      result.embedded += 1;
+    } catch (err) {
+      result.failed += 1;
+      logWarn("leaf embedding failed", {
+        worker: NAME,
+        leafId: leaf.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
       break;
     }
   }

@@ -1,0 +1,194 @@
+# Canonical Brazilian concurso subjects (§15.5). Version with the pipeline.
+- canonical: Língua Portuguesa
+  aliases:
+    - Português
+    - Portugues
+    - Língua Portuguesa e Interpretação de Texto
+    - Comunicação Oficial
+    - Redação Oficial
+  conventionalTopics:
+    - Interpretação de texto
+    - Ortografia
+    - Acentuação
+    - Morfologia
+    - Sintaxe
+    - Concordância
+    - Regência
+    - Crase
+    - Pontuação
+    - Semântica
+    - Redação oficial
+
+- canonical: Raciocínio Lógico
+  aliases:
+    - Raciocínio Lógico-Matemático
+    - Lógica
+    - Matemática e Raciocínio Lógico
+    - Raciocínio Lógico e Quantitativo
+
+- canonical: Matemática
+  aliases:
+    - Matemática Básica
+    - Matemática Financeira
+    - Noções de Matemática
+
+- canonical: Noções de Informática
+  aliases:
+    - Informática
+    - Tecnologia da Informação Básica
+    - Noções de Informática e Tecnologia da Informação
+
+- canonical: Direito Constitucional
+  aliases:
+    - Constitucional
+    - Direito Constitucional e Administrativo
+
+- canonical: Direito Administrativo
+  aliases:
+    - Administrativo
+    - Direito Administrativo e Constitucional
+
+- canonical: Administração Pública
+  aliases:
+    - Administração
+    - Gestão Pública
+    - Noções de Administração Pública
+
+- canonical: Atualidades
+  aliases:
+    - Conhecimentos Gerais
+    - Temas de Atualidade
+
+- canonical: Legislação Específica
+  aliases:
+    - Legislação
+    - Legislação Aplicada
+    - Legislação Especial
+
+- canonical: Contabilidade Geral
+  aliases:
+    - Contabilidade
+    - Contabilidade Pública
+
+- canonical: Auditoria
+  aliases:
+    - Auditoria Governamental
+    - Auditoria e Controle
+
+- canonical: Controle Externo
+  aliases:
+    - Controle Externo e Auditoria
+    - Controle e Auditoria
+
+- canonical: Direito Tributário
+  aliases:
+    - Tributário
+    - Legislação Tributária
+
+- canonical: Direito Financeiro
+  aliases:
+    - Finanças Públicas
+    - Direito Financeiro e Orçamentário
+
+- canonical: Direito Penal
+  aliases:
+    - Penal
+    - Direito Penal e Processual Penal
+
+- canonical: Direito Civil
+  aliases:
+    - Civil
+    - Direito Civil e Processual Civil
+
+- canonical: Direito Processual Civil
+  aliases:
+    - Processual Civil
+    - CPC
+
+- canonical: Direito Processual Penal
+  aliases:
+    - Processual Penal
+    - CPP
+
+- canonical: Direito do Trabalho
+  aliases:
+    - Trabalho
+    - Direito Trabalhista
+    - CLT
+
+- canonical: Direito Previdenciário
+  aliases:
+    - Previdenciário
+    - Seguridade Social
+
+- canonical: Direito Empresarial
+  aliases:
+    - Empresarial
+    - Direito Comercial
+
+- canonical: Direito Ambiental
+  aliases:
+    - Ambiental
+    - Legislação Ambiental
+
+- canonical: Direito Urbanístico
+  aliases:
+    - Urbanístico
+    - Direito da Cidade
+
+- canonical: Economia
+  aliases:
+    - Economia e Finanças
+    - Microeconomia e Macroeconomia
+
+- canonical: Estatística
+  aliases:
+    - Estatística Aplicada
+    - Noções de Estatística
+
+- canonical: Inglês
+  aliases:
+    - Língua Inglesa
+    - English
+
+- canonical: Espanhol
+  aliases:
+    - Língua Espanhola
+
+- canonical: Ética no Serviço Público
+  aliases:
+    - Ética
+    - Ética e Cidadania
+
+- canonical: Arquivologia
+  aliases:
+    - Gestão Documental
+    - Arquivo
+
+- canonical: Biblioteconomia
+  aliases:
+    - Biblioteconomia e Documentação
+
+- canonical: Engenharia Civil
+  aliases:
+    - Civil
+    - Obras e Projetos
+
+- canonical: Engenharia Elétrica
+  aliases:
+    - Elétrica
+    - Instalações Elétricas
+
+- canonical: Engenharia Mecânica
+  aliases:
+    - Mecânica
+    - Manutenção Mecânica
+
+- canonical: Enfermagem
+  aliases:
+    - Conhecimentos Específicos de Enfermagem
+
+- canonical: Medicina
+  aliases:
+    - Conhecimentos Médicos
+    - Saúde

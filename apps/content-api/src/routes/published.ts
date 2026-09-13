@@ -27,6 +27,7 @@ interface PublishedRow {
   correctIndex: number | null;
   referenceAnswer: string | null;
   explanation: string | null;
+  origin?: string;
 }
 
 function toGeneratedQuestion(row: PublishedRow): GeneratedQuestionInput {
@@ -40,6 +41,17 @@ function toGeneratedQuestion(row: PublishedRow): GeneratedQuestionInput {
   };
 }
 
+/** Keep at most `cap` transcription-origin items; fill remainder with generation. */
+function applyTranscriptionMixCap<T extends { origin?: string }>(rows: T[], cap: number): T[] {
+  const transcriptions: T[] = [];
+  const others: T[] = [];
+  for (const row of rows) {
+    if (row.origin === "transcription" || row.origin === "extraction") transcriptions.push(row);
+    else others.push(row);
+  }
+  return [...others, ...transcriptions.slice(0, cap)];
+}
+
 export async function registerPublishedRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", async (request) => {
     if (request.url.startsWith("/published")) assertReader(request);
@@ -49,7 +61,9 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
    * Random sample of published questions. Ordering is done in Postgres so the
    * API never loads a whole exam into memory to pick five rows.
    */
-  app.post<{ Body: PublishedSampleRequest }>("/published/sample", async (request) => {
+  app.post<{ Body: PublishedSampleRequest & { syllabusNodeIds?: string[] } }>(
+    "/published/sample",
+    async (request) => {
     const body = request.body;
     const examSlug = String(body?.examSlug || "").trim();
     if (!examSlug) {
@@ -60,20 +74,22 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
     const subjectSlugs = (body.subjects ?? [])
       .map((s) => toSubjectSlug(s))
       .filter((s) => s && s !== "geral");
+    const leafIds = (body.syllabusNodeIds ?? []).filter(Boolean);
 
     const base = {
       status: "published" as const,
       examSlug,
       ...(body.locale ? { locale: body.locale } : {}),
       ...(exclude.length > 0 ? { id: { notIn: exclude } } : {}),
+      ...(leafIds.length > 0 ? { syllabusNodeId: { in: leafIds } } : {}),
     };
 
-    // Prefer the requested subjects; fall back to the whole exam so a session
-    // is never empty just because a subject label did not match.
+    // Cap transcriptions at 30% of the sample (§18.6) except pure-OAB consumers.
+    const transcriptionCap = Math.max(0, Math.floor(limit * 0.3));
     let rows = subjectSlugs.length
       ? await sampleRows({ ...base, subjectSlug: { in: subjectSlugs } }, limit)
-      : [];
-    if (rows.length < limit) {
+      : await sampleRows(base, limit);
+    if (rows.length < limit && leafIds.length === 0) {
       const more = await sampleRows(
         { ...base, ...(rows.length ? { id: { notIn: [...exclude, ...rows.map((r) => r.id)] } } : {}) },
         limit - rows.length,
@@ -81,10 +97,54 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
       rows = [...rows, ...more];
     }
 
+    rows = applyTranscriptionMixCap(rows, transcriptionCap);
+
     return {
       questions: rows.map(toGeneratedQuestion),
       ids: rows.map((r) => r.id),
       hitCount: rows.length,
+    };
+  });
+
+  /** Active syllabus tree for study focus picker (§47). */
+  app.get<{ Params: { slug: string } }>("/published/exams/:slug/syllabus", async (request) => {
+    const examSlug = request.params.slug.trim();
+    const syllabus = await prisma.syllabus.findFirst({
+      where: { examSlug, status: "active" },
+      orderBy: { version: "desc" },
+      include: {
+        positions: true,
+        nodes: { orderBy: [{ depth: "asc" }, { ordinal: "asc" }] },
+      },
+    });
+    if (!syllabus) {
+      return { examSlug, syllabus: null, nodes: [], positions: [] };
+    }
+    return {
+      examSlug,
+      syllabus: {
+        id: syllabus.id,
+        version: syllabus.version,
+        status: syllabus.status,
+        sourceDocumentId: syllabus.sourceDocumentId,
+      },
+      positions: syllabus.positions.map((p) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        implicit: p.implicit,
+      })),
+      nodes: syllabus.nodes.map((n) => ({
+        id: n.id,
+        parentId: n.parentId,
+        depth: n.depth,
+        ordinal: n.ordinal,
+        title: n.title,
+        pathSlug: n.pathSlug,
+        canonicalKey: n.canonicalKey,
+        scope: n.scope,
+        canonicalSubjectId: n.canonicalSubjectId,
+      })),
     };
   });
 
@@ -144,6 +204,7 @@ async function sampleRows(
       correctIndex: true,
       referenceAnswer: true,
       explanation: true,
+      origin: true,
     },
     orderBy: { publishedAt: "desc" },
     take: Math.min(200, limit * 10),

@@ -1,21 +1,33 @@
 // Concept: Extraction + Embeddings + Generation (continuous content loop)
 //
-// Order matters: extraction produces chunks, embeddings make them retrievable,
-// generation consumes the retrievable ones. Running them in sequence in one
-// tick means new material becomes draft questions within a few passes.
-import { logInfo, logWarn, runLoop, workerEnv } from "@quizzeira/worker-kit";
+// Pipeline v2 only: import → process → planner → eligible embeddings → leaf generation.
+// Legacy exam-level generation and hand-rolled PDF extraction are removed (§48.8).
+import { logInfo, logWarn, newRunId, runLoop, withRunIdAsync, workerEnv } from "@quizzeira/worker-kit";
 import { contentEnv } from "./env.js";
 import { runEmbeddingPass } from "./embeddings/index.js";
-import { runExtractionPass } from "./extraction/index.js";
 import { runGenerationPass } from "./generation/index.js";
+import { runImportPass } from "./stages/import.js";
+import { runPlannerPass } from "./stages/planner.js";
+import { runProcessPass } from "./stages/process.js";
 
 process.env.SERVICE_NAME ||= "quizzeira-contentworker";
 const NAME = "content-worker";
 
 async function tick(): Promise<void> {
+  await withRunIdAsync(newRunId(), async () => {
+  if (contentEnv.stageImportEnabled) {
+    await runImportPass().catch((err) =>
+      logWarn("import pass errored", { worker: NAME, error: String(err) }),
+    );
+  }
   if (contentEnv.extractionEnabled) {
-    await runExtractionPass().catch((err) =>
-      logWarn("extraction pass errored", { worker: NAME, error: String(err) }),
+    await runProcessPass().catch((err) =>
+      logWarn("process pass errored", { worker: NAME, error: String(err) }),
+    );
+  }
+  if (contentEnv.stagePlannerEnabled) {
+    await runPlannerPass().catch((err) =>
+      logWarn("planner pass errored", { worker: NAME, error: String(err) }),
     );
   }
   if (contentEnv.embeddingsEnabled) {
@@ -28,6 +40,7 @@ async function tick(): Promise<void> {
       logWarn("generation pass errored", { worker: NAME, error: String(err) }),
     );
   }
+  });
 }
 
 logInfo("interval mode", {

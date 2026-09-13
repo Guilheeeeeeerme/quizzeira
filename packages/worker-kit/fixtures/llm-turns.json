@@ -1,0 +1,58 @@
+[
+  {
+    "key": "generation.v2:concordancia",
+    "match": "unidades de conhecimento",
+    "response": {
+      "questions": [
+        {
+          "type": "MULTIPLE_CHOICE",
+          "prompt": "Sobre concordância verbal, assinale a alternativa correta.",
+          "options": [
+            "O verbo concorda com o sujeito em número e pessoa.",
+            "O verbo nunca concorda com o sujeito.",
+            "Sujeito composto anteposto exige singular.",
+            "Haver no sentido de existir vai ao plural.",
+            "Fazer indicando tempo pluraliza-se."
+          ],
+          "correctIndex": 0,
+          "explanation": "Regra geral de concordância.",
+          "syllabusNodeId": "leaf",
+          "knowledgeUnitIds": ["ku-1"],
+          "distractorRationale": [
+            "nega a regra",
+            "inverte composto",
+            "haver existencial é singular",
+            "fazer tempo é impessoal"
+          ],
+          "passage": null,
+          "difficulty": 0.5,
+          "bloom": "apply"
+        }
+      ]
+    }
+  },
+  {
+    "key": "knowledge.extract:batch",
+    "match": "Extraia unidades de conhecimento",
+    "response": {
+      "units": [
+        {
+          "kind": "rule",
+          "statement": "Na concordância verbal, o verbo concorda com o sujeito em número e pessoa.",
+          "example": "Os candidatos chegaram cedo.",
+          "qualifiers": ["sujeito simples"]
+        }
+      ]
+    }
+  },
+  {
+    "key": "quality.judge:v2",
+    "match": "avaliar a qualidade do item",
+    "response": {
+      "decision": "published",
+      "score": 0.86,
+      "notes": "grounded in KU; not exam metadata",
+      "reasons": []
+    }
+  }
+]

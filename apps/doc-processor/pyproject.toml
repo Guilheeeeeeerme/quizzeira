@@ -1,0 +1,26 @@
+[project]
+name = "quizzeira-doc-processor"
+version = "0.1.0"
+description = "Quizzeira document normalization service (bytes → NormalizedDocument)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "pydantic>=2.10.0",
+  "pymupdf>=1.25.0",
+  "beautifulsoup4>=4.12.0",
+  "lxml>=5.3.0",
+  "ftfy>=6.3.0",
+  "python-multipart>=0.0.12",
+]
+
+[project.optional-dependencies]
+html = ["trafilatura>=2.0.0"]
+office = ["python-docx>=1.1.0"]
+docling = ["docling>=2.0.0"]
+lingua = ["lingua-language-detector>=2.0.0"]
+dev = ["pytest>=8.3.0", "httpx>=0.28.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

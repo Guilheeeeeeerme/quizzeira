@@ -187,6 +187,19 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/admin/topic-queries", async (request, reply) => {
+    const q = request.query as { status?: string; limit?: string };
+    const params = new URLSearchParams();
+    if (q.status) params.set("status", q.status);
+    if (q.limit) params.set("limit", q.limit);
+    const suffix = params.size ? `?${params}` : "";
+    try {
+      return await discoveryFetch(`/admin/topic-queries${suffix}`);
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
   // Concept: HITL — the queue of items the Eval stage rejected or deferred.
   app.get("/admin/quality/queue", async (request, reply) => {
     const q = request.query as { status?: string; examSlug?: string; limit?: string };
@@ -242,13 +255,77 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/content/documents", async (request, reply) => {
-    const q = request.query as { status?: string; limit?: string };
+    const q = request.query as { status?: string; limit?: string; examSlug?: string; role?: string };
     const params = new URLSearchParams();
     if (q.status) params.set("status", q.status);
     if (q.limit) params.set("limit", q.limit);
+    if (q.examSlug) params.set("examSlug", q.examSlug);
+    if (q.role) params.set("role", q.role);
     const suffix = params.size ? `?${params}` : "";
     try {
       return await contentFetch(`/admin/documents${suffix}`);
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/admin/content/documents/:id",
+    async (request, reply) => {
+      try {
+        return await contentFetch(`/admin/documents/${encodeURIComponent(request.params.id)}`);
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/admin/content/question-items/:id/provenance",
+    async (request, reply) => {
+      try {
+        return await contentFetch(
+          `/internal/question-items/${encodeURIComponent(request.params.id)}/provenance`,
+        );
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.get<{ Params: { examSlug: string } }>(
+    "/admin/content/exams/:examSlug/syllabus",
+    async (request, reply) => {
+      try {
+        return await contentFetch(
+          `/published/exams/${encodeURIComponent(request.params.examSlug)}/syllabus`,
+        );
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.get<{ Params: { examSlug: string } }>(
+    "/admin/content/exams/:examSlug/coverage",
+    async (request, reply) => {
+      try {
+        return await contentFetch(
+          `/admin/syllabi/${encodeURIComponent(request.params.examSlug)}`,
+        );
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
+  app.get("/admin/content/metrics/pipeline", async (request, reply) => {
+    const q = request.query as { hours?: string };
+    const params = new URLSearchParams();
+    if (q.hours) params.set("hours", q.hours);
+    const suffix = params.size ? `?${params}` : "";
+    try {
+      return await contentFetch(`/admin/metrics/pipeline${suffix}`);
     } catch (err) {
       return httpError(err, reply);
     }

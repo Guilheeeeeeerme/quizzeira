@@ -293,6 +293,8 @@ export interface UpdateTopicInput {
 
 export interface StartPillInput {
   focusText?: string | null;
+  /** Syllabus leaf ids for study focus (§37 / §50.21). */
+  syllabusNodeIds?: string[];
   /** Optional session length; omit for default short pill. */
   durationMinutes?: SessionDurationMinutes | null;
   locale?: LocaleCode;
@@ -322,6 +324,12 @@ export interface GeneratedQuestionInput {
   explanation: string | null;
   promptMedia?: QuestionMediaRef[] | null;
   optionMedia?: Array<QuestionMediaRef[] | null> | null;
+  /** Optional style/evidence exemplar link for §30 provenance. */
+  previousQuestionId?: string | null;
+  knowledgeUnitIds?: string[];
+  syllabusNodeId?: string | null;
+  passage?: string | null;
+  distractorRationale?: string[];
 }
 
 export interface GenerationCompleteInput {
@@ -378,6 +386,8 @@ export interface ExamCatalogItemDto {
   bankReady: boolean;
   sourceDomain: string | null;
   placeholder?: boolean;
+  /** Exam family from discovery; catalog filters out non-concurso. */
+  kind?: string;
 }
 
 export interface ExamPrepareResponse {

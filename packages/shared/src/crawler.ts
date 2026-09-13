@@ -10,12 +10,76 @@ export type CrawlerSourceTrust = "high" | "medium" | "low";
  */
 export type CrawlerStrategy = "listing-links" | "banca-portal" | "fixture" | "oab-fgv";
 
+export type DiscoveryMode = "listing" | "topic_query" | "direct" | "custom";
+
+/** Admin-classified source family (§10 / §29.1). */
+export type SourceKind =
+  | "banca_portal"
+  | "org_portal"
+  | "aggregator"
+  | "official_gazette"
+  | "legislation"
+  | "educational_site"
+  | "open_textbook"
+  | "standards_body"
+  | "question_bank_public"
+  | "exam_specific"
+  | "fixture";
+
+/** Exam family for catalog filtering (§29.1). */
+export type ExamKind = "concurso" | "oab" | "certification" | "vestibular" | "other";
+
+/** Crawler hint for artifact document kind (§29.1). */
+export type ArtifactKindHint =
+  | "edital"
+  | "retificacao"
+  | "programa"
+  | "prova"
+  | "gabarito"
+  | "padrao_resposta"
+  | "apostila"
+  | "lei"
+  | "artigo"
+  | "manual"
+  | "listing"
+  | "unknown";
+
+/** Crawler hint for expected document role (§29.1). */
+export type RoleHint = "specification" | "evidence" | "knowledge" | "administrative" | "unknown";
+
+export interface RegistrationWindow {
+  start: string;
+  end: string;
+}
+
+/** Topic-driven knowledge discovery row (§17, §29.1). */
+export interface TopicQueryDto {
+  id: string;
+  examId: string;
+  syllabusNodeId: string;
+  canonicalKey: string;
+  queries: string[];
+  status: "queued" | "running" | "done" | "failed";
+  candidatesFound: number;
+  candidatesStored: number;
+  attempts: number;
+  nextRunAt: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
 export interface CrawlerSource {
   id: string;
   domain: string;
   name: string;
   startUrls: string[];
   strategy: CrawlerStrategy;
+  discoveryMode?: DiscoveryMode;
+  kind?: SourceKind;
+  /** Roles this source may produce (§10). */
+  allowedRoles?: RoleHint[];
+  authorityScore?: number | null;
+  licenseNote?: string;
   /** CSS selector for candidate link nodes (defaults to "a[href]"). */
   linkSelector?: string;
   /** Regex strings matched against href or link text to keep candidates. */
@@ -47,6 +111,17 @@ export interface OpenExamRecord {
   sourceDomain: string;
   discoveredAt: string;
   lastSeenAt: string;
+  /** Edition key when parsed from detail page, e.g. "2026-1" (§11.2). */
+  editionKey?: string | null;
+  /** Parsed exam family; non-concurso rows excluded from study catalog. */
+  kind?: ExamKind;
+  /** Detail page URL when distinct from listing anchor. */
+  detailUrl?: string | null;
+  /** ISO date strings from registration window parser. */
+  registrationStart?: string | null;
+  registrationEnd?: string | null;
+  /** How open status was determined. */
+  statusSource?: "date" | "regex" | "llm" | "admin" | null;
 }
 
 export interface CrawlerRunSummary {
@@ -191,6 +266,96 @@ export function listingsFingerprint(
   return sha256Hex(rows.join("\n"));
 }
 
+const NON_CONCURSO_RE =
+  /\b(CFP|certifica[çc][ãa]o|vestibular|mestrado|resid[êe]ncia m[ée]dica|processo seletivo de faculdade)\b/i;
+
+/**
+ * Parse "inscrições … de DD/MM/AAAA a DD/MM/AAAA" patterns (§11.2).
+ * Returns ISO date strings (UTC midnight) or null when not found.
+ */
+export function parseRegistrationWindow(text: string): RegistrationWindow | null {
+  const normalized = text.replace(/\s+/g, " ");
+
+  const rangePatterns = [
+    /inscri[çc][õo]es?\s+(?:de\s+)?(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    /per[ií]odo\s+de\s+inscri[çc][õo]es?\s*(?:de\s+)?(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    /inscri[çc][õo]es?\s+abertas?\s+(?:de\s+)?(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+  ];
+
+  for (const re of rangePatterns) {
+    const m = normalized.match(re);
+    if (m?.[1] && m[2]) {
+      const start = parseBrDate(m[1]);
+      const end = parseBrDate(m[2]);
+      if (start && end) return { start, end };
+    }
+  }
+
+  const untilMatch = normalized.match(
+    /inscri[çc][õo]es?\s+(?:abertas\s+)?at[ée]\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+  );
+  if (untilMatch?.[1]) {
+    const end = parseBrDate(untilMatch[1]);
+    if (end) return { start: end, end };
+  }
+
+  return null;
+}
+
+function parseBrDate(value: string): string | null {
+  const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const iso = new Date(Date.UTC(year, month - 1, day)).toISOString();
+  return iso.slice(0, 10);
+}
+
+function isRegistrationOpen(window: RegistrationWindow, now = new Date()): boolean {
+  const today = now.toISOString().slice(0, 10);
+  return today >= window.start && today <= window.end;
+}
+
+/** Infer exam kind from title and optional detail text (§11.2 non-concurso filter). */
+export function inferExamKind(title: string, pageText = ""): ExamKind {
+  const blob = `${title} ${pageText}`.replace(/<[^>]+>/g, " ");
+  if (/\boab\b|exame\s+de\s+ordem/i.test(blob)) return "oab";
+  if (/\bvestibular\b/i.test(blob) && !/\bconcurso\s+p[uú]blico\b/i.test(blob)) {
+    return "vestibular";
+  }
+  if (NON_CONCURSO_RE.test(blob) && !/\bconcurso\s+p[uú]blico\b/i.test(blob)) {
+    return "other";
+  }
+  return "concurso";
+}
+
+/** Edition key from URL path or title year (§11.2). */
+export function extractEditionKey(title: string, href: string): string | null {
+  const pathSlug = concursoPathSlug(href);
+  if (pathSlug) {
+    const yearInSlug = pathSlug.match(/(20\d{2})/);
+    if (yearInSlug?.[1]) return yearInSlug[1];
+  }
+
+  const hyphenated = href.match(/\/concursos?\/[^/?#]+-(20\d{2})(?:\/|$)/i);
+  if (hyphenated?.[1]) return hyphenated[1];
+
+  const titleYear = title.match(/\b(20\d{2})\b/);
+  if (titleYear?.[1]) return titleYear[1];
+
+  return null;
+}
+
+/** Build edition-based slug: slugify(org) + "-" + editionKey when possible. */
+export function buildEditionSlug(org: string | null, editionKey: string | null, fallback: string): string {
+  const orgSlug = org ? slugifyKey(org) : "";
+  if (orgSlug && editionKey) return `${orgSlug}-${editionKey}`;
+  return fallback;
+}
+
 /** Normalize a discovered listing into bank-friendly identity fields. */
 export function normalizeOpenExam(input: {
   title: string;
@@ -199,6 +364,7 @@ export function normalizeOpenExam(input: {
   sourceDomain: string;
   orgHint?: string | null;
   bancaHint?: string | null;
+  detailText?: string | null;
 }): Omit<OpenExamRecord, "id" | "discoveredAt" | "lastSeenAt"> {
   const title = input.title.replace(/\s+/g, " ").trim();
   const org =
@@ -207,16 +373,25 @@ export function normalizeOpenExam(input: {
     extractKnownOrg(input.sourceDomain);
   const banca = input.bancaHint?.trim() || extractKnownBanca(title);
   const slugParts = [org, banca].filter(Boolean).map(String);
-  // Prefer /concurso/<slug>/ path identity. Fall back to the listing title —
-  // not org alone — so Transpetro.org nav pages do not all collapse to
-  // examSlug "transpetro" and poison the Content bank.
   const pathSlug = concursoPathSlug(input.href);
-  const examSlug =
-    pathSlug ||
-    slugifyKey(title.slice(0, 80)) ||
-    slugifyKey(slugParts.join(" ") || "exam");
+  const editionKey = extractEditionKey(title, input.href);
+  const titleSlug = slugifyKey(title.slice(0, 80)) || slugifyKey(slugParts.join(" ") || "exam");
+  const editionSlug = buildEditionSlug(org, editionKey, "");
+  const examSlug = pathSlug || editionSlug || titleSlug;
   const emphasis = extractEmphasisHints(title);
   const editalUrl = /edital|pdf/i.test(input.href) ? input.href : null;
+  const kind = inferExamKind(title, input.detailText ?? "");
+
+  const registrationText = [input.detailText, title].filter(Boolean).join(" ");
+  const registration = parseRegistrationWindow(registrationText);
+  const likelyOpen = looksLikelyOpen(title) || looksOpenExamUrl(input.href);
+  let status: "open" | "unknown" = likelyOpen ? "open" : "unknown";
+  let statusSource: OpenExamRecord["statusSource"] = likelyOpen ? "regex" : null;
+
+  if (registration) {
+    status = isRegistrationOpen(registration) ? "open" : "unknown";
+    statusSource = "date";
+  }
 
   return {
     examSlug,
@@ -226,9 +401,15 @@ export function normalizeOpenExam(input: {
     emphasis,
     editalUrl,
     listingUrl: input.href,
-    status: looksOpen(title) || looksOpenExamUrl(input.href) ? "open" : "unknown",
+    status,
     sourceId: input.sourceId,
     sourceDomain: input.sourceDomain,
+    editionKey: editionKey ?? null,
+    kind,
+    detailUrl: input.href,
+    registrationStart: registration?.start ?? null,
+    registrationEnd: registration?.end ?? null,
+    statusSource,
   };
 }
 
@@ -264,8 +445,14 @@ export function extractKnownBanca(text: string): string | null {
   return m?.[0]?.trim() ?? null;
 }
 
-export function looksOpen(text: string): boolean {
+/** Regex-only open hint; does not consult registration dates (§11.2). */
+export function looksLikelyOpen(text: string): boolean {
   return OPEN_RE.test(text);
+}
+
+/** @deprecated Use looksLikelyOpen — kept for backward compatibility. */
+export function looksOpen(text: string): boolean {
+  return looksLikelyOpen(text);
 }
 
 /** Banca detail pages like /concurso/transpetro-2026/ or /concursos/pms2026. */
@@ -291,5 +478,56 @@ export function domainFromUrl(url: string): string | null {
     return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
   } catch {
     return null;
+  }
+}
+
+/** Map anchor label + URL to kind/role hints (§14.2 tier 0). */
+export function classifyDocumentHints(
+  label: string,
+  url: string,
+): { kindHint: ArtifactKindHint; roleHint: RoleHint } {
+  const blob = `${label} ${url}`;
+  if (/\bretifica/i.test(blob)) {
+    return { kindHint: "retificacao", roleHint: "specification" };
+  }
+  if (/\bedital\b/i.test(blob)) {
+    return { kindHint: "edital", roleHint: "specification" };
+  }
+  if (/\bprograma\b|conte[úu]do\s+program/i.test(blob)) {
+    return { kindHint: "programa", roleHint: "specification" };
+  }
+  if (/\bgabarito\b/i.test(blob)) {
+    return { kindHint: "gabarito", roleHint: "evidence" };
+  }
+  if (/padr[ãa]o\s+de\s+respostas?/i.test(blob)) {
+    return { kindHint: "padrao_resposta", roleHint: "evidence" };
+  }
+  if (/\bprova\b|\bcaderno\b/i.test(blob)) {
+    return { kindHint: "prova", roleHint: "evidence" };
+  }
+  if (/\bapostila\b/i.test(blob)) {
+    return { kindHint: "apostila", roleHint: "knowledge" };
+  }
+  if (/\blei\b|\bart\.\s*\d+/i.test(blob)) {
+    return { kindHint: "lei", roleHint: "knowledge" };
+  }
+  return { kindHint: "unknown", roleHint: "unknown" };
+}
+
+/** Legacy ArtifactKind for discovery-api rows without kindHint mapping. */
+export function kindHintToArtifactKind(kindHint: ArtifactKindHint): string {
+  switch (kindHint) {
+    case "edital":
+    case "retificacao":
+      return "edital";
+    case "prova":
+      return "prova";
+    case "gabarito":
+    case "padrao_resposta":
+      return "gabarito";
+    case "programa":
+      return "programa";
+    default:
+      return "other";
   }
 }

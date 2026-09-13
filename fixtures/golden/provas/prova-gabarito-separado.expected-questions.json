@@ -1,0 +1,35 @@
+{
+  "fixtureId": "PRO-005",
+  "layout": "single-column",
+  "gabarito": "separate",
+  "linkedGabaritoId": "GAB-001",
+  "questions": [
+    {
+      "number": 1,
+      "stem": "Regência correta:",
+      "options": ["Assisti o filme.", "Assisti ao filme.", "Obedeci o regulamento.", "Namoro com Maria (obrigatório).", "Visitei ao museu."],
+      "answerKey": "B",
+      "subjectHint": "Língua Portuguesa ▸ Sintaxe ▸ Regência verbal"
+    },
+    {
+      "number": 2,
+      "stem": "Controle externo no Brasil é exercido, em regra, pelo:",
+      "options": [
+        "Poder Executivo",
+        "Ministério Público apenas",
+        "Congresso Nacional com auxílio dos Tribunais de Contas",
+        "Poder Judiciário exclusivamente",
+        "Banco Central"
+      ],
+      "answerKey": "C",
+      "subjectHint": "Controle Externo ▸ Competências"
+    },
+    {
+      "number": 3,
+      "stem": "Em porcentagem, 20% de 150 é:",
+      "options": ["20", "25", "30", "35", "40"],
+      "answerKey": "C",
+      "subjectHint": "Matemática ▸ Porcentagem"
+    }
+  ]
+}

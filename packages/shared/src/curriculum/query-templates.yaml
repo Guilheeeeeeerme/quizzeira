@@ -1,0 +1,12 @@
+# Topic-query templates (§17.2). Placeholders: {subject} {topic} {subtopic} {banca} {org}
+templates:
+  - id: topic-explain
+    pattern: "{subject} {topic} explicação"
+  - id: subtopic-rule
+    pattern: "{subtopic} regra norma-padrão"
+  - id: lei-cite
+    pattern: "{subject} {topic} lei artigo"
+  - id: apostila
+    pattern: "apostila {subject} {topic}"
+  - id: concurso-focus
+    pattern: "{topic} {subtopic} concurso público"

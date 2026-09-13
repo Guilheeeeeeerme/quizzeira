@@ -2,13 +2,15 @@ import { workerEnv } from "./env";
 import { llmError, type LlmErrorCode } from "./errors";
 import { extractJson, geminiProvider, type LlmProvider } from "./gemini";
 import { openaiProvider } from "./openai";
+import { fixtureProvider } from "./providers/fixture";
 import { fenceUntrusted, renderPrompt, screenUntrusted } from "./guardrails";
-import { rankFor } from "./model-rank";
+import { rankFor, rankForTier } from "./model-rank";
 import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
 
 const PROVIDERS: Record<string, LlmProvider> = {
   gemini: geminiProvider,
   openai: openaiProvider,
+  fixture: fixtureProvider,
 };
 
 export interface GenerateJsonOptions {
@@ -16,6 +18,12 @@ export interface GenerateJsonOptions {
   attempt?: number;
   requiredKeys?: readonly string[];
   grounding?: boolean;
+  /** Model tier preference (§27.2). */
+  tier?: "cheap" | "mid" | "strong";
+  /** Stage key for per-stage token budgets (§27.4). */
+  stage?: "ku" | "generation" | "judge" | "residue" | "classify" | "mapping";
+  /** Optional Redis cache key; hits skip the provider call. */
+  cacheKey?: string;
 }
 
 export function requireJsonShape<T>(
@@ -37,8 +45,16 @@ export function requireJsonShape<T>(
 
 function providerOrder(): LlmProvider[] {
   const seen = new Set<LlmProvider>();
-  for (const raw of workerEnv.llmProviderOrder.split(",")) {
+  const names: string[] = [];
+  // Prefer explicit LLM_PROVIDER=fixture for deterministic CI / compose (§41.3).
+  if ((process.env.LLM_PROVIDER ?? "").trim().toLowerCase() === "fixture") {
+    names.push("fixture");
+  }
+  for (const raw of (process.env.LLM_PROVIDER_ORDER || workerEnv.llmProviderOrder).split(",")) {
     const name = raw.trim().toLowerCase();
+    if (name) names.push(name);
+  }
+  for (const name of names) {
     const provider = PROVIDERS[name];
     if (provider && !seen.has(provider)) seen.add(provider);
   }
@@ -171,6 +187,67 @@ export function hasLlmProvider(): boolean {
   return providerOrder().length > 0;
 }
 
+function stageBudgetCap(stage: GenerateJsonOptions["stage"]): number {
+  switch (stage) {
+    case "ku":
+      return workerEnv.llmBudgetKuTokens;
+    case "generation":
+      return workerEnv.llmBudgetGenerationTokens;
+    case "judge":
+      return workerEnv.llmBudgetJudgeTokens;
+    case "residue":
+    case "classify":
+    case "mapping":
+      return workerEnv.llmBudgetResidueTokens;
+    default:
+      return 0;
+  }
+}
+
+async function readCache(cacheKey: string): Promise<unknown | null> {
+  if (!workerEnv.redisUrl) return null;
+  try {
+    const redis = getWorkerRedis();
+    if (!redis) return null;
+    const raw = await redis.get(`llm:cache:${cacheKey}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCache(cacheKey: string, value: unknown): Promise<void> {
+  if (!workerEnv.redisUrl) return;
+  try {
+    const redis = getWorkerRedis();
+    if (!redis) return;
+    const ttl = Math.max(1, workerEnv.llmCacheTtlDays) * 86_400;
+    await redis.set(`llm:cache:${cacheKey}`, JSON.stringify(value), "EX", ttl);
+  } catch {
+    // Cache is best-effort.
+  }
+}
+
+async function consumeStageBudget(stage: GenerateJsonOptions["stage"], tokens: number): Promise<void> {
+  const cap = stageBudgetCap(stage);
+  if (!cap || !stage) return;
+  assertRedisOrTestMode();
+  if (!workerEnv.redisUrl) return;
+  const redis = getWorkerRedis();
+  if (!redis) return;
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `llm:stage:${stage}:${day}`;
+  const used = Number((await redis.incrby(key, tokens)) || 0);
+  await redis.expire(key, BUDGET_TTL_SECONDS);
+  if (used > cap) {
+    throw llmError(
+      "llm_budget_exceeded",
+      `llm_budget_exceeded: stage ${stage} daily token budget hit`,
+    );
+  }
+}
+
 export async function generateJson<T>(
   system: string,
   user: string,
@@ -181,13 +258,23 @@ export async function generateJson<T>(
   if (providers.length === 0) {
     throw llmError("llm_unavailable", "llm_unavailable: no provider API key configured");
   }
+
+  if (opts.cacheKey) {
+    const cached = await readCache(opts.cacheKey);
+    if (cached != null) {
+      return requireJsonShape<T>(cached, opts.requiredKeys ?? []);
+    }
+  }
+
   await consumeBudget(Date.now(), { calls: 1 });
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
   const fencedUser = fenceUntrusted(user);
   const index = Math.max(0, opts.attempt ?? 0);
   let lastError: unknown;
   for (const provider of providers) {
-    const rank = rankFor(provider.name);
+    const rank = opts.tier
+      ? rankForTier(provider.name, opts.tier)
+      : rankFor(provider.name);
     const model = rank[index] ?? provider.defaultModel();
     try {
       const completion = await provider.complete({
@@ -197,11 +284,12 @@ export async function generateJson<T>(
         temperature: opts.temperature,
         grounding: opts.grounding,
       });
-      await consumeBudget(Date.now(), {
-        tokens: Math.max(1, completion.usage.totalTokens),
-        calls: 0,
-      });
-      return requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
+      const tokens = Math.max(1, completion.usage.totalTokens);
+      await consumeBudget(Date.now(), { tokens, calls: 0 });
+      await consumeStageBudget(opts.stage, tokens);
+      const shaped = requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
+      if (opts.cacheKey) await writeCache(opts.cacheKey, shaped);
+      return shaped;
     } catch (err) {
       lastError = err;
     }

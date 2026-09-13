@@ -30,6 +30,11 @@ interface AdminSource {
   name: string;
   startUrls: string[];
   strategy: string;
+  kind?: string;
+  discoveryMode?: string;
+  allowedRoles?: string[];
+  authorityScore?: number | null;
+  licenseNote?: string | null;
   linkPatterns: string[];
   openPatterns: string[];
   trust: "high" | "medium" | "low";
@@ -114,6 +119,49 @@ interface PipelineHealth {
         lastGenerationRun?: { status: string; drafted: number; error: string | null } | null;
       }
     | { error: string };
+}
+
+interface PipelineMetrics {
+  syllabusMappedShare: number | null;
+  adminRejectShare: number | null;
+  publishedCount: number;
+  reviewedWindowCount: number;
+  failedMetadataCount: number;
+  publishRate?: number | null;
+  tokensPerPublished?: number | null;
+  stageBuckets?: Array<{
+    stage: string;
+    decision: string;
+    reason: string;
+    count: number;
+  }>;
+  reasonHistogram?: Array<{ reason: string; count: number }>;
+}
+
+interface TopicQueryRow {
+  id: string;
+  examId: string;
+  syllabusNodeId: string;
+  canonicalKey: string;
+  queries: unknown;
+  status: string;
+  candidatesFound: number;
+  candidatesStored: number;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+interface ContentDocumentRow {
+  id: string;
+  examSlug: string;
+  kind: string;
+  role: string;
+  roleConfidence: number | null;
+  roleMethod: string | null;
+  rank: number | null;
+  status: string;
+  sectionCount?: number;
+  chunkCount: number;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -243,6 +291,11 @@ export function AdminSourcesPage() {
   const [linkPatterns, setLinkPatterns] = useState("");
   const [openPatterns, setOpenPatterns] = useState("");
   const [intervalMinutes, setIntervalMinutes] = useState("30");
+  const [kind, setKind] = useState("banca_portal");
+  const [discoveryMode, setDiscoveryMode] = useState("listing");
+  const [allowedRoles, setAllowedRoles] = useState("specification,evidence,knowledge");
+  const [authorityScore, setAuthorityScore] = useState("");
+  const [licenseNote, setLicenseNote] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -282,12 +335,22 @@ export function AdminSourcesPage() {
           linkPatterns: lines(linkPatterns),
           openPatterns: lines(openPatterns),
           intervalSec: Math.max(60, Number(intervalMinutes || 30) * 60),
+          kind: kind.trim() || undefined,
+          discoveryMode: discoveryMode.trim() || undefined,
+          allowedRoles: lines(allowedRoles.replace(/,/g, "\n")),
+          authorityScore: authorityScore.trim() ? Number(authorityScore) : undefined,
+          licenseNote: licenseNote.trim() || undefined,
         }),
       });
       setName("");
       setStartUrls("");
       setLinkPatterns("");
       setOpenPatterns("");
+      setKind("banca_portal");
+      setDiscoveryMode("listing");
+      setAllowedRoles("specification,evidence,knowledge");
+      setAuthorityScore("");
+      setLicenseNote("");
       setShowForm(false);
       setNotice(t("Source added. The crawler will pick it up on its next pass."));
       await load();
@@ -433,6 +496,36 @@ export function AdminSourcesPage() {
               onChange={(e) => setIntervalMinutes(e.target.value)}
             />
           </Field>
+          <Field label={t("Kind")} hint={t("banca_portal, legislation, educational_site, …")}>
+            <Input value={kind} onChange={(e) => setKind(e.target.value)} />
+          </Field>
+          <Field label={t("Discovery mode")} hint={t("listing | topic | direct")}>
+            <Input value={discoveryMode} onChange={(e) => setDiscoveryMode(e.target.value)} />
+          </Field>
+          <Field
+            label={t("Allowed roles")}
+            hint={t("Comma or newline separated DocumentRole values.")}
+          >
+            <Input value={allowedRoles} onChange={(e) => setAllowedRoles(e.target.value)} />
+          </Field>
+          <Field label={t("Authority score (0–1)")}>
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={authorityScore}
+              placeholder="0.9"
+              onChange={(e) => setAuthorityScore(e.target.value)}
+            />
+          </Field>
+          <Field label={t("License note")}>
+            <Input
+              value={licenseNote}
+              placeholder={t("e.g. official gazette; reuse OK")}
+              onChange={(e) => setLicenseNote(e.target.value)}
+            />
+          </Field>
           <div className={styles.formActions}>
             <Button type="submit" size="sm" loading={saving}>
               {t("Save source")}
@@ -466,13 +559,30 @@ export function AdminSourcesPage() {
                     {source.enabled ? statusLabel(source.status, t) : t("Disabled")}
                   </Badge>
                   <Badge tone="neutral">{source.strategy}</Badge>
+                  {source.kind ? <Badge tone="neutral">{source.kind}</Badge> : null}
+                  {source.discoveryMode ? (
+                    <Badge tone="neutral">{source.discoveryMode}</Badge>
+                  ) : null}
                 </div>
                 <Text size="caption" tone="tertiary">
                   {source.domain} · {t("every {n} min", { n: Math.round(source.intervalSec / 60) })}
+                  {source.authorityScore != null
+                    ? ` · auth ${source.authorityScore}`
+                    : ""}
                   {source.failCount > 0
                     ? ` · ${t("{n} consecutive failures", { n: source.failCount })}`
                     : ""}
                 </Text>
+                {source.allowedRoles && source.allowedRoles.length > 0 ? (
+                  <Text size="caption" tone="tertiary">
+                    {t("Roles")}: {source.allowedRoles.join(", ")}
+                  </Text>
+                ) : null}
+                {source.licenseNote ? (
+                  <Text size="caption" tone="tertiary">
+                    {source.licenseNote}
+                  </Text>
+                ) : null}
                 <Text size="caption" tone="tertiary">
                   {t("Last OK")}: {formatAt(source.lastOkAt)}
                 </Text>
@@ -570,6 +680,24 @@ export function AdminExamsPage() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "closed">("all");
+  const [coverageBySlug, setCoverageBySlug] = useState<
+    Record<
+      string,
+      {
+        nodeCount: number;
+        leavesWithKu: number;
+        published: number;
+        status?: string;
+        tree?: Array<{ id: string; depth: number; title: string; rawText: string }>;
+        rawSections?: Array<{
+          sectionId: string;
+          heading: string | null;
+          role: string;
+          textPreview: string;
+        }>;
+      } | null
+    >
+  >({});
 
   const load = useCallback(async () => {
     setError("");
@@ -600,6 +728,43 @@ export function AdminExamsPage() {
       await load();
     } catch (err) {
       setError(errText(err, t));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function loadCoverage(examSlug: string) {
+    setBusyId(examSlug);
+    setError("");
+    try {
+      const data = await api<{
+        syllabus: { nodeCount: number; status?: string } | null;
+        coverage: Array<{ kus: number; published: number }>;
+        tree?: Array<{ id: string; depth: number; title: string; rawText: string }>;
+        rawSections?: Array<{
+          sectionId: string;
+          heading: string | null;
+          role: string;
+          textPreview: string;
+        }>;
+      }>(`/admin/content/exams/${encodeURIComponent(examSlug)}/coverage`);
+      const coverage = data.coverage ?? [];
+      setCoverageBySlug((prev) => ({
+        ...prev,
+        [examSlug]: data.syllabus
+          ? {
+              nodeCount: data.syllabus.nodeCount,
+              leavesWithKu: coverage.filter((c) => c.kus > 0).length,
+              published: coverage.reduce((sum, c) => sum + c.published, 0),
+              status: data.syllabus.status,
+              tree: data.tree ?? [],
+              rawSections: data.rawSections ?? [],
+            }
+          : null,
+      }));
+    } catch (err) {
+      setError(errText(err, t));
+      setCoverageBySlug((prev) => ({ ...prev, [examSlug]: null }));
     } finally {
       setBusyId(null);
     }
@@ -664,8 +829,64 @@ export function AdminExamsPage() {
                 <a className={styles.link} href={exam.listingUrl} target="_blank" rel="noreferrer">
                   {t("Open listing")}
                 </a>
+                {coverageBySlug[exam.examSlug] !== undefined ? (
+                  <>
+                    <Text size="caption" tone="tertiary">
+                      {coverageBySlug[exam.examSlug] == null
+                        ? t("No active syllabus.")
+                        : t("{nodes} nodes · {kus} leaves with KUs · {pub} published", {
+                            nodes: coverageBySlug[exam.examSlug]!.nodeCount,
+                            kus: coverageBySlug[exam.examSlug]!.leavesWithKu,
+                            pub: coverageBySlug[exam.examSlug]!.published,
+                          })}
+                      {coverageBySlug[exam.examSlug]?.status
+                        ? ` · ${coverageBySlug[exam.examSlug]!.status}`
+                        : ""}
+                    </Text>
+                    {coverageBySlug[exam.examSlug]?.tree &&
+                    coverageBySlug[exam.examSlug]!.tree!.length > 0 ? (
+                      <ul className={styles.list}>
+                        {coverageBySlug[exam.examSlug]!.tree!.slice(0, 40).map((n) => (
+                          <li key={n.id}>
+                            <Text size="caption" tone="tertiary">
+                              {"··".repeat(Math.max(0, n.depth))} {n.title}
+                            </Text>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {coverageBySlug[exam.examSlug]?.status === "needs_review" &&
+                    (coverageBySlug[exam.examSlug]!.rawSections?.length ?? 0) > 0 ? (
+                      <div>
+                        <Text size="caption" tone="tertiary">
+                          {t("Raw sections (needs review)")}
+                        </Text>
+                        <ul className={styles.list}>
+                          {coverageBySlug[exam.examSlug]!.rawSections!.slice(0, 12).map((s) => (
+                            <li key={s.sectionId} className={styles.card}>
+                              <Text size="caption" tone="tertiary">
+                                [{s.role}] {s.heading || t("(no heading)")}
+                              </Text>
+                              <Text size="caption" tone="tertiary">
+                                {s.textPreview.slice(0, 240)}
+                              </Text>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
               <div className={styles.cardActions}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={busyId === exam.examSlug}
+                  onClick={() => void loadCoverage(exam.examSlug)}
+                >
+                {t("Coverage / syllabus")}
+              </Button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -694,6 +915,7 @@ export function AdminQualityPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [status, setStatus] = useState<"all" | "failed" | "needs_review">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [provenanceById, setProvenanceById] = useState<Record<string, unknown>>({});
 
   const load = useCallback(async () => {
     setError("");
@@ -725,6 +947,20 @@ export function AdminQualityPage() {
         });
       }
       await load();
+    } catch (err) {
+      setError(errText(err, t));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function loadProvenance(id: string) {
+    setBusyId(id);
+    setError("");
+    try {
+      const data = await api<unknown>(`/admin/content/question-items/${id}/provenance`);
+      setProvenanceById((prev) => ({ ...prev, [id]: data }));
+      setExpandedId(id);
     } catch (err) {
       setError(errText(err, t));
     } finally {
@@ -840,6 +1076,9 @@ export function AdminQualityPage() {
                           {t("Open source document")}
                         </a>
                       ) : null}
+                      {provenanceById[item.id] ? (
+                        <ProvenanceTree data={provenanceById[item.id]} t={t} />
+                      ) : null}
                       {item.reviews.length > 0 ? (
                         <ul className={styles.reviews}>
                           {item.reviews.map((review, index) => (
@@ -862,6 +1101,13 @@ export function AdminQualityPage() {
                 </div>
 
                 <div className={styles.cardActions}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void loadProvenance(item.id)}
+                  >
+                    {t("Provenance")}
+                  </Button>
                   <Button
                     size="sm"
                     loading={busyId === item.id}
@@ -897,6 +1143,280 @@ export function AdminQualityPage() {
   );
 }
 
+function ProvenanceTree({ data, t }: { data: unknown; t: Translate }) {
+  if (!data || typeof data !== "object") {
+    return (
+      <pre className={styles.reviews}>{JSON.stringify(data, null, 2)}</pre>
+    );
+  }
+  const p = data as {
+    questionItem?: {
+      id?: string;
+      examSlug?: string;
+      origin?: string;
+      status?: string;
+      previousQuestionId?: string | null;
+    };
+    syllabusNode?: {
+      title?: string;
+      pathSlug?: string;
+      path?: Array<{ title?: string; pathSlug?: string }>;
+    } | null;
+    knowledgeUnits?: Array<{
+      id: string;
+      statement: string;
+      evidence?: Array<{ sourceUrl?: string | null; span?: [number, number] | null }>;
+    }>;
+    chain?: {
+      chunks?: Array<{ id: string; textPreview?: string; sectionRole?: string | null }>;
+      sections?: Array<{ id: string; role?: string; heading?: string | null }>;
+      documents?: Array<{
+        id: string;
+        role?: string;
+        sourceUrl?: string | null;
+        purpose?: string;
+        discoveryArtifactId?: string | null;
+      }>;
+      artifacts?: Array<{
+        discoveryArtifactId: string;
+        artifact?: { url?: string | null; kind?: string; kindHint?: string };
+        source?: { id?: string; domain?: string; name?: string; kind?: string } | null;
+        topicQuery?: {
+          id?: string;
+          canonicalKey?: string;
+          status?: string;
+          candidatesStored?: number;
+        } | null;
+      }>;
+    };
+    previousQuestion?: {
+      id?: string;
+      prompt?: string;
+      year?: number | null;
+      number?: number;
+      document?: { id?: string; sourceUrl?: string | null; role?: string } | null;
+    } | null;
+    styleProfile?: unknown;
+    generationRun?: {
+      id?: string;
+      promptVersion?: string;
+      model?: string | null;
+      tokensIn?: number | null;
+      tokensOut?: number | null;
+    } | null;
+    reviews?: Array<{ id?: string; stage?: string; decision?: string }>;
+  };
+
+  const pathLabel =
+    (p.syllabusNode?.path ?? [])
+      .map((n) => n.title)
+      .filter(Boolean)
+      .join(" › ") || p.syllabusNode?.title;
+
+  return (
+    <div className={styles.details}>
+      <Text size="caption" tone="secondary">
+        {t("Provenance chain")}
+      </Text>
+      <ul className={styles.reviews}>
+        <li>
+          <details open>
+            <summary>
+              <Text size="caption" tone="tertiary">
+                Q · {p.questionItem?.examSlug ?? "—"} · {p.questionItem?.origin ?? "—"} ·{" "}
+                {p.questionItem?.status ?? "—"}
+              </Text>
+            </summary>
+          </details>
+        </li>
+        {p.syllabusNode ? (
+          <li>
+            <details open>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  Syllabus · {pathLabel} ({p.syllabusNode.pathSlug})
+                </Text>
+              </summary>
+            </details>
+          </li>
+        ) : null}
+        {(p.knowledgeUnits ?? []).length > 0 ? (
+          <li>
+            <details open>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  KnowledgeUnits · {(p.knowledgeUnits ?? []).length}
+                </Text>
+              </summary>
+              <ul className={styles.reviews}>
+                {(p.knowledgeUnits ?? []).map((ku) => (
+                  <li key={ku.id}>
+                    <Text size="caption" tone="tertiary">
+                      KU · {ku.statement.slice(0, 120)}
+                      {ku.statement.length > 120 ? "…" : ""}
+                      {(ku.evidence ?? [])
+                        .map((ev) =>
+                          ev.sourceUrl
+                            ? ` · ${ev.sourceUrl}${ev.span ? ` [${ev.span[0]}-${ev.span[1]}]` : ""}`
+                            : "",
+                        )
+                        .join("")}
+                    </Text>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+        ) : null}
+        {(p.chain?.chunks ?? []).length > 0 ? (
+          <li>
+            <details>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  Chunks · {(p.chain?.chunks ?? []).length}
+                </Text>
+              </summary>
+              <ul className={styles.reviews}>
+                {(p.chain?.chunks ?? []).map((c) => (
+                  <li key={c.id}>
+                    <Text size="caption" tone="tertiary">
+                      Chunk · {c.sectionRole ?? "?"} · {(c.textPreview ?? "").slice(0, 100)}
+                    </Text>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+        ) : null}
+        {(p.chain?.documents ?? []).length > 0 ? (
+          <li>
+            <details open>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  Documents · {(p.chain?.documents ?? []).length}
+                </Text>
+              </summary>
+              <ul className={styles.reviews}>
+                {(p.chain?.documents ?? []).map((d) => (
+                  <li key={`${d.id}-${d.purpose ?? "doc"}`}>
+                    <Text size="caption" tone="tertiary">
+                      Doc · {d.role}
+                      {d.purpose ? ` (${d.purpose})` : ""}
+                      {d.sourceUrl ? ` · ${d.sourceUrl}` : ""}
+                      {d.discoveryArtifactId ? ` · artifact=${d.discoveryArtifactId}` : ""}
+                    </Text>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+        ) : null}
+        {(p.chain?.artifacts ?? []).length > 0 ? (
+          <li>
+            <details open>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  Artifact → Source / TopicQuery · {(p.chain?.artifacts ?? []).length}
+                </Text>
+              </summary>
+              <ul className={styles.reviews}>
+                {(p.chain?.artifacts ?? []).map((a) => (
+                  <li key={a.discoveryArtifactId}>
+                    <Text size="caption" tone="tertiary">
+                      Artifact · {a.artifact?.kind ?? "?"} / {a.artifact?.kindHint ?? "?"}
+                      {a.artifact?.url ? ` · ${a.artifact.url}` : ""}
+                    </Text>
+                    {a.source ? (
+                      <div>
+                        <Text size="caption" tone="tertiary">
+                          Source · {a.source.name} ({a.source.domain}) · {a.source.kind}
+                        </Text>
+                      </div>
+                    ) : null}
+                    {a.topicQuery ? (
+                      <div>
+                        <Text size="caption" tone="tertiary">
+                          TopicQuery · {a.topicQuery.canonicalKey} · {a.topicQuery.status} · stored=
+                          {a.topicQuery.candidatesStored ?? 0}
+                        </Text>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+        ) : null}
+        {p.previousQuestion ? (
+          <li>
+            <details open>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  PreviousQuestion · #{p.previousQuestion.number ?? "?"}{" "}
+                  {p.previousQuestion.year ?? ""}
+                </Text>
+              </summary>
+              <Text size="caption" tone="tertiary">
+                {(p.previousQuestion.prompt ?? "").slice(0, 160)}
+                {p.previousQuestion.document?.sourceUrl
+                  ? ` · ${p.previousQuestion.document.sourceUrl}`
+                  : ""}
+              </Text>
+            </details>
+          </li>
+        ) : null}
+        {p.generationRun ? (
+          <li>
+            <details open>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  Run · {p.generationRun.promptVersion} · {p.generationRun.model ?? "—"}
+                  {p.generationRun.tokensIn != null || p.generationRun.tokensOut != null
+                    ? ` · tokens ${p.generationRun.tokensIn ?? 0}/${p.generationRun.tokensOut ?? 0}`
+                    : ""}
+                </Text>
+              </summary>
+              {p.styleProfile ? (
+                <pre className={styles.reviews}>
+                  {JSON.stringify(p.styleProfile, null, 2).slice(0, 800)}
+                </pre>
+              ) : null}
+            </details>
+          </li>
+        ) : null}
+        {(p.reviews ?? []).length > 0 ? (
+          <li>
+            <details>
+              <summary>
+                <Text size="caption" tone="tertiary">
+                  Reviews · {(p.reviews ?? []).length}
+                </Text>
+              </summary>
+              <ul className={styles.reviews}>
+                {(p.reviews ?? []).map((r, idx) => (
+                  <li key={r.id ?? String(idx)}>
+                    <Text size="caption" tone="tertiary">
+                      {r.stage ?? "?"} · {r.decision ?? "?"}
+                    </Text>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+        ) : null}
+      </ul>
+      <details>
+        <summary>
+          <Text size="caption" tone="tertiary">
+            {t("Raw JSON")}
+          </Text>
+        </summary>
+        <pre className={styles.reviews}>{JSON.stringify(data, null, 2)}</pre>
+      </details>
+    </div>
+  );
+}
+
 // ── Pipeline health ─────────────────────────────────────────────────────────
 
 function Stat({ label, value }: { label: string; value: number | string }) {
@@ -910,20 +1430,54 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 
 export function AdminHealthPage() {
   const t = useT();
+  const formatAt = useFormatAt();
   const [health, setHealth] = useState<PipelineHealth | null>(null);
+  const [metrics, setMetrics] = useState<PipelineMetrics | null>(null);
+  const [topicQueries, setTopicQueries] = useState<TopicQueryRow[]>([]);
+  const [documents, setDocuments] = useState<ContentDocumentRow[]>([]);
+  const [docDetail, setDocDetail] = useState<{
+    document: ContentDocumentRow & { stats?: unknown; sourceUrl?: string | null };
+    sections: Array<{ id: string; heading: string | null; role: string; scores: unknown }>;
+  } | null>(null);
   const [booting, setBooting] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setError("");
     try {
-      setHealth(await api<PipelineHealth>("/admin/health/pipeline"));
+      const [h, m, tq, docs] = await Promise.all([
+        api<PipelineHealth>("/admin/health/pipeline"),
+        api<PipelineMetrics>("/admin/content/metrics/pipeline").catch(() => null),
+        api<{ items: TopicQueryRow[] }>("/admin/topic-queries?limit=30").catch(() => ({
+          items: [] as TopicQueryRow[],
+        })),
+        api<{ items: ContentDocumentRow[] }>("/admin/content/documents?limit=25").catch(() => ({
+          items: [] as ContentDocumentRow[],
+        })),
+      ]);
+      setHealth(h);
+      setMetrics(m);
+      setTopicQueries(tq.items);
+      setDocuments(docs.items);
     } catch (err) {
       setError(errText(err, t));
     } finally {
       setBooting(false);
     }
   }, [t]);
+
+  async function loadDocument(id: string) {
+    setError("");
+    try {
+      const data = await api<{
+        document: ContentDocumentRow & { stats?: unknown; sourceUrl?: string | null };
+        sections: Array<{ id: string; heading: string | null; role: string; scores: unknown }>;
+      }>(`/admin/content/documents/${encodeURIComponent(id)}`);
+      setDocDetail(data);
+    } catch (err) {
+      setError(errText(err, t));
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -1018,6 +1572,183 @@ export function AdminHealthPage() {
               </Text>
             )}
           </>
+        )}
+      </section>
+
+      <section>
+        <Heading level={3} size="section">
+          {t("Eval metrics (24h)")}
+        </Heading>
+        {metrics ? (
+          <div className={styles.stats}>
+            <Stat
+              label={t("Syllabus mapped")}
+              value={
+                metrics.syllabusMappedShare == null
+                  ? "—"
+                  : `${Math.round(metrics.syllabusMappedShare * 100)}%`
+              }
+            />
+            <Stat
+              label={t("Admin reject share")}
+              value={
+                metrics.adminRejectShare == null
+                  ? "—"
+                  : `${Math.round(metrics.adminRejectShare * 100)}%`
+              }
+            />
+            <Stat label={t("Published")} value={metrics.publishedCount} />
+            <Stat label={t("Metadata fails")} value={metrics.failedMetadataCount} />
+            <Stat
+              label={t("Publish rate")}
+              value={
+                metrics.publishRate == null
+                  ? "—"
+                  : `${Math.round(metrics.publishRate * 100)}%`
+              }
+            />
+            <Stat
+              label={t("Tokens / published")}
+              value={
+                metrics.tokensPerPublished == null
+                  ? "—"
+                  : Math.round(metrics.tokensPerPublished)
+              }
+            />
+          </div>
+        ) : (
+          <Text size="caption" tone="tertiary">
+            {t("Pipeline metrics unavailable.")}
+          </Text>
+        )}
+      </section>
+
+      <section>
+        <Heading level={3} size="section">
+          {t("Stage funnel (24h)")}
+        </Heading>
+        {metrics?.stageBuckets && metrics.stageBuckets.length > 0 ? (
+          <ul className={styles.list}>
+            {metrics.stageBuckets.slice(0, 40).map((b, i) => (
+              <li key={`${b.stage}-${b.decision}-${b.reason}-${i}`} className={styles.card}>
+                <Text size="caption" tone="tertiary">
+                  {b.stage} · {b.decision} · {b.reason || "—"} · ×{b.count}
+                </Text>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Text size="caption" tone="tertiary">
+            {t("No stage metrics yet.")}
+          </Text>
+        )}
+      </section>
+
+      <section>
+        <Heading level={3} size="section">
+          {t("Rejection reasons (24h)")}
+        </Heading>
+        {metrics?.reasonHistogram && metrics.reasonHistogram.length > 0 ? (
+          <ul className={styles.list}>
+            {metrics.reasonHistogram.map((r) => (
+              <li key={r.reason} className={styles.card}>
+                <Text size="caption" tone="tertiary">
+                  {r.reason} · ×{r.count}
+                </Text>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Text size="caption" tone="tertiary">
+            {t("No rejection reasons in the window.")}
+          </Text>
+        )}
+      </section>
+
+      <section>
+        <Heading level={3} size="section">
+          {t("Documents (roles)")}
+        </Heading>
+        {documents.length === 0 ? (
+          <Text size="caption" tone="tertiary">
+            {t("No content documents yet.")}
+          </Text>
+        ) : (
+          <ul className={styles.list}>
+            {documents.map((d) => (
+              <li key={d.id} className={styles.card}>
+                <div className={styles.cardTitleRow}>
+                  <Badge tone="neutral">{d.role}</Badge>
+                  <Badge tone="neutral">{d.kind}</Badge>
+                  <Badge tone="neutral">{d.examSlug}</Badge>
+                </div>
+                <Text size="caption" tone="tertiary">
+                  {d.roleMethod ?? "—"}
+                  {d.roleConfidence != null ? ` · conf ${d.roleConfidence.toFixed(2)}` : ""}
+                  {d.rank != null ? ` · rank ${d.rank.toFixed(2)}` : ""}
+                  {` · ${d.sectionCount ?? 0} sections · ${d.chunkCount} chunks`}
+                </Text>
+                <Button size="sm" variant="ghost" onClick={() => void loadDocument(d.id)}>
+                  {t("Sections")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {docDetail ? (
+          <div className={styles.details}>
+            <Text size="caption" tone="secondary">
+              {docDetail.document.examSlug} · {docDetail.document.role} ·{" "}
+              {docDetail.sections.length} sections
+            </Text>
+            <ul className={styles.reviews}>
+              {docDetail.sections.slice(0, 40).map((s) => (
+                <li key={s.id}>
+                  <Text size="caption" tone="tertiary">
+                    {s.role} · {s.heading ?? "—"}
+                  </Text>
+                </li>
+              ))}
+            </ul>
+            {docDetail.document.stats ? (
+              <details>
+                <summary>
+                  <Text size="caption" tone="tertiary">
+                    {t("Stats JSON")}
+                  </Text>
+                </summary>
+                <pre className={styles.reviews}>
+                  {JSON.stringify(docDetail.document.stats, null, 2)}
+                </pre>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section>
+        <Heading level={3} size="section">
+          {t("Topic queries")}
+        </Heading>
+        {topicQueries.length === 0 ? (
+          <Text size="caption" tone="tertiary">
+            {t("No topic queries recorded.")}
+          </Text>
+        ) : (
+          <ul className={styles.list}>
+            {topicQueries.map((row) => (
+              <li key={row.id} className={styles.card}>
+                <div className={styles.cardTitleRow}>
+                  <Badge tone={row.status === "done" ? "success" : "neutral"}>{row.status}</Badge>
+                  <Badge tone="neutral">{row.canonicalKey}</Badge>
+                </div>
+                <Text size="caption" tone="tertiary">
+                  found {row.candidatesFound} · stored {row.candidatesStored} ·{" "}
+                  {formatAt(row.finishedAt ?? row.createdAt)}
+                </Text>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </Stack>

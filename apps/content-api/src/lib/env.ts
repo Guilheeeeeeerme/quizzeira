@@ -24,4 +24,13 @@ export const env = {
   s3ForcePathStyle: (process.env.S3_FORCE_PATH_STYLE || "true") === "true",
   /** Must match the embedding model the worker uses. */
   embeddingDimensions: num("CONTENT_EMBEDDING_DIMENSIONS", 768),
+  /** Cross-plane join for §30 Artifact → Source / TopicQuery. */
+  discoveryApiUrl: (process.env.DISCOVERY_API_URL || "http://discovery-api:3010").replace(
+    /\/+$/,
+    "",
+  ),
+  discoveryApiKey:
+    process.env.INTERNAL_API_KEY_DISCOVERY ||
+    process.env.INTERNAL_API_KEY ||
+    "dev-discovery-key",
 };

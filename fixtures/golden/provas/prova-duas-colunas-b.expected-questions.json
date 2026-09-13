@@ -1,0 +1,35 @@
+{
+  "fixtureId": "PRO-003",
+  "layout": "two-column",
+  "gabarito": "separate",
+  "questions": [
+    {
+      "number": 11,
+      "stem": "Em \"Os livros, que eram novos, chegaram\", a oração destacada é:",
+      "options": ["subordinada adjetiva restritiva", "subordinada adjetiva explicativa", "subordinada adverbial", "coordenada", "principal"],
+      "answerKey": "B",
+      "subjectHint": "Língua Portuguesa ▸ Sintaxe ▸ Orações subordinadas"
+    },
+    {
+      "number": 12,
+      "stem": "Se p→q é falsa, então:",
+      "options": ["p verdadeira e q falsa", "p falsa e q verdadeira", "ambas falsas", "ambas verdadeiras", "indeterminado"],
+      "answerKey": "A",
+      "subjectHint": "Raciocínio Lógico ▸ Condicional"
+    },
+    {
+      "number": 13,
+      "stem": "Ato administrativo vinculado:",
+      "options": ["admite discricionariedade ampla", "a lei fixa os elementos", "depende só da vontade do agente", "não produz efeitos", "é sempre nulo"],
+      "answerKey": "B",
+      "subjectHint": "Direito Administrativo ▸ Atos administrativos"
+    },
+    {
+      "number": 14,
+      "stem": "Juros compostos de capital C à taxa i por n períodos:",
+      "options": ["C·i·n", "C(1+i)^n", "C/(1+i)^n", "C+i+n", "C·n/i"],
+      "answerKey": "B",
+      "subjectHint": "Matemática Financeira ▸ Juros compostos"
+    }
+  ]
+}

@@ -1,0 +1,340 @@
+{
+  "version": "1",
+  "description": "Golden dataset for crawler redesign (§42) — synthetic Portuguese stubs",
+  "fixtures": [
+    {
+      "id": "REG-DOC-001",
+      "path": "regression/listing-trivia/listing-page.html",
+      "category": "administrative",
+      "expectedRole": "administrative",
+      "expectedSubtype": "listagem",
+      "notes": "Reconstructed portal listing behind screenshot failures (§43)"
+    },
+    {
+      "id": "REG-001",
+      "path": "regression/listing-trivia/questions.json",
+      "category": "regression",
+      "expectedReasons": ["tests_exam_metadata", "knowledge_unit_ids_missing"]
+    },
+    {
+      "id": "EDT-001",
+      "path": "editais/edital-federal-cesgranrio.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "edital_abertura",
+      "expectedSyllabus": "editais/edital-federal-cesgranrio.expected-syllabus.json"
+    },
+    {
+      "id": "EDT-002",
+      "path": "editais/edital-estadual-tce.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "edital_abertura",
+      "expectedSyllabus": "editais/edital-estadual-tce.expected-syllabus.json"
+    },
+    {
+      "id": "EDT-003",
+      "path": "editais/edital-municipal.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "edital_abertura",
+      "expectedSyllabus": "editais/edital-municipal.expected-syllabus.json"
+    },
+    {
+      "id": "EDT-004",
+      "path": "editais/edital-federal-cebraspe.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "edital_abertura",
+      "expectedSyllabus": "editais/edital-federal-cebraspe.expected-syllabus.json"
+    },
+    {
+      "id": "EDT-005",
+      "path": "editais/edital-estadual-sefaz.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "edital_abertura",
+      "expectedSyllabus": "editais/edital-estadual-sefaz.expected-syllabus.json"
+    },
+    {
+      "id": "EDT-006",
+      "path": "editais/edital-retificacao.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "edital_retificacao",
+      "expectedSyllabus": "editais/edital-retificacao.expected-syllabus.json"
+    },
+    {
+      "id": "ANX-001",
+      "path": "anexos/anexo-conteudo-programatico.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "conteudo_programatico_anexo"
+    },
+    {
+      "id": "ANX-002",
+      "path": "anexos/anexo-programa-oficial.html",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "conteudo_programatico_anexo"
+    },
+    {
+      "id": "ANX-003",
+      "path": "anexos/anexo-prose-running.txt",
+      "category": "specification",
+      "expectedRole": "specification",
+      "expectedSubtype": "conteudo_programatico_anexo",
+      "notes": "Running prose for LLM residue syllabus path"
+    },
+    {
+      "id": "PRO-001",
+      "path": "provas/prova-objetiva-dummy.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "prova_objetiva",
+      "expectedQuestions": "provas/prova-objetiva-dummy.expected-questions.json"
+    },
+    {
+      "id": "PRO-002",
+      "path": "provas/prova-duas-colunas-a.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "prova_objetiva",
+      "expectedQuestions": "provas/prova-duas-colunas-a.expected-questions.json"
+    },
+    {
+      "id": "PRO-003",
+      "path": "provas/prova-duas-colunas-b.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "prova_objetiva",
+      "expectedQuestions": "provas/prova-duas-colunas-b.expected-questions.json"
+    },
+    {
+      "id": "PRO-004",
+      "path": "provas/prova-inline-gabarito.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "prova_objetiva",
+      "expectedQuestions": "provas/prova-inline-gabarito.expected-questions.json",
+      "notes": "Inline gabarito at end of document"
+    },
+    {
+      "id": "PRO-005",
+      "path": "provas/prova-gabarito-separado.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "prova_objetiva",
+      "expectedQuestions": "provas/prova-gabarito-separado.expected-questions.json",
+      "notes": "Gabarito in separate GAB-001 document"
+    },
+    {
+      "id": "GAB-001",
+      "path": "gabaritos/gabarito-lista.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "gabarito_preliminar"
+    },
+    {
+      "id": "GAB-002",
+      "path": "gabaritos/gabarito-tabela.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "gabarito_definitivo"
+    },
+    {
+      "id": "GAB-003",
+      "path": "gabaritos/gabarito-caderno.html",
+      "category": "evidence",
+      "expectedRole": "evidence",
+      "expectedSubtype": "gabarito_preliminar"
+    },
+    {
+      "id": "KNW-001",
+      "path": "knowledge/grammar-chapter.html",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "artigo_educacional"
+    },
+    {
+      "id": "KNW-002",
+      "path": "knowledge/lei-14133-excerpt.html",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "lei"
+    },
+    {
+      "id": "KNW-003",
+      "path": "knowledge/educational-with-nav.html",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "artigo_educacional",
+      "notes": "Heavy nav/ads; body still knowledge"
+    },
+    {
+      "id": "KNW-004",
+      "path": "knowledge/wikipedia-style.html",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "artigo_educacional"
+    },
+    {
+      "id": "KNW-005",
+      "path": "knowledge/forum-qa.html",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "forum_qa",
+      "notes": "Low quality — prefer reject/park for generation"
+    },
+    {
+      "id": "KNW-006",
+      "path": "knowledge/paywalled-teaser.html",
+      "category": "knowledge",
+      "expectedRole": "unknown",
+      "expectedSubtype": "paywall",
+      "notes": "Reject path"
+    },
+    {
+      "id": "KNW-007",
+      "path": "knowledge/seo-listicle.html",
+      "category": "knowledge",
+      "expectedRole": "unknown",
+      "expectedSubtype": "seo_listicle",
+      "notes": "Reject path"
+    },
+    {
+      "id": "KNW-008",
+      "path": "knowledge/spanish-reject.html",
+      "category": "knowledge",
+      "expectedRole": "unknown",
+      "expectedSubtype": "wrong_language",
+      "notes": "Spanish — language reject"
+    },
+    {
+      "id": "ADM-001",
+      "path": "administrative/inscricao-page.html",
+      "category": "administrative",
+      "expectedRole": "administrative",
+      "expectedSubtype": "inscricao"
+    },
+    {
+      "id": "ADM-002",
+      "path": "administrative/cronograma.html",
+      "category": "administrative",
+      "expectedRole": "administrative",
+      "expectedSubtype": "cronograma"
+    },
+    {
+      "id": "ADM-003",
+      "path": "administrative/resultado-page.html",
+      "category": "administrative",
+      "expectedRole": "administrative",
+      "expectedSubtype": "resultado"
+    },
+    {
+      "id": "ADM-004",
+      "path": "administrative/faq-page.html",
+      "category": "administrative",
+      "expectedRole": "administrative",
+      "expectedSubtype": "faq"
+    },
+    {
+      "id": "ADM-005",
+      "path": "administrative/news-article.html",
+      "category": "administrative",
+      "expectedRole": "administrative",
+      "expectedSubtype": "noticia"
+    },
+    {
+      "id": "KNW-DOCX-001",
+      "path": "knowledge/manual-etica.html",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "manual_chapter",
+      "notes": "DOCX path covered by apps/doc-processor/tests/test_docx_process.py (runtime-built); PDF twin: knowledge/manual-etica.pdf"
+    },
+    {
+      "id": "KNW-PDF-004",
+      "path": "knowledge/manual-etica.pdf",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "manual_chapter"
+    },
+    {
+      "id": "KNW-PDF-001",
+      "path": "knowledge/grammar-chapter.pdf",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "manual_chapter",
+      "notes": "PDF text-layer grammar chapter"
+    },
+    {
+      "id": "KNW-PDF-002",
+      "path": "knowledge/lei-14133-excerpt.pdf",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "legal_excerpt"
+    },
+    {
+      "id": "KNW-PDF-003",
+      "path": "knowledge/math-porcentagem.pdf",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "apostila"
+    },
+    {
+      "id": "KNW-OCR-001",
+      "path": "knowledge/scanned-page-ocr-stub.pdf",
+      "category": "knowledge",
+      "expectedRole": "knowledge",
+      "expectedSubtype": "scanned_ocr_stub",
+      "notes": "Image XObject + caption for OCR routing smoke"
+    },
+    {
+      "id": "GAR-001",
+      "path": "garbage/empty-pdf-stub.pdf",
+      "category": "garbage",
+      "expectedRole": "unknown",
+      "notes": "Near-empty PDF; companion .txt stub retained for text-only runners"
+    },
+    {
+      "id": "GAR-001b",
+      "path": "garbage/empty-pdf-stub.txt",
+      "category": "garbage",
+      "expectedRole": "unknown"
+    },
+    {
+      "id": "GAR-002",
+      "path": "garbage/cookie-wall.html",
+      "category": "garbage",
+      "expectedRole": "unknown",
+      "expectedSubtype": "cookie_wall"
+    },
+    {
+      "id": "GAR-003",
+      "path": "garbage/binary-in-html.html",
+      "category": "garbage",
+      "expectedRole": "unknown",
+      "expectedSubtype": "binary_embed"
+    },
+    {
+      "id": "GAR-004",
+      "path": "garbage/glyph-noise.txt",
+      "category": "garbage",
+      "expectedRole": "unknown",
+      "expectedSubtype": "glyph_noise"
+    },
+    {
+      "id": "PAR-001",
+      "path": "paraphrase-pairs.json",
+      "category": "paraphrase",
+      "notes": "30 previous-question pairs for dedup"
+    },
+    {
+      "id": "LAB-001",
+      "path": "labelled-sections.json",
+      "category": "labelled_sections",
+      "notes": "seeds + expanders materialize ≥600 labelled sections (§42)"
+    }
+  ]
+}

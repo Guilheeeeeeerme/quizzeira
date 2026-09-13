@@ -2,7 +2,7 @@
 //
 // This worker owns the only draft → published transition in the platform.
 // If it stops, nothing new reaches learners — which is the intended failure mode.
-import { logInfo, runLoop, workerEnv } from "@quizzeira/worker-kit";
+import { logInfo, newRunId, runLoop, withRunIdAsync, workerEnv } from "@quizzeira/worker-kit";
 import { qualityEnv } from "./env.js";
 import { runEvalPass } from "./pipeline.js";
 
@@ -14,7 +14,7 @@ async function tick(): Promise<void> {
     logInfo("skip", { worker: NAME, reason: "CONTENT_QUALITY_ENABLED=false" });
     return;
   }
-  await runEvalPass();
+  await withRunIdAsync(newRunId(), () => runEvalPass());
 }
 
 logInfo("interval mode", {

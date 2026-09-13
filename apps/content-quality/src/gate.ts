@@ -1,25 +1,31 @@
-// Concept: Publish gate (turns structural + judge signals into one decision)
+// Concept: Publish gate (turns structural + ladder signals into one decision)
 //
 // Pure function on purpose: the decision rule is the most consequential logic
 // in the pipeline, so it is testable without a model or a database.
+import type { GroundingResult } from "./grounding.js";
 import type { JudgeVerdict } from "./judge.js";
+import type { RelevanceResult } from "./relevance.js";
 import type { StructuralResult } from "./structural.js";
 
 export type GateDecision = "published" | "failed" | "needs_review";
 
 export interface GateInput {
   structural: StructuralResult;
+  /** Rung 2 — syllabus/metadata classifier. Null when not run. */
+  relevance?: RelevanceResult | null;
+  /** Rung 3 — grounding checks. Null when not run. */
+  grounding?: GroundingResult | null;
   /** Null when the judge could not run (no provider, budget hit, outage). */
   judge: JudgeVerdict | null;
   /** The item's own claimed answer, for agreement checking. */
   correctIndex: number | null;
   thresholds: GateThresholds;
   /**
-   * When true and judge is null, structurally-ok extraction items publish
+   * When true and judge is null, structurally-ok extraction/transcription items publish
    * instead of parking in needs_review (Headroom/provider outage escape hatch).
    */
   publishExtractionWithoutJudge?: boolean;
-  origin?: "extraction" | "generation" | string | null;
+  origin?: "extraction" | "generation" | "transcription" | string | null;
 }
 
 export interface GateThresholds {
@@ -36,8 +42,12 @@ export interface GateResult {
   notes: string;
 }
 
+function isTranscriptionOrExtraction(origin: string | null | undefined): boolean {
+  return origin === "extraction" || origin === "transcription";
+}
+
 export function decide(input: GateInput): GateResult {
-  const { structural, judge, thresholds } = input;
+  const { structural, relevance, grounding, judge, thresholds } = input;
 
   // Structural failures are deterministic and final; no model opinion can
   // rescue a malformed item.
@@ -50,14 +60,32 @@ export function decide(input: GateInput): GateResult {
     };
   }
 
+  if (relevance && !relevance.ok) {
+    return {
+      decision: "failed",
+      score: 0,
+      reasons: relevance.reasons,
+      notes: relevance.notes,
+    };
+  }
+
+  if (grounding && !grounding.ok) {
+    return {
+      decision: "failed",
+      score: 0,
+      reasons: grounding.reasons,
+      notes: grounding.notes,
+    };
+  }
+
   // Without a judge verdict we refuse to publish, but we also refuse to fail —
   // an infrastructure gap is not the item's fault, so a human decides.
-  // Exception: past-exam extraction can opt into structural-only publish when
+  // Exception: past-exam extraction/transcription can opt into structural-only publish when
   // the LLM path (often Headroom) is known broken.
   if (!judge) {
     if (
       input.publishExtractionWithoutJudge &&
-      input.origin === "extraction"
+      isTranscriptionOrExtraction(input.origin)
     ) {
       return {
         decision: "published",
@@ -91,6 +119,32 @@ export function decide(input: GateInput): GateResult {
       notes:
         `judge answered ${judge.answerIndex}, item keys ${input.correctIndex}` +
         (judge.notes ? ` — ${judge.notes}` : ""),
+    };
+  }
+
+  // V2 axes: low relevance/durability hard-fail; low grounding → HITL (§25.5).
+  if (judge.durability != null && judge.durability < 0.5) {
+    return {
+      decision: "failed",
+      score: judge.score,
+      reasons: [...reasons, "judge_low_durability"],
+      notes: judge.notes || "durability below 0.5",
+    };
+  }
+  if (judge.relevance != null && judge.relevance < 0.5) {
+    return {
+      decision: "failed",
+      score: judge.score,
+      reasons: [...reasons, "judge_low_relevance"],
+      notes: judge.notes || "relevance below 0.5",
+    };
+  }
+  if (judge.grounding != null && judge.grounding < 0.5) {
+    return {
+      decision: "needs_review",
+      score: judge.score,
+      reasons: [...reasons, "judge_low_grounding"],
+      notes: judge.notes || "grounding below 0.5",
     };
   }
 

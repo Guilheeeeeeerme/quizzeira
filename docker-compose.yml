@@ -9,6 +9,14 @@
 # Internal APIs are never LAN-exposed: only web (5173) and the study API
 # (127.0.0.1:3000) publish ports. discovery-api and content-api stay on the
 # private network.
+#
+# Cursor benchmark isolation: export COMPOSE_PROJECT_NAME=quizzeira-cursor
+# and prefer host ports 4340–4349 when running beside other implementations
+# (override published ports via compose override or .env — see .env.sample).
+#
+# Deterministic E2E (§41.3): set LLM_PROVIDER=fixture in .env (see .env.sample).
+# content-worker, content-quality, and quiz-corrector honor it via env_file and
+# the LLM_PROVIDER passthrough below (worker-kit fixture provider).
 services:
   mysql:
     image: mysql:8.0
@@ -64,15 +72,16 @@ services:
       - private
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # Docker Hub minio/minio often requires login; Quay is the public mirror.
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-quizzeira}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-quizzeira-secret}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_HOST_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -114,7 +123,8 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
     ports:
       # Bind localhost only so /internal is not LAN-exposed in compose.
-      - "127.0.0.1:3000:3000"
+      # Host port override: API_HOST_PORT (e.g. 4340 for quizzeira-cursor).
+      - "127.0.0.1:${API_HOST_PORT:-3000}:3000"
     volumes:
       - ./apps/api:/app/apps/api
       - ./packages/shared:/app/packages/shared
@@ -155,7 +165,7 @@ services:
     environment:
       VITE_API_ORIGIN: ${API_ORIGIN:-http://localhost:3000}
     ports:
-      - "5173:5173"
+      - "${WEB_HOST_PORT:-5173}:5173"
     volumes:
       - ./apps/web:/app/apps/web
       - ./packages/shared:/app/packages/shared
@@ -188,7 +198,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: https://api.openai.com/v1
-      LLM_PROVIDER_ORDER: openai,gemini
+      # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
       MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
@@ -281,6 +293,8 @@ services:
       DISCOVERY_CRAWLER_MAX_SOURCES: ${DISCOVERY_CRAWLER_MAX_SOURCES:-16}
       DISCOVERY_CRAWLER_MAX_OPEN_PER_SOURCE: ${DISCOVERY_CRAWLER_MAX_OPEN_PER_SOURCE:-8}
       DISCOVERY_CRAWLER_MAX_ARTIFACTS: ${DISCOVERY_CRAWLER_MAX_ARTIFACTS:-16}
+      DISCOVERY_CRAWLER_MAX_OAB_EDITIONS: ${DISCOVERY_CRAWLER_MAX_OAB_EDITIONS:-3}
+      DISCOVERY_CRAWLER_NAV_TIMEOUT_MS: ${DISCOVERY_CRAWLER_NAV_TIMEOUT_MS:-45000}
     volumes:
       - ./apps/discovery-crawler:/app/apps/discovery-crawler
       - ./packages/shared:/app/packages/shared
@@ -298,6 +312,24 @@ services:
       - private
 
   # ── Content plane (Extraction, Generation, Eval) ──────────────────────────
+
+  doc-processor:
+    build:
+      context: ./apps/doc-processor
+      dockerfile: Dockerfile
+      network: host
+    restart: unless-stopped
+    ports:
+      - "${DOC_PROCESSOR_HOST_PORT:-3030}:3030"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3030/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - private
+      - dmz
 
   content-api:
     build:
@@ -370,13 +402,16 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: https://api.openai.com/v1
-      LLM_PROVIDER_ORDER: openai,gemini
+      # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
       CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
+      DOC_PROCESSOR_URL: http://doc-processor:3030
     volumes:
       - ./apps/content-worker:/app/apps/content-worker
       - ./packages/shared:/app/packages/shared
@@ -387,6 +422,8 @@ services:
       content-api:
         condition: service_healthy
       discovery-api:
+        condition: service_healthy
+      doc-processor:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -417,7 +454,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
       OPENAI_BASE_URL: https://api.openai.com/v1
-      LLM_PROVIDER_ORDER: openai,gemini
+      # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}

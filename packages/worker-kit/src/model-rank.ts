@@ -1,6 +1,6 @@
 import { workerEnv } from "./env";
 
-export type ProviderName = "gemini" | "openai";
+export type ProviderName = "gemini" | "openai" | "fixture";
 
 export interface RankedModel {
   provider: ProviderName;
@@ -77,6 +77,7 @@ let refreshing = false;
 
 function defaultModelFor(provider: ProviderName): string {
   if (provider === "gemini") return workerEnv.geminiModel;
+  if (provider === "fixture") return "fixture-v1";
   return workerEnv.openaiModel;
 }
 
@@ -162,6 +163,38 @@ export function rankFor(provider: ProviderName): string[] {
     defaultModelFor(provider),
     workerEnv.modelRankTopN,
   );
+}
+
+export type ModelTier = "cheap" | "mid" | "strong";
+
+const TIER_MODELS: Record<ModelTier, Partial<Record<ProviderName, string[]>>> = {
+  cheap: {
+    gemini: ["gemini-2.5-flash-lite"],
+    openai: ["gpt-5-nano", "gpt-4.1-nano"],
+  },
+  mid: {
+    gemini: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    openai: ["gpt-4o-mini", "gpt-4.1-nano"],
+  },
+  strong: {
+    gemini: ["gemini-2.5-flash", "gemini-2.5-pro"],
+    openai: ["gpt-4o", "gpt-4o-mini"],
+  },
+};
+
+/** Rank models within a requested tier, falling back to cost rank. */
+export function rankForTier(provider: ProviderName, tier: ModelTier = "mid"): string[] {
+  ensureScheduled();
+  const preferred = TIER_MODELS[tier][provider] ?? [];
+  const fallback = rankFor(provider);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const model of [...preferred, ...fallback]) {
+    if (seen.has(model)) continue;
+    seen.add(model);
+    out.push(model);
+  }
+  return out.length > 0 ? out : [defaultModelFor(provider)];
 }
 
 export function resetModelRankForTests(): void {

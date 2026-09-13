@@ -1,0 +1,42 @@
+{
+  "fixtureId": "EDT-005",
+  "banco": "estadual-sefaz",
+  "positions": [
+    {
+      "title": "Auditor Fiscal da Receita Estadual",
+      "subjects": [
+        {
+          "name": "Língua Portuguesa",
+          "topics": [
+            { "name": "Texto", "subtopics": ["Redação oficial", "Tipologia textual", "Figuras de linguagem"] }
+          ]
+        },
+        {
+          "name": "Direito Tributário",
+          "topics": [
+            { "name": "Sistema", "subtopics": ["Sistema Tributário Nacional"] },
+            { "name": "ICMS", "subtopics": ["ICMS — fatos geradores e base de cálculo"] },
+            { "name": "Processo", "subtopics": ["Processo administrativo tributário"] }
+          ]
+        },
+        {
+          "name": "Matemática Financeira",
+          "topics": [
+            { "name": "Juros", "subtopics": ["Juros simples e compostos", "Descontos", "Séries de pagamentos"] }
+          ]
+        }
+      ],
+      "leaves": [
+        "Língua Portuguesa ▸ Texto ▸ Redação oficial",
+        "Língua Portuguesa ▸ Texto ▸ Tipologia textual",
+        "Língua Portuguesa ▸ Texto ▸ Figuras de linguagem",
+        "Direito Tributário ▸ Sistema ▸ Sistema Tributário Nacional",
+        "Direito Tributário ▸ ICMS ▸ ICMS — fatos geradores e base de cálculo",
+        "Direito Tributário ▸ Processo ▸ Processo administrativo tributário",
+        "Matemática Financeira ▸ Juros ▸ Juros simples e compostos",
+        "Matemática Financeira ▸ Juros ▸ Descontos",
+        "Matemática Financeira ▸ Juros ▸ Séries de pagamentos"
+      ]
+    }
+  ]
+}

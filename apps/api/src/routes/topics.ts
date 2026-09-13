@@ -14,7 +14,8 @@ import {
 } from "../services/topic.service";
 import { getPillAttempt, startPill } from "../services/pill.service";
 import { guardedCreateTopic } from "./exams";
-import { assertOpenExamOnlyPreset } from "../services/exam-catalog.service";
+import { assertOpenExamOnlyPreset, examSlugFromGuidelines } from "../services/exam-catalog.service";
+import { fetchPublishedSyllabus } from "../lib/pipeline-clients";
 
 function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
   const error = err as { statusCode?: number; message?: string };
@@ -47,6 +48,23 @@ export async function topicRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get<{ Params: { topicId: string } }>(
+    "/topics/:topicId/syllabus",
+    async (request, reply) => {
+      if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
+      try {
+        const topic = await getTopic(request.userId, request.params.topicId);
+        const examSlug = examSlugFromGuidelines(topic.guidelines);
+        if (!examSlug) {
+          return { examSlug: null, syllabus: null, nodes: [], positions: [] };
+        }
+        return await fetchPublishedSyllabus(examSlug);
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
+
   app.patch<{ Params: { topicId: string }; Body: UpdateTopicInput }>(
     "/topics/:topicId",
     async (request, reply) => {
@@ -74,7 +92,12 @@ export async function topicRoutes(app: FastifyInstance) {
 
   app.post<{
     Params: { topicId: string };
-    Body: { focusText?: string; durationMinutes?: SessionDurationMinutes | null; locale?: LocaleCode };
+    Body: {
+      focusText?: string;
+      syllabusNodeIds?: string[];
+      durationMinutes?: SessionDurationMinutes | null;
+      locale?: LocaleCode;
+    };
   }>("/topics/:topicId/pills/start", async (request, reply) => {
     if (!request.userId) return reply.code(401).send({ error: "Unauthorized" });
     try {

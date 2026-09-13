@@ -1,0 +1,45 @@
+{
+  "description": "§41.4 negative draft stems — must fail before judge with the listed reason",
+  "items": [
+    {
+      "id": "NEG-001",
+      "prompt": "Quantas vagas são oferecidas para o cargo de Analista?",
+      "expectedReason": "tests_exam_metadata"
+    },
+    {
+      "id": "NEG-002",
+      "prompt": "Qual o valor da taxa de inscrição?",
+      "expectedReason": "tests_exam_metadata"
+    },
+    {
+      "id": "NEG-003",
+      "prompt": "Até que data podem ser realizadas as inscrições?",
+      "expectedReason": "tests_exam_metadata"
+    },
+    {
+      "id": "NEG-004",
+      "prompt": "Qual instituição é responsável pela organização do concurso?",
+      "expectedReason": "tests_exam_metadata"
+    },
+    {
+      "id": "NEG-005",
+      "prompt": "Qual a remuneração inicial do cargo?",
+      "expectedReason": "tests_exam_metadata"
+    },
+    {
+      "id": "NEG-006",
+      "prompt": "Quais assuntos de Língua Portuguesa constam no conteúdo programático?",
+      "expectedReason": "tests_syllabus_meta"
+    },
+    {
+      "id": "NEG-007",
+      "prompt": "Em que cidade será aplicada a prova objetiva?",
+      "expectedReason": "tests_exam_metadata"
+    },
+    {
+      "id": "NEG-008",
+      "prompt": "Qual o número do edital de abertura?",
+      "expectedReason": "tests_exam_metadata"
+    }
+  ]
+}

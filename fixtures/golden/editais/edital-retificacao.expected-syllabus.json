@@ -1,0 +1,40 @@
+{
+  "fixtureId": "EDT-006",
+  "banco": "retificacao",
+  "positions": [
+    {
+      "title": "Analista Judiciário — Área Administrativa",
+      "subjects": [
+        {
+          "name": "Língua Portuguesa",
+          "topics": [
+            { "name": "Texto", "subtopics": ["Compreensão e interpretação de textos"] },
+            { "name": "Sintaxe", "subtopics": ["Concordância verbal e nominal"] }
+          ]
+        },
+        {
+          "name": "Direito Administrativo",
+          "topics": [
+            { "name": "Fundamentos", "subtopics": ["Princípios da Administração Pública", "Atos administrativos", "Ética no serviço público"] }
+          ]
+        },
+        {
+          "name": "Informática",
+          "topics": [
+            { "name": "Aplicativos", "subtopics": ["Sistemas operacionais", "Editor de textos e planilhas", "Segurança da informação"] }
+          ]
+        }
+      ],
+      "leaves": [
+        "Língua Portuguesa ▸ Texto ▸ Compreensão e interpretação de textos",
+        "Língua Portuguesa ▸ Sintaxe ▸ Concordância verbal e nominal",
+        "Direito Administrativo ▸ Fundamentos ▸ Princípios da Administração Pública",
+        "Direito Administrativo ▸ Fundamentos ▸ Atos administrativos",
+        "Direito Administrativo ▸ Fundamentos ▸ Ética no serviço público",
+        "Informática ▸ Aplicativos ▸ Sistemas operacionais",
+        "Informática ▸ Aplicativos ▸ Editor de textos e planilhas",
+        "Informática ▸ Aplicativos ▸ Segurança da informação"
+      ]
+    }
+  ]
+}
