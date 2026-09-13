@@ -101,3 +101,23 @@ describe("self-detail concurso pages", () => {
   assert.equal(withinRegistrationGrace(null, now), false);
 });
 });
+
+import { hasExamIdentity } from "./detail.js";
+
+describe("hasExamIdentity", () => {
+  it("rejects nav/chrome rows and accepts real concursos", () => {
+    const none = { editionKey: null, registrationEnd: null, documentLinks: [] as never[] };
+    assert.equal(hasExamIdentity({ ...none, title: "Cebraspe | O melhor em avaliação de pessoas" }), false);
+    assert.equal(hasExamIdentity({ ...none, title: "MAIS INFORMAÇÕES" }), false);
+    assert.equal(hasExamIdentity({ ...none, title: "Concursos" }), false);
+    assert.equal(hasExamIdentity({ ...none, title: "Concurso Transpetro 2026", editionKey: "2026" }), true);
+    assert.equal(
+      hasExamIdentity({
+        ...none,
+        title: "Concurso Público para a Defensoria Pública",
+        documentLinks: [{ url: "https://x/edital.pdf", anchorLabel: "Edital", kindHint: "edital", roleHint: "specification" }],
+      }),
+      true,
+    );
+  });
+});

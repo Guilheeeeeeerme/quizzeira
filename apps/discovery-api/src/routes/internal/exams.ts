@@ -3,6 +3,9 @@ import { openExamId } from "@quizzeira/shared";
 import { prisma } from "../../lib/prisma";
 import { examToWire } from "./helpers";
 
+/** Days after registration closes during which a concurso stays in the catalog. */
+const CATALOG_GRACE_DAYS = 90;
+
 export async function registerInternalExamRoutes(app: FastifyInstance): Promise<void> {
   // ── Exams ─────────────────────────────────────────────────────────────────
 
@@ -100,9 +103,18 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
     return { record: examToWire(row) };
   });
 
+  /**
+   * Study catalog feed. Registration-open exams plus concursos whose
+   * registration closed recently (the prova is still ahead — that is the study
+   * window). Vestibular/other kinds are excluded (§11.2.5).
+   */
   app.get("/internal/open-exams", async () => {
+    const graceStart = new Date(Date.now() - CATALOG_GRACE_DAYS * 86_400_000);
     const items = await prisma.exam.findMany({
-      where: { status: "open" },
+      where: {
+        kind: { in: ["concurso", "oab"] },
+        OR: [{ status: "open" }, { status: "unknown", registrationEnd: { gte: graceStart } }],
+      },
       orderBy: { lastSeenAt: "desc" },
       take: 200,
     });

@@ -106,7 +106,9 @@ export function parseDetailHtml(
   const editionKey =
     editalNumberEditionKey(pageText) || extractEditionKey(title, detailUrl);
   const examSlug = editionKey ? buildEditionSlug(org, editionKey, "") || null : null;
-  const kind = inferExamKind(title, pageText);
+  // Kind from the title block only: site nav ("MESTRADO E PÓS", "VESTIBULARES")
+  // made Transpetro 2026 kind=other and hid it from the catalog.
+  const kind = inferExamKind(title, pageText.slice(0, 600));
   const regWindow = parseRegistrationWindow(pageText);
   const positions = extractPositions(pageText);
   const emphasis = extractEmphasisHints(`${title} ${pageText}`);
@@ -200,6 +202,22 @@ export function isSelfDetailPage(
   const docUrls = new Set(parse.documentLinks.map((d) => d.url));
   const pdfOrDoc = listingHrefs.filter((h) => /\.pdf(\?|#|$)/i.test(h) || docUrls.has(h));
   return listingHrefs.length === 0 || pdfOrDoc.length / listingHrefs.length >= 0.6;
+}
+
+/**
+ * §11.2.2: an exam needs an identity signal — edition key, registration
+ * window, or a specification document. Listing/nav pages ("Concursos em
+ * andamento", "Mais informações", "Nosso portfólio") have none and must not
+ * become catalog rows (RC-2).
+ */
+export function hasExamIdentity(
+  parse: Pick<DetailPageParse, "editionKey" | "registrationEnd" | "documentLinks" | "title">,
+): boolean {
+  if (/\|/.test(parse.title) || /^\s*(mais informa|nosso portf|concursos?\s*$)/i.test(parse.title)) {
+    return false;
+  }
+  if (parse.editionKey || parse.registrationEnd) return true;
+  return parse.documentLinks.some((d) => d.roleHint === "specification");
 }
 
 /** Documents stay attachable for a while after registration closes (study window). */

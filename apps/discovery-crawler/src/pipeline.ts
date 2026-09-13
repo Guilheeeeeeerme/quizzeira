@@ -7,6 +7,7 @@ import { dmzGet, dmzPost, dmzPut, logError, logInfo, withRunIdAsync } from "@qui
 import { closeBrowser, crawlSourceListings, listingsToOpenRecords } from "./browser.js";
 import {
   detailFromPdfListing,
+  hasExamIdentity,
   isSelfDetailPage,
   parseDetailHtml,
   withinRegistrationGrace,
@@ -207,6 +208,16 @@ async function crawlListingMode(
       const html = (await fetchPage(listing.href, source)).html;
       detail = parseDetailHtml(html, listing.href, listing.title);
       detail = await enrichDetailWithPortal(detail, html);
+    }
+
+    if (!hasExamIdentity(detail)) {
+      logInfo("listing skipped: no exam identity", {
+        worker: NAME,
+        sourceId: source.id,
+        href: listing.href.slice(0, 160),
+        title: (detail.title || listing.title).slice(0, 80),
+      });
+      continue;
     }
 
     const examSlug =
