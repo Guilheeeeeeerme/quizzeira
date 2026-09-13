@@ -74,6 +74,8 @@ export interface ProcessPassResult {
 }
 
 const PAST_EXAM_KINDS = new Set(["prova", "gabarito", "past_exam"]);
+/** Document kinds the OAB/FGV extractor owns; everything else is v2 knowledge. */
+const OAB_LEGACY_KINDS = new Set(["prova", "gabarito", "past_exam", "edital"]);
 
 export async function runProcessPass(): Promise<ProcessPassResult> {
   const result: ProcessPassResult = {
@@ -96,7 +98,10 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
         status: "extracting",
       });
 
-      if (isOabExamSlug(document.examSlug)) {
+      // OAB banca PDFs (caderno / gabarito / edital) take the dedicated FGV
+      // extractor (docs/oab-exam.md). Study material discovered for an OAB
+      // syllabus leaf is ordinary knowledge and flows through pipeline v2.
+      if (isOabExamSlug(document.examSlug) && OAB_LEGACY_KINDS.has(document.kind)) {
         await content.patch(`/internal/documents/${document.id}`, { bumpAttempts: true });
         await processOabLegacy(document);
         result.processed += 1;
