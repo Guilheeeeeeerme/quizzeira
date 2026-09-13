@@ -69,6 +69,17 @@ describe("parseRegistrationWindow", () => {
     assert.equal(window!.end, "2026-03-30");
   });
 
+  it("inherits the end year when the first date omits it (Cesgranrio pages)", () => {
+    const window = parseRegistrationWindow(
+      "PROVAS 06/12/2026 Objetivas INSCRIÇÕES 12/08 a 21/09/2026 Taxa de inscrição: R$ 81,50",
+    );
+    assert.ok(window);
+    assert.equal(window!.start, "2026-08-12");
+    assert.equal(window!.end, "2026-09-21");
+    const colon = parseRegistrationWindow("Inscrições: 22/07/2026 a 20/08/2026 Pedidos de Isenção");
+    assert.equal(colon!.end, "2026-08-20");
+  });
+
   it("parses inscrições abertas até", () => {
     const window = parseRegistrationWindow("Inscrições abertas até 15/04/2026");
     assert.ok(window);

@@ -96,7 +96,7 @@ export function parseDetailHtml(
   listingTitle: string,
 ): DetailPageParse {
   const pageText = textOf(html);
-  const title = titleFromHtml(html, listingTitle);
+  const title = extractConcursoHeadline(pageText) ?? titleFromHtml(html, listingTitle);
   const org = extractKnownOrg(pageText) || extractKnownOrg(title);
   const banca = extractKnownBanca(pageText) || extractKnownBanca(title);
   const editionKey =
@@ -170,6 +170,41 @@ export function extractDocumentLinks(html: string, baseUrl: string): DocumentLin
   }
 
   return out;
+}
+
+const HEADLINE_RE =
+  /([A-ZÀ-Ú][A-ZÀ-Ú0-9 .'-]{2,60}?\s*[-–]\s*(?:CONCURSO\s+P[ÚU]BLICO|PROCESSO\s+SELETIVO)\s*[-–]?\s*(?:N[ºo°.]?\s*)?\d{1,4}\/20\d{2}(?:\s+[A-ZÀ-Ú][A-ZÀ-Ú-]{1,20})?)/;
+
+/**
+ * Concurso headline for pages whose <h1>/<title> is site chrome (e.g. IBAM's
+ * "Concursos Públicos no Estado de São Paulo"): "SANTOS - CONCURSO PÚBLICO - 74/2026 SEPLA-RH".
+ */
+export function extractConcursoHeadline(pageText: string): string | null {
+  const m = pageText.match(HEADLINE_RE);
+  return m?.[1]?.replace(/\s+/g, " ").trim() ?? null;
+}
+
+/**
+ * A Source whose start URL is already a concurso page (registration window +
+ * document anexos) must become ONE exam, not one exam per anexo (§11.2.2/6).
+ */
+export function isSelfDetailPage(
+  parse: Pick<DetailPageParse, "registrationEnd" | "documentLinks">,
+  listingHrefs: string[],
+): boolean {
+  if (!parse.registrationEnd || parse.documentLinks.length === 0) return false;
+  const docUrls = new Set(parse.documentLinks.map((d) => d.url));
+  const pdfOrDoc = listingHrefs.filter((h) => /\.pdf(\?|#|$)/i.test(h) || docUrls.has(h));
+  return listingHrefs.length === 0 || pdfOrDoc.length / listingHrefs.length >= 0.6;
+}
+
+/** Documents stay attachable for a while after registration closes (study window). */
+export const POST_REGISTRATION_GRACE_DAYS = 90;
+
+export function withinRegistrationGrace(registrationEnd: Date | null, now = new Date()): boolean {
+  if (!registrationEnd) return false;
+  const elapsedDays = (now.getTime() - registrationEnd.getTime()) / 86_400_000;
+  return elapsedDays >= 0 && elapsedDays <= POST_REGISTRATION_GRACE_DAYS;
 }
 
 /** When the listing row is itself a PDF edital, synthesize a minimal detail parse. */

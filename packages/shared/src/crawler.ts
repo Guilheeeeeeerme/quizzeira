@@ -276,17 +276,21 @@ const NON_CONCURSO_RE =
 export function parseRegistrationWindow(text: string): RegistrationWindow | null {
   const normalized = text.replace(/\s+/g, " ");
 
+  // First date may omit the year ("INSCRIÇÕES 12/08 a 21/09/2026"); it inherits the end year.
   const rangePatterns = [
-    /inscri[çc][õo]es?\s+(?:de\s+)?(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
-    /per[ií]odo\s+de\s+inscri[çc][õo]es?\s*(?:de\s+)?(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
-    /inscri[çc][õo]es?\s+abertas?\s+(?:de\s+)?(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    /inscri[çc][õo]es?\s*:?\s+(?:de\s+)?(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    /per[ií]odo\s+de\s+inscri[çc][õo]es?\s*:?\s*(?:de\s+)?(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    /inscri[çc][õo]es?\s+abertas?\s+(?:de\s+)?(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(?:a|at[ée])\s+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
   ];
 
   for (const re of rangePatterns) {
     const m = normalized.match(re);
     if (m?.[1] && m[2]) {
-      const start = parseBrDate(m[1]);
       const end = parseBrDate(m[2]);
+      const startRaw = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(m[1])
+        ? m[1]
+        : `${m[1]}/${m[2].split("/")[2]}`;
+      const start = parseBrDate(startRaw);
       if (start && end) return { start, end };
     }
   }

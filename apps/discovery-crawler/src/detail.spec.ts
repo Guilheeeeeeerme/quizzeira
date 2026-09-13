@@ -56,3 +56,48 @@ describe("parseDetailHtml", () => {
     assert.ok(!detail.documentLinks.some((d) => /inscri/i.test(d.anchorLabel)));
   });
 });
+
+import {
+  extractConcursoHeadline,
+  isSelfDetailPage,
+  withinRegistrationGrace,
+} from "./detail.js";
+
+describe("self-detail concurso pages", () => {
+  it("headline, detection and registration grace", () => {
+  const text =
+    "IBAM - Concursos Públicos no Estado de São Paulo Concursos/ Processos Seletivos/ Vestibulares " +
+    "Concurso Público SANTOS - CONCURSO PÚBLICO - 74/2026 SEPLA-RH Inscrições de 22/07/2026 a 20/08/2026 Informações Gerais";
+  assert.equal(extractConcursoHeadline(text), "SANTOS - CONCURSO PÚBLICO - 74/2026 SEPLA-RH");
+  assert.equal(extractConcursoHeadline("Notícias e resultados"), null);
+
+  const docs = [
+    { url: "https://anexos.example/a.pdf", anchorLabel: "01- Edital de Abertura", kindHint: "edital" as const, roleHint: "specification" as const },
+  ];
+  assert.equal(
+    isSelfDetailPage({ registrationEnd: new Date("2026-08-20T23:59:59Z"), documentLinks: docs }, [
+      "https://anexos.example/a.pdf",
+      "https://anexos.example/b.pdf",
+    ]),
+    true,
+  );
+  assert.equal(
+    isSelfDetailPage({ registrationEnd: null, documentLinks: docs }, ["https://anexos.example/a.pdf"]),
+    false,
+  );
+  assert.equal(
+    isSelfDetailPage({ registrationEnd: new Date("2026-08-20T23:59:59Z"), documentLinks: docs }, [
+      "https://banca.example/concurso/a/",
+      "https://banca.example/concurso/b/",
+      "https://banca.example/concurso/c/",
+    ]),
+    false,
+  );
+
+  const now = new Date("2026-09-13T12:00:00Z");
+  assert.equal(withinRegistrationGrace(new Date("2026-08-20T23:59:59Z"), now), true);
+  assert.equal(withinRegistrationGrace(new Date("2026-04-01T23:59:59Z"), now), false);
+  assert.equal(withinRegistrationGrace(new Date("2026-09-21T23:59:59Z"), now), false);
+  assert.equal(withinRegistrationGrace(null, now), false);
+});
+});

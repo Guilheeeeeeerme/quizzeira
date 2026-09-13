@@ -56,6 +56,16 @@ listing sources rotate by least-recent success within
 Search provider order (§17.4): `SEARCH_API_URL` → `FIRECRAWL_API_KEY`
 (Firecrawl `/v2/search`, optional `FIRECRAWL_API_URL`) → allowlist-only stub.
 
+## Listing sources that are already a concurso page
+
+When a Source start URL is itself the concurso page (registration window +
+"Documentação do Concurso" anexos, e.g. IBAM `informacoes/<id>`), the crawler
+upserts ONE exam from that page and stores its anexos as documents instead of
+one exam per anexo (§11.2.2/§11.2.6). Cesgranrio concurso pages are enriched
+from the candidate portal API (`/api/PortalEventoConteudos/publico/<id>`),
+which is where their editais and retificações live. Documents are stored while
+registration is open or for 90 days after it closes (study window).
+
 ## Duplicate documents
 
 `PATCH /internal/documents/:id` with a `contentHash` already owned by another

@@ -1,10 +1,17 @@
 // Concept: Ingestion (one crawl pass over the enabled Source registry)
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
-import { concursoPathSlug, listingsFingerprint, oabEditionPageUrl } from "@quizzeira/shared";
+import { concursoPathSlug, listingsFingerprint, oabEditionPageUrl, slugifyKey } from "@quizzeira/shared";
+import { cesgranrioPortalEventId, fetchCesgranrioPortalDocuments } from "./cesgranrio-portal.js";
 import { dmzGet, dmzPost, dmzPut, logError, logInfo, withRunIdAsync } from "@quizzeira/worker-kit";
 import { closeBrowser, crawlSourceListings, listingsToOpenRecords } from "./browser.js";
-import { detailFromPdfListing, parseDetailHtml } from "./detail.js";
+import {
+  detailFromPdfListing,
+  isSelfDetailPage,
+  parseDetailHtml,
+  withinRegistrationGrace,
+  type DetailPageParse,
+} from "./detail.js";
 import { crawlDirectSource } from "./direct.js";
 import { crawlerEnv } from "./env.js";
 import { fetchPage } from "./fetch.js";
@@ -164,6 +171,21 @@ async function crawlListingMode(
   }
 
   let remaining = budget;
+
+  // Start URL is itself the concurso page (IBAM-style "informacoes/<id>"):
+  // one exam, its anexos are that exam's documents (§11.2.2 / §11.2.6).
+  if (listingPageHtml && listingPageUrl) {
+    const self = parseDetailHtml(listingPageHtml, listingPageUrl, source.name);
+    if (isSelfDetailPage(self, listings.map((l) => l.href))) {
+      remaining = await upsertExamWithDocuments(source, summary, self, listingPageUrl, remaining);
+      await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
+        fingerprint,
+        listingCount: listings.length,
+      });
+      return remaining;
+    }
+  }
+
   const openRecords = listingsToOpenRecords(listings, source);
 
   for (let i = 0; i < listings.length; i++) {
@@ -171,13 +193,14 @@ async function crawlListingMode(
     const baseOpen = openRecords[i]!;
 
     const isPdf = /\.pdf(\?|#|$)/i.test(listing.href);
-    const detail = isPdf
-      ? detailFromPdfListing(listing.title, listing.href, listing.title)
-      : parseDetailHtml(
-          (await fetchPage(listing.href, source)).html,
-          listing.href,
-          listing.title,
-        );
+    let detail: DetailPageParse;
+    if (isPdf) {
+      detail = detailFromPdfListing(listing.title, listing.href, listing.title);
+    } else {
+      const html = (await fetchPage(listing.href, source)).html;
+      detail = parseDetailHtml(html, listing.href, listing.title);
+      detail = await enrichDetailWithPortal(detail, html);
+    }
 
     const examSlug =
       detail.examSlug ||
@@ -220,7 +243,9 @@ async function crawlListingMode(
 
     if (upserted.changed) summary.openDiscovered += 1;
 
-    if (upserted.record.status !== "open") continue;
+    if (upserted.record.status !== "open" && !withinRegistrationGrace(detail.registrationEnd)) {
+      continue;
+    }
 
     // Store ONLY document links from the detail page — never the listing URL (RC-2).
     for (const doc of detail.documentLinks) {
@@ -258,6 +283,88 @@ async function crawlListingMode(
     if (proposed.proposed) summary.proposedSources += 1;
   }
 
+  return remaining;
+}
+
+/** Banca portals that hide editais behind a JSON API (Cesgranrio). */
+async function enrichDetailWithPortal(
+  detail: DetailPageParse,
+  html: string,
+): Promise<DetailPageParse> {
+  const eventId = cesgranrioPortalEventId(html, detail.detailUrl);
+  if (!eventId) return detail;
+  const portalDocs = await fetchCesgranrioPortalDocuments(eventId);
+  if (portalDocs.length === 0) return detail;
+  const seen = new Set(detail.documentLinks.map((d) => d.url));
+  const documentLinks = [...detail.documentLinks, ...portalDocs.filter((d) => !seen.has(d.url))];
+  const editalUrl =
+    detail.editalUrl ??
+    documentLinks.find((d) => d.kindHint === "edital")?.url ??
+    null;
+  return { ...detail, documentLinks, editalUrl };
+}
+
+/** One exam from an already-parsed detail page plus its document links. */
+async function upsertExamWithDocuments(
+  source: CrawlerSource,
+  summary: CrawlerRunSummary,
+  detail: DetailPageParse,
+  pageUrl: string,
+  budget: number,
+): Promise<number> {
+  const examSlug = detail.examSlug || slugifyKey(detail.title);
+  const upserted = await dmzPost<{ record: OpenExamRecord; created: boolean; changed: boolean }>(
+    "/internal/open-exams",
+    {
+      examSlug,
+      title: detail.title,
+      org: detail.org,
+      banca: detail.banca,
+      emphasis: detail.emphasis,
+      editalUrl: detail.editalUrl,
+      listingUrl: pageUrl,
+      sourceId: source.id,
+      sourceDomain: source.domain,
+      status: detail.status,
+      kind: detail.kind,
+      editionKey: detail.editionKey,
+      detailUrl: pageUrl,
+      registrationEnd: detail.registrationEnd?.toISOString() ?? null,
+      statusSource: detail.statusSource,
+      positions: detail.positions,
+    },
+  );
+  if (upserted.changed) summary.openDiscovered += 1;
+  logInfo("self-detail source", {
+    worker: NAME,
+    sourceId: source.id,
+    examSlug,
+    status: detail.status,
+    documents: detail.documentLinks.length,
+  });
+
+  let remaining = budget;
+  if (upserted.record.status !== "open" && !withinRegistrationGrace(detail.registrationEnd)) {
+    return remaining;
+  }
+  for (const doc of detail.documentLinks) {
+    if (remaining <= 0) break;
+    const stored = await storeArtifact({
+      examId: upserted.record.id,
+      sourceId: source.id,
+      url: doc.url,
+      withBytes: true,
+      kindHint: doc.kindHint,
+      roleHint: doc.roleHint,
+      anchorLabel: doc.anchorLabel,
+      domain: source.domain,
+      politenessMs: source.politenessMs,
+    });
+    if (stored) {
+      summary.artifactsStored += 1;
+      if (stored.downloaded) remaining -= 1;
+    }
+  }
   return remaining;
 }
 
