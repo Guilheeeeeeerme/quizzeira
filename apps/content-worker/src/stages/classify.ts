@@ -162,7 +162,36 @@ function tier1DocumentRole(doc: NormalizedDocument): { role: DocumentRole; confi
   return { role: topRole, confidence: Math.max(0.4, topScore) };
 }
 
-function classifySectionRole(section: NormalizedSection, docLinkDensity: number): SectionRole {
+/** Boilerplate headings on study sites (§17.3 post-fetch): never knowledge. */
+const KNOWLEDGE_NAV_HEADING =
+  /\b(categorias?|newsletter|inscreva-se|compartilh|leia\s+tamb[ée]m|veja\s+tamb[ée]m|posts?\s+relacionados|coment[áa]rios|menu|rodap[ée]|navega[çc][ãa]o|busca|tags?)\b/i;
+
+/**
+ * Section roles for knowledge documents (§14.4). Edital-specific roles
+ * (registration, exam_structure, schedule, …) must not fire on study material:
+ * an article about Direito Eleitoral legitimately says "questões", "taxa" or
+ * "deverá". Page-level link density is also ignored — portals wrap the article
+ * in heavy nav, but the body sections themselves are prose.
+ */
+function classifyKnowledgeSectionRole(section: NormalizedSection): SectionRole {
+  const heading = section.heading ?? "";
+  const text = section.text;
+  if (KNOWLEDGE_NAV_HEADING.test(heading)) return "nav";
+  if (computeLinkDensity(text) > 0.5) return "nav";
+  if ((text.match(/^\s*[A-E]\)/gm) ?? []).length >= 4) return "question_block";
+  if (/gabarito/i.test(heading) && (text.match(/\d+\s*[-–.)]\s*[A-E]/g) ?? []).length >= 10) {
+    return "answer_key";
+  }
+  if (section.flags.includes("legal_article")) return "legal_article";
+  return "content";
+}
+
+export function classifySectionRole(
+  section: NormalizedSection,
+  docLinkDensity: number,
+  documentRole: DocumentRole = "unknown",
+): SectionRole {
+  if (documentRole === "knowledge") return classifyKnowledgeSectionRole(section);
   const heading = section.heading ?? "";
   const text = section.text;
   const combined = `${heading}\n${text}`;
@@ -230,7 +259,7 @@ export function classifyDocument(
 
   const linkDensity = doc.stats.linkDensity ?? 0;
   const sections = doc.sections.map((section) => {
-    const sectionRole = classifySectionRole(section, linkDensity);
+    const sectionRole = classifySectionRole(section, linkDensity, role);
     const scores = computeSectionScores(section.text);
     return { section, role: sectionRole, scores };
   });
