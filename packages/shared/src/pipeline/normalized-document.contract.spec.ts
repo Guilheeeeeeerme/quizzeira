@@ -101,3 +101,23 @@ describe("NormalizedDocument contract (§41.2)", () => {
     }
   });
 });
+
+describe("doc-processor null tolerance", () => {
+  it("accepts pydantic nulls for optional block/section fields", () => {
+  const doc = parseNormalizedDocument({
+    schemaVersion: NORMALIZED_DOCUMENT_SCHEMA_VERSION,
+    documentId: "d1",
+    contentHash: "h",
+    source: { url: null, contentType: "application/pdf", byteSize: 10, fetchedAt: new Date().toISOString() },
+    extractor: { engine: "pymupdf", version: "1.28", options: {} },
+    stats: { pages: 2, chars: 100, textLayerRatio: 1, ocrConfidence: null, language: "pt", blocksByType: {}, linkDensity: 0 },
+    metadata: { title: null, author: null, date: null, sitename: null },
+    blocks: [{ type: "heading", text: "ANEXO II", level: null, page: null, bbox: null, fontStats: null }],
+    sections: [{ id: "s0", ordinal: 0, path: [], heading: "ANEXO II", level: 1, text: "x".repeat(30), charCount: 30, blockRange: [0, 1], pageRange: null, flags: [] }],
+    tables: [{ id: "t0", page: null, rows: [["a"]], markdown: "|a|" }],
+    cleaningLog: [],
+  });
+  assert.equal(doc.blocks[0]!.level, undefined);
+  assert.equal(doc.sections[0]!.pageRange, undefined);
+});
+});

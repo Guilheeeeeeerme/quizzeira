@@ -6,6 +6,7 @@ import {
   type NormalizedSection,
 } from "@quizzeira/shared";
 import { createHash } from "node:crypto";
+import { logWarn } from "@quizzeira/worker-kit";
 import { processDocumentWithDocProcessor, ProcessorUnavailableError } from "../doc-processor-client.js";
 import { extractHtmlText } from "./html-text.js";
 
@@ -159,14 +160,20 @@ export async function normalizeDocument(input: NormalizeInput): Promise<Normaliz
   } catch (err) {
     // Spec §33: processor unreachable → do not degrade; caller keeps doc pending.
     if (err instanceof ProcessorUnavailableError) throw err;
-    if (/html/i.test(input.contentType) || input.bytes.subarray(0, 15).toString("utf8").includes("<")) {
-      return normalizeHtmlFallback(input);
-    }
-    const text = input.bytes.toString("utf8").trim();
-    return normalizeHtmlFallback({
-      ...input,
-      contentType: "text/html",
-      bytes: Buffer.from(`<body><pre>${text}</pre></body>`, "utf8"),
+    const message = err instanceof Error ? err.message : String(err);
+    const looksHtml =
+      /html|text\/plain/i.test(input.contentType) ||
+      input.bytes.subarray(0, 15).toString("utf8").includes("<");
+    logWarn("doc-processor result rejected", {
+      worker: "content-worker/normalize",
+      documentId: input.documentId,
+      contentType: input.contentType,
+      fallback: looksHtml ? "html_strip" : "none",
+      error: message.slice(0, 240),
     });
+    if (looksHtml) return normalizeHtmlFallback(input);
+    // Binary formats (PDF/DOCX) must never be read as text: that produced
+    // "%%EOF"/"Xref" syllabus leaves. Fail the row with a reason (§33).
+    throw new Error(`normalize_contract: ${message.slice(0, 200)}`);
   }
 }

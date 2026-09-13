@@ -6,6 +6,8 @@ import {
   getSyllabusNodeEmbeddings,
 } from "../../lib/vectors";
 
+const stripNul = (text: string): string => text.replace(/\u0000/g, "");
+
 export async function registerInternalSyllabusRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: Record<string, unknown> }>("/internal/syllabi", async (request) => {
     const body = request.body ?? {};
@@ -36,7 +38,7 @@ export async function registerInternalSyllabusRoutes(app: FastifyInstance): Prom
         prisma.position.create({
           data: {
             syllabusId: syllabus.id,
-            title: String(p.title),
+            title: stripNul(String(p.title)),
             slug: String(p.slug),
             implicit: Boolean(p.implicit),
             vacancies: p.vacancies != null ? Number(p.vacancies) : null,
@@ -58,8 +60,8 @@ export async function registerInternalSyllabusRoutes(app: FastifyInstance): Prom
           parentId: parentPathSlug ? pathSlugToId.get(parentPathSlug) ?? null : null,
           depth: Number(n.depth),
           ordinal: Number(n.ordinal),
-          title: String(n.title),
-          rawText: String(n.rawText),
+          title: stripNul(String(n.title)),
+          rawText: stripNul(String(n.rawText)),
           pathSlug,
           canonicalSubjectId: (n.canonicalSubjectId as string) ?? null,
           canonicalKey: String(n.canonicalKey),

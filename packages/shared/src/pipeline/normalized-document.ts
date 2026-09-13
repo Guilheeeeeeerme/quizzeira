@@ -17,18 +17,29 @@ const blockTypeSchema = z.enum([
   "page_artifact",
 ]);
 
+// doc-processor (pydantic) serialises unset optionals as null; accept both.
+const nullishInt = z
+  .number()
+  .int()
+  .nullish()
+  .transform((v) => v ?? undefined);
+
 const blockSchema = z.object({
   type: blockTypeSchema,
   text: z.string(),
-  level: z.number().int().optional(),
-  page: z.number().int().optional(),
-  bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
+  level: nullishInt,
+  page: nullishInt,
+  bbox: z
+    .tuple([z.number(), z.number(), z.number(), z.number()])
+    .nullish()
+    .transform((v) => v ?? undefined),
   fontStats: z
     .object({
-      size: z.number().optional(),
-      bold: z.boolean().optional(),
+      size: z.number().nullish().transform((v) => v ?? undefined),
+      bold: z.boolean().nullish().transform((v) => v ?? undefined),
     })
-    .optional(),
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 const sectionFlagSchema = z.enum([
@@ -48,13 +59,16 @@ const sectionSchema = z.object({
   text: z.string(),
   charCount: z.number().int(),
   blockRange: z.tuple([z.number(), z.number()]),
-  pageRange: z.tuple([z.number(), z.number()]).optional(),
+  pageRange: z
+    .tuple([z.number(), z.number()])
+    .nullish()
+    .transform((v) => v ?? undefined),
   flags: z.array(sectionFlagSchema).default([]),
 });
 
 const tableSchema = z.object({
   id: z.string(),
-  page: z.number().int().optional(),
+  page: nullishInt,
   rows: z.array(z.array(z.string())),
   markdown: z.string(),
 });
