@@ -4,6 +4,7 @@ import { dmzGet, dmzPatch, dmzPost, logInfo } from "@quizzeira/worker-kit";
 import { crawlerEnv } from "./env.js";
 import { AllowlistSearchProvider } from "./search/allowlist-provider.js";
 import { filterSearchCandidates } from "./search/filter.js";
+import { FirecrawlSearchProvider } from "./search/firecrawl.js";
 import { FixtureSearchProvider } from "./search/fixture.js";
 import type { SearchProvider } from "./search/provider.js";
 import { WebApiSearchProvider } from "./search/web-api.js";
@@ -14,7 +15,8 @@ const NAME = "discovery-crawler";
 function pickProvider(): SearchProvider {
   if (crawlerEnv.fixtureMode) return new FixtureSearchProvider();
   if (process.env.SEARCH_API_URL) return new WebApiSearchProvider();
-  // Default: allowlist-only (§17.4) — no paid search when SEARCH_API_URL unset.
+  if (process.env.FIRECRAWL_API_KEY) return new FirecrawlSearchProvider();
+  // Default: allowlist-only (§17.4) — no paid search when no search key is set.
   return new AllowlistSearchProvider();
 }
 

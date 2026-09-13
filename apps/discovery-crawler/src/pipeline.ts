@@ -9,6 +9,7 @@ import { crawlDirectSource } from "./direct.js";
 import { crawlerEnv } from "./env.js";
 import { fetchPage } from "./fetch.js";
 import { crawlOabSource, type OabExamGroup } from "./oab-fgv.js";
+import { selectSourcesForPass } from "./source-order.js";
 import { storeArtifact, storeSourceListingArtifact } from "./store.js";
 import { crawlTopicQueries } from "./topic.js";
 import { bindRobotsSource } from "./robots.js";
@@ -54,7 +55,7 @@ export async function runDiscoveryPipeline(
 
     const selected = onlySourceId
       ? sources.filter((s) => s.id === onlySourceId)
-      : sources.slice(0, crawlerEnv.maxSourcesPerRun);
+      : selectSourcesForPass(sources, crawlerEnv.maxSourcesPerRun);
 
     for (const source of selected) {
       try {

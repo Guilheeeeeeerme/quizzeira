@@ -67,6 +67,7 @@ interface QueuedDocument {
 export interface ProcessPassResult {
   processed: number;
   failed: number;
+  duplicates: number;
   chunks: number;
   syllabi: number;
   evidence: number;
@@ -78,6 +79,7 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
   const result: ProcessPassResult = {
     processed: 0,
     failed: 0,
+    duplicates: 0,
     chunks: 0,
     syllabi: 0,
     evidence: 0,
@@ -187,16 +189,30 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
         sourceSectionId: section.id,
       }));
 
-      await content.patch(`/internal/documents/${document.id}`, {
-        role: classification.role,
-        roleConfidence: classification.roleConfidence,
-        roleMethod: classification.roleMethod,
-        subtype: classification.subtype,
-        contentHash: normalized.contentHash,
-        language: normalized.stats.language,
-        normalizerVersion: normalized.extractor.version,
-        stats: normalized.stats,
-      });
+      const patched = await content.patch<{ duplicateOfId?: string | null }>(
+        `/internal/documents/${document.id}`,
+        {
+          role: classification.role,
+          roleConfidence: classification.roleConfidence,
+          roleMethod: classification.roleMethod,
+          subtype: classification.subtype,
+          contentHash: normalized.contentHash,
+          language: normalized.stats.language,
+          normalizerVersion: normalized.extractor.version,
+          stats: normalized.stats,
+        },
+      );
+      if (patched?.duplicateOfId) {
+        // §26: exact duplicate of an already-normalized document — linked, not reprocessed.
+        logInfo("duplicate document", {
+          worker: NAME,
+          documentId: document.id,
+          duplicateOfId: patched.duplicateOfId,
+        });
+        result.duplicates += 1;
+        await emitStageMetric({ stage: "normalize", decision: "duplicate" });
+        continue;
+      }
       await content
         .put(`/internal/documents/${document.id}/normalized`, { document: normalized })
         .catch(() => undefined);
@@ -651,7 +667,7 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
     }
   }
 
-  if (result.processed || result.failed) {
+  if (result.processed || result.failed || result.duplicates) {
     logInfo("process pass", { worker: NAME, ...result });
   }
   return result;

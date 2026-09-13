@@ -60,6 +60,7 @@ export function chunkSections(
 
   for (const { section, role } of sections) {
     const paragraphs = section.text
+      .replace(/\u0000/g, "")
       .split(/\n{2,}/)
       .map((p) => p.trim())
       .filter(Boolean);

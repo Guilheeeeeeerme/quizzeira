@@ -44,6 +44,26 @@ Worker passes (also default on): `CONTENT_EXTRACTION_ENABLED`, `CONTENT_EMBEDDIN
 
 LLM token/call budgets are enforced in Redis via worker-kit guardrails (`docs/guardrails.md`). Stage budgets: `LLM_BUDGET_*_TOKENS` in `.env.sample`.
 
+## Topic-query discovery (study material)
+
+The planner writes `TopicQuery` rows, but the crawler only dequeues them while
+crawling a Source with `discoveryMode = topic_query` (§11.3). Register one per
+deployment (admin action, §17.6), e.g. `kind=educational_site`,
+`allowedRoles=["knowledge"]`. Topic-query sources always ride along in a pass;
+listing sources rotate by least-recent success within
+`DISCOVERY_CRAWLER_MAX_SOURCES`.
+
+Search provider order (§17.4): `SEARCH_API_URL` → `FIRECRAWL_API_KEY`
+(Firecrawl `/v1/search`, optional `FIRECRAWL_API_URL`) → allowlist-only stub.
+
+## Duplicate documents
+
+`PATCH /internal/documents/:id` with a `contentHash` already owned by another
+document links the row (`nearDuplicateOfId`, `status=failed`,
+`failReason=duplicate_document:<id>`) and returns `duplicateOfId`; the worker
+counts it as `duplicates` and emits `normalize/duplicate` (§26). Chunk and
+section text are NUL-stripped before insert (§33).
+
 ## Embeddings (eligible only)
 
 The worker always requests `/internal/embeddings/queue?eligibleOnly=true`. Only chunks with `eligibility = eligible` are embedded. Search defaults to eligible chunks (`eligibleOnly` defaults true on `/internal/chunks/search`).

@@ -3,6 +3,10 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
 import { getArtifactObject, getJsonObject, putObject } from "../../lib/storage";
 
+function stripNul(text: string): string {
+  return text.replace(/\u0000/g, "");
+}
+
 export async function registerInternalDocumentRoutes(app: FastifyInstance): Promise<void> {
   /**
    * Register a Discovery artifact as a Document. Idempotent on
@@ -111,6 +115,29 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
     Body: Record<string, unknown>;
   }>("/internal/documents/:id", async (request) => {
     const body = request.body ?? {};
+    const contentHash = body.contentHash ? String(body.contentHash) : undefined;
+
+    // §26 document-layer dedup: a second copy with the same normalized text
+    // links to the first and is never reprocessed (P2002 on the unique hash).
+    if (contentHash) {
+      const twin = await prisma.document.findUnique({ where: { contentHash } });
+      if (twin && twin.id !== request.params.id) {
+        const document = await prisma.document.update({
+          where: { id: request.params.id },
+          data: {
+            nearDuplicateOfId: twin.id,
+            status: "failed",
+            failReason: `duplicate_document:${twin.id}`,
+            role: (body.role as never) || undefined,
+            language: body.language ? String(body.language) : undefined,
+            normalizerVersion: body.normalizerVersion ? String(body.normalizerVersion) : undefined,
+            stats: body.stats ?? undefined,
+          },
+        });
+        return { document, duplicateOfId: twin.id };
+      }
+    }
+
     const document = await prisma.document.update({
       where: { id: request.params.id },
       data: {
@@ -126,7 +153,7 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
         roleConfidence: body.roleConfidence != null ? Number(body.roleConfidence) : undefined,
         roleMethod: body.roleMethod ? String(body.roleMethod) : undefined,
         subtype: body.subtype != null ? String(body.subtype) : undefined,
-        contentHash: body.contentHash ? String(body.contentHash) : undefined,
+        contentHash,
         language: body.language ? String(body.language) : undefined,
         normalizerVersion: body.normalizerVersion ? String(body.normalizerVersion) : undefined,
         stats: body.stats ?? undefined,
@@ -202,10 +229,14 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
     };
   }>("/internal/documents/:id/pipeline-output", async (request) => {
     const documentId = request.params.id;
-    const sections = request.body?.sections ?? [];
-    const chunks = (request.body?.chunks ?? []).filter(
-      (c) => typeof c.text === "string" && c.text.trim(),
-    );
+    // Extractors sometimes emit NUL bytes; Postgres UTF-8 rejects 0x00 (§33).
+    const sections: Array<Record<string, unknown>> = (request.body?.sections ?? []).map((s) => ({
+      ...s,
+      heading: typeof s.heading === "string" ? stripNul(s.heading) : s.heading,
+    }));
+    const chunks: Array<Record<string, unknown>> = (request.body?.chunks ?? [])
+      .map((c) => ({ ...c, text: typeof c.text === "string" ? stripNul(c.text) : c.text }))
+      .filter((c) => typeof c.text === "string" && c.text.trim());
 
     await prisma.$transaction(async (tx) => {
       await tx.chunk.deleteMany({ where: { documentId } });
@@ -271,7 +302,7 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
       .map((c) => ({
         ...c,
         // PDF extractors sometimes emit NUL bytes; Postgres UTF-8 rejects 0x00.
-        text: (c.text ?? "").replace(/\u0000/g, ""),
+        text: stripNul(c.text ?? ""),
       }))
       .filter((c) => c.text?.trim());
     await prisma.chunk.deleteMany({ where: { documentId } });
