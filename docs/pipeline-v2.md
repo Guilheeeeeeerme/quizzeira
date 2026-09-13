@@ -54,7 +54,7 @@ listing sources rotate by least-recent success within
 `DISCOVERY_CRAWLER_MAX_SOURCES`.
 
 Search provider order (§17.4): `SEARCH_API_URL` → `FIRECRAWL_API_KEY`
-(Firecrawl `/v1/search`, optional `FIRECRAWL_API_URL`) → allowlist-only stub.
+(Firecrawl `/v2/search`, optional `FIRECRAWL_API_URL`) → allowlist-only stub.
 
 ## Duplicate documents
 

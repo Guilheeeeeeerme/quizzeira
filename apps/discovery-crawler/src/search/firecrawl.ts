@@ -2,7 +2,7 @@ import { domainFromUrl } from "@quizzeira/shared";
 import { isAllowlistedDomain } from "./allowlist.js";
 import type { SearchCandidate, SearchProvider } from "./provider.js";
 
-/** Minimal shape of Firecrawl `/v1/search` and `/v2/search` responses. */
+/** Minimal shape of Firecrawl `/v2/search` (`data.web`) and legacy `/v1` (`data[]`) responses. */
 export interface FirecrawlSearchResponse {
   success?: boolean;
   data?:
@@ -42,8 +42,9 @@ export function parseFirecrawlSearch(
 }
 
 /**
- * Firecrawl web search provider (§17.4c). Server-side HTTP call using the
- * same FIRECRAWL_API_KEY the API service uses for past-exam search.
+ * Firecrawl web search provider (§17.4c): POST /v2/search, results under
+ * `data.web`. Uses the same FIRECRAWL_API_KEY the API service uses for
+ * past-exam search.
  */
 export class FirecrawlSearchProvider implements SearchProvider {
   constructor(
@@ -56,14 +57,14 @@ export class FirecrawlSearchProvider implements SearchProvider {
     const q = query.trim();
     if (!q || !this.apiKey) return [];
     try {
-      const res = await fetch(`${this.baseUrl}/v1/search`, {
+      const res = await fetch(`${this.baseUrl}/v2/search`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${this.apiKey}`,
           "user-agent": "QuizzeiraDiscoveryCrawler/0.1 (+research; polite)",
         },
-        body: JSON.stringify({ query: q, limit, lang: "pt", country: "br" }),
+        body: JSON.stringify({ query: q, limit, sources: ["web"] }),
         signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) return [];
