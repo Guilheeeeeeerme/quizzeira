@@ -1,5 +1,11 @@
 import { workerEnv } from "./env";
-import type { LlmCompletion, LlmProvider, ProviderCompleteInput } from "./gemini";
+import {
+  MAX_OUTPUT_TOKENS,
+  REQUEST_TIMEOUT_MS,
+  type LlmCompletion,
+  type LlmProvider,
+  type ProviderCompleteInput,
+} from "./gemini";
 
 type OpenAiResponse = {
   choices?: Array<{ message?: { content?: string } }>;
@@ -29,7 +35,9 @@ export async function openaiComplete(input: ProviderCompleteInput): Promise<LlmC
       ],
       response_format: { type: "json_object" },
       temperature: input.temperature ?? 0.2,
+      max_completion_tokens: MAX_OUTPUT_TOKENS,
     }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const data = (await res.json()) as OpenAiResponse;
   if (!res.ok) {
