@@ -177,7 +177,9 @@ const TIER_MODELS: Record<ModelTier, Partial<Record<ProviderName, string[]>>> = 
     openai: ["gpt-4o-mini", "gpt-4.1-nano"],
   },
   strong: {
-    gemini: ["gemini-2.5-flash", "gemini-2.5-pro"],
+    // Retry attempts walk this list in order: keep a model that always answers
+    // before the preview tier. gemini-2.5-pro was retired for new users (404).
+    gemini: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-pro-preview"],
     openai: ["gpt-4o", "gpt-4o-mini"],
   },
 };
