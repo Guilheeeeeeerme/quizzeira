@@ -243,10 +243,13 @@ export function classifyDocument(
   // "Edital de resultado / relação de candidatos / isenção / convocação" are
   // editais by name but administrative by content: no programme, no vagas.
   // The `edital` provenance hint must not turn candidate lists into syllabi.
-  const adminTitle = [doc.metadata.title ?? "", doc.sections[0]?.heading ?? "", doc.sections[0]?.text.slice(0, 400) ?? ""].join("\n");
+  const adminTitle = [
+    doc.metadata.title ?? "",
+    ...doc.sections.slice(0, 3).map((s) => `${s.heading ?? ""}\n${s.text.slice(0, 600)}`),
+  ].join("\n");
   const fullText = doc.sections.map((s) => s.text).join("\n");
   const administrativeEdital =
-    /resultado|rela[çc][ãa]o\s+de\s+candidatos|isen[çc][ãa]o|convoca[çc][ãa]o|homologa[çc][ãa]o|recursos?\s+interpostos|gabarito/i.test(adminTitle) &&
+    /resultado|rela[çc][ãa]o\s+de\s+candidatos|candidatos\s+inscritos|isen[çc][ãa]o|convoca[çc][ãa]o|homologa[çc][ãa]o|recursos?\s+(interpostos|deferidos|indeferidos)|foram\s+(in)?deferidos|gabarito/i.test(adminTitle) &&
     !/conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?|\bdas\s+vagas\b/i.test(fullText);
 
   if (administrativeEdital && tier0?.role !== "evidence") {

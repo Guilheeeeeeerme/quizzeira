@@ -76,10 +76,32 @@ def order_blocks_in_reading_order(
     return left_col + right_col
 
 
+def _looks_like_heading_line(block: RawBlock, body_font: float | None) -> bool:
+    """Short all-caps (or clearly larger/bold) lines are headings: 'LÍNGUA
+    PORTUGUESA', 'ANEXO II', 'CONHECIMENTOS ESPECÍFICOS'. They must stay their
+    own block so downstream parsers see them on their own line."""
+    text = block.text.strip()
+    if not text or len(text) > 90:
+        return False
+    letters = [c for c in text if c.isalpha()]
+    if len(letters) >= 3 and sum(1 for c in letters if c.isupper()) / len(letters) >= 0.9:
+        return True
+    if body_font and block.font_size and block.font_size >= body_font * 1.15 and len(text) <= 80:
+        return True
+    return bool(block.bold and len(text) <= 60)
+
+
 def join_lines_to_paragraphs(blocks: list[RawBlock], median_line_height: float | None = None) -> list[RawBlock]:
-    """Merge consecutive lines into paragraphs when vertical gap is small."""
+    """Merge consecutive wrapped lines into paragraphs when the vertical gap is
+    small. Lines are joined with a space (a bare concatenation glued words:
+    'informações explícitas einformações'); a trailing hyphen followed by a
+    lowercase continuation is a hyphenation and is removed. Heading-like lines
+    are never merged into their neighbours."""
     if not blocks:
         return []
+
+    sizes = sorted(b.font_size for b in blocks if b.font_size)
+    body_font = sizes[len(sizes) // 2] if sizes else None
 
     if median_line_height is None:
         heights = [max(1.0, b.y1 - b.y0) for b in blocks]
@@ -96,10 +118,14 @@ def join_lines_to_paragraphs(blocks: list[RawBlock], median_line_height: float |
 
         same_page = block.page == current.page
         gap = block.y0 - current.y1
-        hyphen_break = current.text.rstrip().endswith("-") and block.text[:1].islower()
+        hyphenated = current.text.rstrip().endswith("-") and block.text[:1].islower()
+        boundary = _looks_like_heading_line(current, body_font) or _looks_like_heading_line(block, body_font)
 
-        if same_page and 0 <= gap < gap_threshold and not hyphen_break:
-            join_text = current.text.rstrip("-") + block.text.lstrip()
+        if same_page and 0 <= gap < gap_threshold and not boundary:
+            if hyphenated:
+                join_text = current.text.rstrip()[:-1] + block.text.lstrip()
+            else:
+                join_text = current.text.rstrip() + " " + block.text.lstrip()
             current = RawBlock(
                 text=join_text,
                 x0=min(current.x0, block.x0),

@@ -13,8 +13,11 @@ def _is_garbage(text: str) -> bool:
     stripped = text.strip()
     if len(stripped) < 8:
         return False
-    alpha = sum(1 for c in stripped if c.isalpha())
-    if alpha / max(1, len(stripped)) < 0.6:
+    # Ratio over non-whitespace characters: spaces between words are not
+    # evidence of garbage (a numbers-heavy maths apostila is still prose).
+    body = "".join(c for c in stripped if not c.isspace())
+    alpha = sum(1 for c in body if c.isalpha())
+    if alpha / max(1, len(body)) < 0.6:
         return True
     words = _WORD.findall(stripped)
     if not words:
