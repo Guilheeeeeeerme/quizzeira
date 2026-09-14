@@ -242,9 +242,19 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
       ...s,
       heading: typeof s.heading === "string" ? stripNul(s.heading) : s.heading,
     }));
+    const seenHashes = new Set<string>();
     const chunks: Array<Record<string, unknown>> = (request.body?.chunks ?? [])
       .map((c) => ({ ...c, text: typeof c.text === "string" ? stripNul(c.text) : c.text }))
-      .filter((c) => typeof c.text === "string" && c.text.trim());
+      .filter((c) => typeof c.text === "string" && c.text.trim())
+      .filter((c) => {
+        // (documentId, contentHash) is unique: repeated boilerplate blocks
+        // (page headers, signatures) would otherwise fail the whole insert.
+        const text = String(c.text).trim();
+        const hash = (c.contentHash as string) || createHash("sha256").update(text).digest("hex");
+        if (seenHashes.has(hash)) return false;
+        seenHashes.add(hash);
+        return true;
+      });
 
     await prisma.$transaction(async (tx) => {
       await tx.chunk.deleteMany({ where: { documentId } });
