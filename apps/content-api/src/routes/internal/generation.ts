@@ -18,54 +18,91 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
     };
   });
 
+  /**
+   * Leaves ready for generation (§17.5 / §24): active KUs ≥ minKu and a
+   * published+pending deficit against the leaf target. Per syllabus the
+   * leaves are ranked by deficit (breadth first), syllabi are merged
+   * round-robin in the order of `examSlugs` (caller passes open exams sorted
+   * by registration deadline) so the soonest exam is always served first.
+   * Stale `running` runs are reclaimed here so a worker restart never blocks
+   * a leaf forever.
+   */
   app.get("/internal/generation/planner-queue", async (request) => {
-    const q = request.query as { limit?: string; target?: string; minKu?: string };
+    const q = request.query as {
+      limit?: string;
+      target?: string;
+      minKu?: string;
+      examSlugs?: string;
+    };
     const baseTarget = Math.max(1, Number(q.target || 20));
     const minKu = Math.max(1, Number(q.minKu || 4));
     const limit = Math.min(20, Number(q.limit || 3));
+    const examSlugs = String(q.examSlugs || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    await prisma.generationRun.updateMany({
+      where: { status: "running", startedAt: { lt: new Date(Date.now() - 20 * 60_000) } },
+      data: { status: "failed", error: "stale: reclaimed by planner-queue", finishedAt: new Date() },
+    });
 
     const syllabi = await prisma.syllabus.findMany({
-      where: { status: "active" },
+      where: {
+        status: "active",
+        ...(examSlugs.length > 0 ? { examSlug: { in: examSlugs } } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: 40,
     });
+    if (examSlugs.length > 0) {
+      const order = new Map(examSlugs.map((slug, i) => [slug, i]));
+      syllabi.sort((a, b) => (order.get(a.examSlug) ?? 99) - (order.get(b.examSlug) ?? 99));
+    }
 
-    const scored: Array<Record<string, unknown> & { _rank: number }> = [];
+    type LeafRow = {
+      id: string;
+      title: string;
+      pathSlug: string;
+      canonicalKey: string;
+      rawText: string;
+      questionCount: number | null;
+      kuCount: bigint | number;
+      published: bigint | number;
+      pending: bigint | number;
+      previousQuestionCount: bigint | number;
+    };
 
+    const perSyllabus: Array<Array<Record<string, unknown>>> = [];
     for (const syllabus of syllabi) {
-      const leaves = await prisma.syllabusNode.findMany({
-        where: { syllabusId: syllabus.id, depth: { gte: 1 } },
-        orderBy: { ordinal: "asc" },
-        take: 80,
-      });
+      const rows = await prisma.$queryRaw<LeafRow[]>`
+        select n.id, n.title, n."pathSlug", n."canonicalKey", n."rawText", n."questionCount",
+               (select count(*) from "KnowledgeUnit" k where k.status = 'active' and k."syllabusNodeId" = n.id) as "kuCount",
+               (select count(*) from "QuestionItem" q where q."syllabusNodeId" = n.id and q.status = 'published') as "published",
+               (select count(*) from "QuestionItem" q where q."syllabusNodeId" = n.id and q.status in ('draft','needs_review')) as "pending",
+               (select count(*) from "PreviousQuestion" p where p."syllabusNodeId" = n.id or p."canonicalKey" = n."canonicalKey") as "previousQuestionCount"
+          from "SyllabusNode" n
+         where n."syllabusId" = ${syllabus.id}
+           and n.depth >= 1
+           and n.status = 'active'
+           and not exists (select 1 from "SyllabusNode" c where c."parentId" = n.id and c.status = 'active')
+           and (select count(*) from "KnowledgeUnit" k where k.status = 'active' and k."syllabusNodeId" = n.id) >= ${minKu}
+         order by "published" asc, "pending" asc, "previousQuestionCount" desc, n.ordinal asc
+         limit ${Math.max(limit * 4, 20)}
+      `;
 
       const subjectTotals = new Map<string, number>();
-      for (const leaf of leaves) {
+      for (const leaf of rows) {
         const subject = leaf.pathSlug.split("/")[0] || leaf.title;
-        const pq = await prisma.previousQuestion.count({
-          where: {
-            OR: [{ syllabusNodeId: leaf.id }, { canonicalKey: leaf.canonicalKey }],
-          },
-        });
-        subjectTotals.set(subject, (subjectTotals.get(subject) ?? 0) + pq);
+        subjectTotals.set(subject, (subjectTotals.get(subject) ?? 0) + Number(leaf.previousQuestionCount));
       }
 
-      for (const leaf of leaves) {
-        const kuCount = await prisma.knowledgeUnit.count({
-          where: { syllabusNodeId: leaf.id, status: "active" },
-        });
-        if (kuCount < minKu) continue;
-
-        const previousQuestionCount = await prisma.previousQuestion.count({
-          where: {
-            OR: [{ syllabusNodeId: leaf.id }, { canonicalKey: leaf.canonicalKey }],
-          },
-        });
-
-        const pathParts = leaf.pathSlug.split("/").map((p) => p.trim()).filter(Boolean);
+      const items: Array<Record<string, unknown>> = [];
+      for (const leaf of rows) {
+        const pathParts = leaf.pathSlug.split("/").map((x) => x.trim()).filter(Boolean);
         const subject = pathParts[0] || leaf.title;
         if (!subject.trim() || subject.trim().toLowerCase() === "geral") continue;
-
+        const previousQuestionCount = Number(leaf.previousQuestionCount);
         const subjectTotal = Math.max(subjectTotals.get(subject) ?? 0, 1);
         const share = previousQuestionCount / subjectTotal;
         const subjectQuestionCount = leaf.questionCount ?? baseTarget;
@@ -74,19 +111,11 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
           4,
           Math.min(40, Math.round(share * subjectQuestionCount * 4) || baseTarget),
         );
-
-        const [published, pending] = await Promise.all([
-          prisma.questionItem.count({
-            where: { syllabusNodeId: leaf.id, status: "published" },
-          }),
-          prisma.questionItem.count({
-            where: { syllabusNodeId: leaf.id, status: { in: ["draft", "needs_review"] } },
-          }),
-        ]);
+        const published = Number(leaf.published);
+        const pending = Number(leaf.pending);
         const deficit = leafTarget - published - pending;
         if (deficit <= 0) continue;
-
-        scored.push({
+        items.push({
           examSlug: syllabus.examSlug,
           examTitle: null,
           syllabusNodeId: leaf.id,
@@ -95,19 +124,29 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
           canonicalKey: leaf.canonicalKey,
           rawText: leaf.rawText,
           path: pathParts.length > 0 ? pathParts : [subject],
-          kuCount,
+          kuCount: Number(leaf.kuCount),
           published,
           pending,
           target: leafTarget,
           deficit,
           previousQuestionCount,
-          _rank: previousQuestionCount * 3 + (leaf.questionCount ?? 0) + deficit,
         });
       }
+      if (items.length > 0) perSyllabus.push(items);
     }
 
-    scored.sort((a, b) => b._rank - a._rank);
-    const items = scored.slice(0, limit).map(({ _rank: _ignored, ...rest }) => rest);
+    const items: Array<Record<string, unknown>> = [];
+    for (let i = 0; items.length < limit; i += 1) {
+      let any = false;
+      for (const list of perSyllabus) {
+        if (i < list.length) {
+          any = true;
+          items.push(list[i]!);
+          if (items.length >= limit) break;
+        }
+      }
+      if (!any) break;
+    }
     return { items };
   });
 

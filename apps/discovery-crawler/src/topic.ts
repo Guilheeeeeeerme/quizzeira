@@ -62,6 +62,8 @@ export async function crawlTopicQueries(
 
     await dmzPatch(`/internal/topic-queries/${row.id}`, {
       status: "running",
+      // Lease: if this crawler dies, the API hands the row back after 30 min.
+      nextRunAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     }).catch(() => undefined);
 
     for (const query of queries.slice(0, 3)) {

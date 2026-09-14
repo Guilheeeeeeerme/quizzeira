@@ -2,6 +2,7 @@
 // Exam-level subject="geral" generation has been removed (§48.8).
 
 import {
+  isDeferrableLlmError,
   generateJson,
   hasLlmProvider,
   llmErrorCode,
@@ -10,7 +11,7 @@ import {
   screenModelStrings,
 } from "@quizzeira/worker-kit";
 import { parseGeneratedQuestionsV2 } from "@quizzeira/shared";
-import { content } from "../clients.js";
+import { content, discovery } from "../clients.js";
 import { contentEnv } from "../env.js";
 import { buildGenerationBrief } from "./brief.js";
 import { buildGenerationPromptV2, GENERATION_SYSTEM_PROMPT_V2 } from "./prompt.js";
@@ -41,9 +42,13 @@ export async function runGenerationPass(): Promise<GenerationPassResult> {
     return result;
   }
 
+  // Soonest registration deadline first: the bank must be ready for the exam
+  // that happens next, not for whichever syllabus was created last.
+  const openSlugs = await openExamSlugsByDeadline();
   const { items } = await content.get<{ items: PlannerQueueItem[] }>(
     `/internal/generation/planner-queue?limit=${contentEnv.examsPerGenerationPass}` +
-      `&target=${contentEnv.publishedTargetPerExam}&minKu=4`,
+      `&target=${contentEnv.publishedTargetPerExam}&minKu=4` +
+      (openSlugs.length > 0 ? `&examSlugs=${encodeURIComponent(openSlugs.join(","))}` : ""),
   );
 
   for (const item of items) {
@@ -55,6 +60,13 @@ export async function runGenerationPass(): Promise<GenerationPassResult> {
       result.drafted += await generateForLeaf(item, count);
     } catch (err) {
       result.failed += 1;
+      if (isDeferrableLlmError(err)) {
+        logWarn("generation pass deferred: LLM budget or provider unavailable", {
+          worker: NAME,
+          error: err instanceof Error ? err.message.slice(0, 200) : String(err),
+        });
+        break;
+      }
       logWarn("generation run failed", {
         worker: NAME,
         examSlug: item.examSlug,
@@ -67,6 +79,26 @@ export async function runGenerationPass(): Promise<GenerationPassResult> {
 
   if (result.runs) logInfo("generation pass v2", { worker: NAME, ...result });
   return result;
+}
+
+/** Open exams ordered by registration deadline (unknown deadlines last). */
+export async function openExamSlugsByDeadline(): Promise<string[]> {
+  try {
+    const { items } = await discovery.get<{
+      items: Array<{ examSlug: string; registrationEnd: string | null }>;
+    }>("/internal/open-exams");
+    const seen = new Set<string>();
+    return items
+      .filter((e) => e.examSlug && !seen.has(e.examSlug) && seen.add(e.examSlug))
+      .sort((a, b) => {
+        const ta = a.registrationEnd ? Date.parse(a.registrationEnd) : Number.POSITIVE_INFINITY;
+        const tb = b.registrationEnd ? Date.parse(b.registrationEnd) : Number.POSITIVE_INFINITY;
+        return ta - tb;
+      })
+      .map((e) => e.examSlug);
+  } catch {
+    return [];
+  }
 }
 
 async function generateForLeaf(item: PlannerQueueItem, count: number): Promise<number> {

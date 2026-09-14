@@ -3,6 +3,7 @@
 import { buildTopicQueries } from "@quizzeira/shared";
 import { logInfo } from "@quizzeira/worker-kit";
 import { content, discovery } from "../clients.js";
+import { openExamSlugsByDeadline } from "../generation/index.js";
 import { contentEnv } from "../env.js";
 
 const NAME = "content-worker/planner";
@@ -39,10 +40,7 @@ export async function runPlannerPass(): Promise<PlannerPassResult> {
 
   // Only chase exams the catalog still considers open (§11.2.5); a closed
   // 2022 syllabus must not consume the topic-query budget.
-  const openSlugs = await discovery
-    .get<{ items: Array<{ examSlug: string }> }>("/internal/open-exams")
-    .then((r) => Array.from(new Set(r.items.map((e) => e.examSlug).filter(Boolean))))
-    .catch(() => [] as string[]);
+  const openSlugs = await openExamSlugsByDeadline();
 
   const candidateLimit = MAX_TOPIC_QUERIES_PER_PASS * CANDIDATE_MULTIPLIER;
   const { items } = await content.get<{ items: KnowledgeGapLeaf[] }>(

@@ -138,6 +138,10 @@ export async function registerInternalKnowledgeRoutes(app: FastifyInstance): Pro
       orderBy: { createdAt: "desc" },
       take: 40,
     });
+    if (examSlugs.length > 0) {
+      const order = new Map(examSlugs.map((slug, i) => [slug, i]));
+      syllabi.sort((a, b) => (order.get(a.examSlug) ?? 99) - (order.get(b.examSlug) ?? 99));
+    }
 
     type GapRow = {
       id: string;

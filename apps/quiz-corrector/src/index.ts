@@ -53,6 +53,8 @@ async function tick(): Promise<void> {
 
     const result = await generateJson<AttemptCorrectionInput>(system, user, {
       requiredKeys: ["answers", "generalComment"],
+      tier: "cheap",
+      stage: "corrector",
     });
     if (!Array.isArray(result.answers) || typeof result.generalComment !== "string") {
       throw new Error("Invalid correction payload from model");

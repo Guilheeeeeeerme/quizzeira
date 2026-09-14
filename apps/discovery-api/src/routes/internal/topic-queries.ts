@@ -57,6 +57,18 @@ export async function registerInternalTopicQueryRoutes(app: FastifyInstance): Pr
       syllabusNodeId?: string;
       examId?: string;
     };
+    if (q.status === "queued") {
+      // A crawler that died mid-query leaves rows `running` forever; the lease
+      // (nextRunAt set when the row was taken) expires them back to queued.
+      await prisma.topicQuery.updateMany({
+        where: { status: "running", nextRunAt: { lt: new Date() } },
+        data: { status: "queued" },
+      });
+      await prisma.topicQuery.updateMany({
+        where: { status: "running", nextRunAt: null, createdAt: { lt: new Date(Date.now() - 60 * 60_000) } },
+        data: { status: "queued" },
+      });
+    }
     const items = await prisma.topicQuery.findMany({
       where: {
         ...(q.status ? { status: q.status } : {}),

@@ -10,6 +10,8 @@ export interface SyllabusLeafRef {
   canonicalKey: string;
   canonicalSubjectId: string | null;
   parentTitle?: string | null;
+  /** Active KU count (from the leaves route) so distill can skip saturated leaves. */
+  kuCount?: number | null;
   /** Optional precomputed leaf embedding (`"${S} — ${T} — ${L}"`). */
   embedding?: number[] | null;
 }

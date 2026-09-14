@@ -37,3 +37,9 @@ test("dedupeChunks stays fast on hundreds of chunks", () => {
   dedupeChunks(drafts);
   assert.ok(Date.now() - started < 5000);
 });
+
+test("distill lexical gate: material must mention the leaf", () => {
+  const chunks = [{ text: "A concordância verbal exige que o verbo concorde com o sujeito em número e pessoa." }];
+  assert.equal(materialMentionsLeaf(chunks, ["Língua Portuguesa", "Concordância verbal e nominal"]), true);
+  assert.equal(materialMentionsLeaf(chunks, ["Arquitetura Naval", "Principais compartimentos da embarcação"]), false);
+});

@@ -14,6 +14,42 @@ bash scripts/verify-pipeline-v2.sh
 
 CI: `.github/workflows/pipeline-v2.yml` runs shared/quality/discovery/content tests, typecheck, build, and doc-processor pytest. `.github/workflows/no-listing-trivia.yml` remains the focused REG-001..006 job.
 
+## Flow and budgets (what runs, in what order, and what it costs)
+
+1. **Find exams** (discovery-crawler, every `DISCOVERY_CRAWLER_INTERVAL_MS`): listing
+   sources rotate by least-recent success; client-rendered portals are rendered
+   with Playwright; a listing becomes an exam only with an identity (edition
+   key, registration window or an edital) and never from a menu slug. No LLM.
+2. **Pick what to chase** (content-worker planner, every tick): open exams from
+   `/internal/open-exams` sorted by registration deadline; per syllabus, leaves
+   ranked by KU deficit; syllabi merged round-robin; ≤20 `TopicQuery` rows per
+   pass. No LLM.
+3. **Fetch study material** (crawler topic mode): ≤3 web searches per query,
+   candidates dropped before fetch when the domain, TLD, path, file type or
+   title is on the denylist (`search/filter.ts`), after fetch when too short,
+   link-heavy, sales copy or not Portuguese (`search/postfetch.ts`). No LLM.
+4. **Process documents** (content-worker, `CONTENT_DOCS_PER_PASS` per tick):
+   normalize → classify (lexical; LLM `cheap` only for the residue) → chunk →
+   map (topic hint + lexical + embeddings; LLM residue mapper skipped for
+   topic-hinted pages) → **distill** (LLM `cheap`, stage `ku`): only the
+   topic-hinted leaf plus the two leaves with most mapped chunks, ≤3 chunks of
+   ≤1 800 chars each, skipped when the material never mentions the leaf or the
+   leaf already holds 12 active KUs, and the model must declare `onTopic`.
+5. **Generate** (content-worker, `CONTENT_EXAMS_PER_GENERATION_PASS` leaves per
+   tick): `/internal/generation/planner-queue` serves leaves with ≥4 KUs and a
+   published deficit, soonest exam first, breadth first; first attempt `mid`,
+   one `strong` retry only when the first returned nothing.
+6. **Evaluate** (content-quality): structural → relevance → grounding are free;
+   the LLM judge (`mid`, stage `judge`) only sees items that passed all three.
+7. **Study** (api + quiz-corrector `cheap`, stage `corrector`).
+
+Budgets live in Redis (`llm:tokens:<day>`, `llm:stage:<stage>:<day>`). When a
+budget or the provider is exhausted, process and generation passes park the
+unit of work (`Document.status=pending`, `failReason=deferred: …`) and stop the
+pass instead of failing it; stale `GenerationRun`/`TopicQuery`/`Document`
+leases are reclaimed automatically (20 min / 30 min / 15 min), so nothing stays
+stuck after a restart.
+
 ## Stage toggles (content-worker)
 
 All default **on** unless set to `false` or `0`:

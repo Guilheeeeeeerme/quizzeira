@@ -21,7 +21,7 @@ export interface GenerateJsonOptions {
   /** Model tier preference (§27.2). */
   tier?: "cheap" | "mid" | "strong";
   /** Stage key for per-stage token budgets (§27.4). */
-  stage?: "ku" | "generation" | "judge" | "residue" | "classify" | "mapping";
+  stage?: "ku" | "generation" | "judge" | "residue" | "classify" | "mapping" | "corrector";
   /** Optional Redis cache key; hits skip the provider call. */
   cacheKey?: string;
 }

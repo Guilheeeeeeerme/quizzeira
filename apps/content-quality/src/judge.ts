@@ -118,7 +118,7 @@ export async function judgeItem(input: JudgeInput): Promise<JudgeVerdict> {
   const raw = await generateJson<Record<string, unknown>>(
     JUDGE_SYSTEM_PROMPT,
     buildJudgePrompt(input),
-    { temperature: 0, requiredKeys: JUDGE_REQUIRED_KEYS },
+    { temperature: 0, requiredKeys: JUDGE_REQUIRED_KEYS, tier: "mid", stage: "judge" },
   );
 
   return normalizeJudgeResponse(raw);

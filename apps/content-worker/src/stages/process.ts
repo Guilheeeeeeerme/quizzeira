@@ -1,7 +1,8 @@
 // Concept: V2 document processing orchestrator (normalize → classify → branch).
 
 import { createHash } from "node:crypto";
-import { logInfo, logWarn } from "@quizzeira/worker-kit";
+import {
+  isDeferrableLlmError, logInfo, logWarn } from "@quizzeira/worker-kit";
 import type { DocumentRole } from "@quizzeira/shared";
 import {
   isGenerationEligibleRole,
@@ -96,9 +97,14 @@ export interface ProcessPassResult {
   chunks: number;
   syllabi: number;
   evidence: number;
+  deferred: number;
 }
 
 const PAST_EXAM_KINDS = new Set(["prova", "gabarito", "past_exam"]);
+/** §27 cost caps: at most this many leaves get an LLM distill call per document. */
+const MAX_DISTILL_LEAVES_PER_DOC = 3;
+/** Leaves at/above this many active KUs are saturated; skip distilling into them. */
+const DISTILL_KU_TARGET = 12;
 /** Document kinds the OAB/FGV extractor owns; everything else is v2 knowledge. */
 const OAB_LEGACY_KINDS = new Set(["prova", "gabarito", "past_exam", "edital"]);
 
@@ -110,6 +116,7 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
     chunks: 0,
     syllabi: 0,
     evidence: 0,
+    deferred: 0,
   };
 
   const { items } = await content.get<{ items: QueuedDocument[] }>(
@@ -352,8 +359,10 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
           });
         }
       }
+      // Topic-hinted documents already carry a confident leaf for every chunk;
+      // the LLM residue mapper would only spend tokens re-deciding it.
       const llmMaps =
-        leaves.length > 0
+        leaves.length > 0 && topicMaps.length === 0
           ? await mapChunksLlmResidue(
               deduped.chunks,
               leaves,
@@ -660,9 +669,23 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
           byLeaf.set(m.syllabusNodeId, list);
         }
 
+        // Cost cap (§27): distill only the leaves this document is really about —
+        // the topic-hinted leaf first, then the leaves with most mapped chunks —
+        // and never leaves that already reached their KU target.
+        const topicLeafForDistill = topicMaps[0]?.syllabusNodeId ?? null;
+        const distillLeaves = leaves
+          .filter((l) => (byLeaf.get(l.id)?.length ?? 0) > 0)
+          .filter((l) => (l.kuCount ?? 0) < DISTILL_KU_TARGET || l.id === topicLeafForDistill)
+          .sort((a, b) => {
+            if (a.id === topicLeafForDistill) return -1;
+            if (b.id === topicLeafForDistill) return 1;
+            return (byLeaf.get(b.id)?.length ?? 0) - (byLeaf.get(a.id)?.length ?? 0);
+          })
+          .slice(0, MAX_DISTILL_LEAVES_PER_DOC);
+
         const allUnits: Array<Record<string, unknown>> = [];
-        for (const leaf of leaves) {
-          const leafChunks = byLeaf.get(leaf.id)?.slice(0, 4) ?? [];
+        for (const leaf of distillLeaves) {
+          const leafChunks = byLeaf.get(leaf.id) ?? [];
           if (leafChunks.length === 0) continue;
           const units = await distillKnowledgeUnits(leafChunks, {
             id: leaf.id,
@@ -718,8 +741,25 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
 
       result.processed += 1;
     } catch (err) {
-      result.failed += 1;
       const message = err instanceof Error ? err.message : String(err);
+      if (isDeferrableLlmError(err)) {
+        // Budget exhausted / provider down: put the document back and stop the
+        // pass — hammering the provider only burns the per-minute budget.
+        result.deferred += 1;
+        logWarn("process deferred: LLM budget or provider unavailable", {
+          worker: NAME,
+          documentId: document.id,
+          error: message.slice(0, 200),
+        });
+        await content
+          .patch(`/internal/documents/${document.id}`, {
+            status: "pending",
+            failReason: `deferred: ${message.slice(0, 200)}`,
+          })
+          .catch(() => undefined);
+        break;
+      }
+      result.failed += 1;
       logWarn("process failed", { worker: NAME, documentId: document.id, error: message });
       await content
         .patch(`/internal/documents/${document.id}`, {
@@ -730,7 +770,7 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
     }
   }
 
-  if (result.processed || result.failed || result.duplicates) {
+  if (result.processed || result.failed || result.duplicates || result.deferred) {
     logInfo("process pass", { worker: NAME, ...result });
   }
   return result;

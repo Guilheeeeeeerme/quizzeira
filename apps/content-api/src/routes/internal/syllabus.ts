@@ -129,6 +129,12 @@ export async function registerInternalSyllabusRoutes(app: FastifyInstance): Prom
       });
       const byId = new Map(nodes.map((n) => [n.id, n]));
       const maxDepth = nodes.reduce((m, n) => Math.max(m, n.depth), 0);
+      const kuCounts = await prisma.knowledgeUnit.groupBy({
+        by: ["syllabusNodeId"],
+        where: { status: "active", syllabusNodeId: { in: nodes.map((n) => n.id) } },
+        _count: { _all: true },
+      });
+      const kuByLeaf = new Map(kuCounts.map((r) => [r.syllabusNodeId, r._count._all]));
       const leaves = nodes
         .filter((n) => n.depth === maxDepth || !nodes.some((c) => c.parentId === n.id))
         .map((n) => {
@@ -141,6 +147,7 @@ export async function registerInternalSyllabusRoutes(app: FastifyInstance): Prom
             canonicalSubjectId: n.canonicalSubjectId,
             parentTitle: parent?.title ?? null,
             depth: n.depth,
+            kuCount: kuByLeaf.get(n.id) ?? 0,
           };
         });
       return { leaves, syllabusId: syllabus.id, version: syllabus.version };
