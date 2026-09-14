@@ -45,7 +45,9 @@ export async function crawlTopicQueries(
       queries: string[] | unknown;
       attempts?: number;
     }>;
-  }>("/internal/topic-queries?status=queued&limit=5").catch(() => ({ items: [] }));
+  }>(`/internal/topic-queries?status=queued&limit=${crawlerEnv.topicQueriesPerPass}`).catch(
+    () => ({ items: [] }),
+  );
 
   if (items.length === 0) return budget;
 

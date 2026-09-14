@@ -19,6 +19,8 @@ export const crawlerEnv = {
   /** Edital PDFs downloaded into the Document store per run. */
   maxArtifactsPerRun: num("DISCOVERY_CRAWLER_MAX_ARTIFACTS", 4),
   maxArtifactBytes: num("DISCOVERY_CRAWLER_MAX_ARTIFACT_BYTES", 16 * 1024 * 1024),
+  /** §11.3 TOPIC_DISCOVERY_MAX_QUERIES_PER_PASS — TopicQuery rows dequeued per pass. */
+  topicQueriesPerPass: num("TOPIC_DISCOVERY_MAX_QUERIES_PER_PASS", 5),
   /** Editions an oab-fgv pass walks, newest first. */
   maxOabEditionsPerRun: num("DISCOVERY_CRAWLER_MAX_OAB_EDITIONS", 3),
   headless: (process.env.DISCOVERY_CRAWLER_HEADLESS ?? "true") !== "false",
