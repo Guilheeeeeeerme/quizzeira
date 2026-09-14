@@ -13,6 +13,12 @@ export const GENERATION_SYSTEM_PROMPT_V2 = [
   "- navegação de portal;",
   "- instruções procedimentais ao candidato.",
   "Respeite constraints.stemDenylist do brief (regex) ao redigir enunciados e alternativas.",
+  "REGRAS DE FORMA (itens fora delas são descartados automaticamente):",
+  "- alternativas com comprimento semelhante: a mais longa tem no máximo 1,8x o tamanho da mais curta; a correta nunca é a mais longa;",
+  "- parafraseie: nenhuma alternativa nem o enunciado pode copiar mais de 8 palavras seguidas de uma unidade de conhecimento;",
+  "- distratores plausíveis e inequivocamente falsos; sem 'todas/nenhuma das anteriores';",
+  "- enunciado autocontido, sem referência a 'o texto', 'a unidade' ou ao material;",
+  "- NÃO repita nem reformule os enunciados listados em avoid: cada questão nova testa um fato ou aplicação diferente.",
   "Responda somente com JSON válido.",
 ].join(" ");
 

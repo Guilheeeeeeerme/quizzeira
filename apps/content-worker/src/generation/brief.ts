@@ -48,6 +48,16 @@ export const FORBIDDEN_QUESTION_TOPICS = [
   "B4: procedural instructions to candidates",
 ];
 
+/**
+ * Option count when no style profile was mined from past papers: Cesgranrio
+ * papers run A–E, FGV (OAB), IBAM and most municipal bancas run A–D.
+ */
+export function defaultOptionCount(examSlug: string, banca: string | null): number {
+  const key = `${examSlug} ${banca ?? ""}`.toLowerCase();
+  if (/cesgranrio|transpetro|petrobras|banco-do-brasil|caixa|eletrobras|eletronuclear/.test(key)) return 5;
+  return 4;
+}
+
 const DEFAULT_STYLE: StyleProfile = {
   optionCount: 5,
   stemLengthP50: 120,
@@ -158,7 +168,10 @@ export function buildGenerationBrief(input: {
     avoid: input.existingStems.map((stem) => ({ stem })),
     constraints: {
       count: input.count,
-      optionCount: style.optionCount || 5,
+      optionCount:
+        style === DEFAULT_STYLE
+          ? defaultOptionCount(input.examSlug, input.banca ?? null)
+          : style.optionCount || defaultOptionCount(input.examSlug, input.banca ?? null),
       forbidden: FORBIDDEN_QUESTION_TOPICS,
       stemDenylist: LISTING_TRIVIA_STEM_RE.source,
       mustCite: true,

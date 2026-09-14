@@ -25,16 +25,22 @@ export async function distillKnowledgeUnits(
   const material = chunks.map((c, i) => `[${i}] ${c.text.slice(0, 2500)}`).join("\n\n");
   const prompt = [
     `Subtópico: ${leaf.path.join(" › ")}`,
-    "Extraia unidades de conhecimento testáveis presentes no texto. JSON: { units: [{ kind, statement, example, confidence }] }",
+    "Extraia unidades de conhecimento testáveis presentes no texto que tratem DIRETAMENTE desse subtópico.",
+    "Se o material não for sobre o subtópico (outro assunto, outra disciplina, página de portal), responda { \"onTopic\": false, \"units\": [] }.",
+    "JSON: { onTopic: boolean, units: [{ kind, statement, example, confidence }] }",
     material,
   ].join("\n");
 
   try {
-    const response = await generateJson<{ units: unknown }>(
-      "Extraia apenas fatos do material. Sem metadados de edital.",
+    const response = await generateJson<{ onTopic?: unknown; units: unknown }>(
+      "Extraia apenas fatos do material, e apenas os pertinentes ao subtópico indicado. Cada statement é autocontido (sem 'o texto', 'o autor'). Sem metadados de edital.",
       prompt,
       { temperature: 0, requiredKeys: ["units"] },
     );
+    if (response.onTopic === false) {
+      logInfo("material off-topic for leaf; no KUs", { worker: NAME, leaf: leaf.id, chunks: chunks.length });
+      return [];
+    }
     const units = Array.isArray(response.units) ? response.units : [];
     const out: KnowledgeUnitDraft[] = [];
     for (const entry of units) {

@@ -181,9 +181,15 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
 
   app.get("/internal/question-items/stems", async (request) => {
     const q = request.query as { syllabusNodeId?: string; limit?: string };
+    // The generator must avoid what is (or may become) live on the leaf; the
+    // most recent failed drafts are noise and used to crowd the list out.
     const items = await prisma.questionItem.findMany({
-      where: { syllabusNodeId: String(q.syllabusNodeId || "") || undefined },
+      where: {
+        syllabusNodeId: String(q.syllabusNodeId || "") || undefined,
+        status: { in: ["published", "needs_review", "draft"] },
+      },
       select: { prompt: true },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       take: Math.min(50, Number(q.limit || 20)),
     });
     return { stems: items.map((i) => i.prompt) };

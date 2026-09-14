@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  defaultOptionCount,
   buildGenerationBrief,
   diversifyKnowledgeUnits,
   looksLikeListingTriviaStem,
@@ -80,5 +81,11 @@ describe("listing-trivia stem denylist (§43.2.3)", () => {
     });
     assert.equal(brief.constraints.stemDenylist, LISTING_TRIVIA_STEM_RE.source);
     assert.ok(brief.constraints.forbidden.length >= 4);
+  });
+
+  it("defaults option count by banca when no style profile exists", () => {
+    assert.equal(defaultOptionCount("transpetro-2026-edital-1", null), 5);
+    assert.equal(defaultOptionCount("santos-concurso-publico-74-2026", "IBAMSP"), 4);
+    assert.equal(defaultOptionCount("oab-47-1-fase", "FGV"), 4);
   });
 });
