@@ -74,6 +74,15 @@ from the candidate portal API (`/api/PortalEventoConteudos/publico/<id>`),
 which is where their editais and retificações live. Documents are stored while
 registration is open or for 90 days after it closes (study window).
 
+Client-rendered portals (Cebraspe's React app) are detected by visible text,
+not raw HTML size, and rendered with Playwright; both listing and detail
+renders wait for network idle before parsing. Exam identity for such portals
+comes from the URL segment (`/concursos/PM_AL_26` → slug `pm-al-26`, edition
+2026, title from the page `<h2>`); menu segments (`concursos`, `encerrado`,
+`inscricoes-abertas`) never become exams. `/internal/open-exams` excludes
+rows whose registration ended more than 90 days ago even when a listing regex
+once said "open".
+
 ## Duplicate documents
 
 `PATCH /internal/documents/:id` with a `contentHash` already owned by another
