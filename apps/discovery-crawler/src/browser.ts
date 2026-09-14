@@ -86,6 +86,7 @@ export async function crawlSourceListings(source: CrawlerSource): Promise<{
 
       await sleep(source.politenessMs);
       await page.goto(url, { waitUntil: "domcontentloaded" });
+      await settleRenderedPage(page);
       const html = await page.content();
       if (!listingPageHtml) {
         listingPageHtml = html;
@@ -116,6 +117,21 @@ export async function crawlSourceListings(source: CrawlerSource): Promise<{
   };
 }
 
+/**
+ * Client-rendered portals (Cebraspe's React app) paint their concurso list
+ * from XHR after DOMContentLoaded; reading `page.content()` immediately
+ * returns the empty shell. Wait for the network to go idle (bounded) plus a
+ * short settle so the list is in the DOM.
+ */
+async function settleRenderedPage(page: Page): Promise<void> {
+  await page
+    .waitForLoadState("networkidle", { timeout: Math.min(crawlerEnv.navigationTimeoutMs, 15_000) })
+    .catch(() => undefined);
+  await sleep(RENDER_SETTLE_MS);
+}
+
+const RENDER_SETTLE_MS = 1_200;
+
 export async function fetchWithPlaywright(
   url: string,
   politenessMs: number,
@@ -131,6 +147,7 @@ export async function fetchWithPlaywright(
   try {
     await sleep(politenessMs);
     await page.goto(url, { waitUntil: "domcontentloaded" });
+    await settleRenderedPage(page);
     return { html: await page.content() };
   } finally {
     await context.close();
