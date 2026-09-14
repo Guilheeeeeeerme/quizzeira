@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="branding/quizzeira.svg" alt="Quizzeira" width="72" height="72" />
+</p>
+
 # Quizzeira
 
-Concurso-only study platform: continuous **Ingestion** of public exams, **Extraction/Generation** into a draft Question bank, **Eval** publish gate, then **Sampling** into study pills. Grading remains **Grading** via `quiz-corrector`.
+Concurso-only study platform: continuous **Ingestion** of public exams → **Extraction/Generation** into a draft Question bank → **Eval** publish gate → **Sampling** into study pills. Grading via `quiz-corrector`.
 
 ## Live
 
@@ -9,43 +13,49 @@ Concurso-only study platform: continuous **Ingestion** of public exams, **Extrac
 | Web | https://app.quizzeira.ferredemo.dev |
 | API | https://api.quizzeira.ferredemo.dev |
 
-## Features
+## Technical docs (GitHub Pages)
 
-- **Open exams catalog** — discovered via admin-registered sources (no content seeds / placeholders).
-- **Published Question bank** — only Eval-approved items reach Study.
-- **Study pills** — pick exam → focus → timed/pill session from published Sampling.
-- **Async Grading** — `quiz-corrector` scores attempts.
-- **Admin** (`role=ADMIN`) — Source registry, exams, quality HITL queue in the same design system.
+**https://guilheeeeeeerme.github.io/promptdesk/** — shared ecosystem docs (`/en/quizzeira/…`). Hosted from the PromptDesk Pages site (infra repo is private).
 
-## Architecture
+## AI engineering (audit-honest)
 
-See [`docs/ai-swe-concepts.md`](docs/ai-swe-concepts.md) for the canonical AI SWE concept map (Ingestion, Extraction, Generation, Eval, Publish gate, Sampling, Guardrails, …).
+| Capability | Status |
+| --- | --- |
+| Three planes (Discovery / Content / Study); workers use **runLoop** (not BullMQ) | **VERIFIED** |
+| Intervals 60s study/quality/corrector, 120s content-worker, 30m crawler; Eval 0.8/0.5; BANK_READY≥5; MIN_KU/TARGET 4/12; PUBLISHED_TARGET 40 | **VERIFIED** |
+| Headroom **OFF** (`LLM_USE_HEADROOM=false`); no question-bank seed | **VERIFIED** |
+| Embeddings 768d | **VERIFIED** |
+| `searchChunks` in generation / `googleSearch` | **UNUSED** |
+| Full semantic RAG on gen path | **NOT FOUND** |
+| `specs/001` / compose vs sample | **PARTIAL** — crawler SoT is `docs/crawler-redesign-spec.md` |
+
+Guardrails: [`docs/guardrails.md`](docs/guardrails.md). Concepts: [`docs/ai-swe-concepts.md`](docs/ai-swe-concepts.md).
+
+## Architecture snapshot
 
 | Plane | Apps | Store |
 | --- | --- | --- |
-| Discovery | `discovery-api`, `discovery-crawler` | Postgres `quizzeira_discovery` + MinIO artifacts |
-| Content | `content-api`, `content-worker`, `content-quality` | Postgres `quizzeira_content` + pgvector |
-| Study | `api`, `web`, `quiz-corrector` | MySQL (users/topics/attempts) + Redis budgets |
+| Discovery | `discovery-api`, `discovery-crawler` | Postgres + MinIO |
+| Content | `content-api`, `content-worker`, `content-quality` | Postgres + pgvector |
+| Study | `api`, `web`, `quiz-corrector` | MySQL + Redis |
 
-**No content seed.** Only user seed (`seed-platform`: admin root; optional demo guest account without curriculum). Bank fills via continuous Ingestion → Content → Eval.
+Brand mark: [`branding/quizzeira.svg`](branding/quizzeira.svg) — exam card + Eval check gate.
 
-## Local compose
+## Quick start
 
 ```bash
 cp .env.sample .env
 docker compose up --build
 ```
 
-Services: MySQL, Postgres(+pgvector), Redis, MinIO, discovery-api/crawler, content-api/worker/quality, study api/web, quiz-corrector.
-
-## Seed (users only)
+User seed only (no question-bank seed):
 
 ```bash
 npm run db:seed -w @quizzeira/api
 ```
 
-Creates platform ADMIN from `DEV_ROOT_EMAIL` / `DEV_ROOT_PASSWORD`. Admin then adds sources under `/admin/sources`.
+## Deeper docs
 
-## Guardrails
-
-See [`docs/guardrails.md`](docs/guardrails.md).
+- Agent map: [`CLAUDE.md`](CLAUDE.md) · [`AGENTS.md`](AGENTS.md)
+- Crawler SoT: [`docs/crawler-redesign-spec.md`](docs/crawler-redesign-spec.md)
+- Production deploy: private **infra** repo (Jenkins)
