@@ -2,7 +2,11 @@
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
 import { concursoPathSlug, listingsFingerprint, oabEditionPageUrl, slugifyKey } from "@quizzeira/shared";
-import { cesgranrioPortalEventId, fetchCesgranrioPortalDocuments } from "./cesgranrio-portal.js";
+import {
+  cesgranrioPortalEventId,
+  fetchCesgranrioPortalDocuments,
+  fetchCesgranrioPortalEditais,
+} from "./cesgranrio-portal.js";
 import { dmzGet, dmzPost, dmzPut, logError, logInfo, withRunIdAsync } from "@quizzeira/worker-kit";
 import { closeBrowser, crawlSourceListings, listingsToOpenRecords } from "./browser.js";
 import {
@@ -261,6 +265,21 @@ async function crawlListingMode(
 
     if (upserted.changed) summary.openDiscovered += 1;
 
+    // Several editais under one banca event (Transpetro Mar/Terra, médio/superior):
+    // each is its own concurso with its own syllabus and question bank.
+    if (detail.subExams && detail.subExams.length >= 2) {
+      for (const sub of detail.subExams) {
+        remaining = await upsertExamWithDocuments(
+          source,
+          summary,
+          sub,
+          `${listing.href}#${sub.examSlug ?? sub.editionKey ?? "edital"}`,
+          remaining,
+        );
+      }
+      continue;
+    }
+
     if (upserted.record.status !== "open" && !withinRegistrationGrace(detail.registrationEnd)) {
       continue;
     }
@@ -311,6 +330,27 @@ async function enrichDetailWithPortal(
 ): Promise<DetailPageParse> {
   const eventId = cesgranrioPortalEventId(html, detail.detailUrl);
   if (!eventId) return detail;
+  const editais = await fetchCesgranrioPortalEditais(eventId);
+  if (editais.length >= 2) {
+    const baseSlug = detail.examSlug || slugifyKey(detail.title);
+    const subExams: DetailPageParse[] = editais.map((e) => ({
+      ...detail,
+      title: `${detail.title} — Edital nº ${e.number}${e.emphasis.length ? ` (${e.emphasis.join(", ")})` : ""}`,
+      examSlug: `${baseSlug}-edital-${e.number}`,
+      editionKey: e.editionKey ?? detail.editionKey,
+      emphasis: e.emphasis,
+      documentLinks: e.documentLinks,
+      editalUrl: e.documentLinks.find((d) => d.kindHint === "edital")?.url ?? null,
+      subExams: undefined,
+    }));
+    logInfo("portal event split into editais", {
+      worker: NAME,
+      eventId,
+      count: subExams.length,
+      slugs: subExams.map((s) => s.examSlug),
+    });
+    return { ...detail, subExams };
+  }
   const portalDocs = await fetchCesgranrioPortalDocuments(eventId);
   if (portalDocs.length === 0) return detail;
   const seen = new Set(detail.documentLinks.map((d) => d.url));

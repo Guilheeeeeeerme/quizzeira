@@ -33,6 +33,8 @@ export interface DetailPageParse {
   emphasis: string[];
   documentLinks: DocumentLinkCandidate[];
   editalUrl: string | null;
+  /** Banca portals with several editais under one event → one exam each. */
+  subExams?: DetailPageParse[];
 }
 
 function decodeHtmlEntities(value: string): string {
