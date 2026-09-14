@@ -244,8 +244,13 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
     }));
     const seenHashes = new Set<string>();
     const chunks: Array<Record<string, unknown>> = (request.body?.chunks ?? [])
-      .map((c) => ({ ...c, text: typeof c.text === "string" ? stripNul(c.text) : c.text }))
-      .filter((c) => typeof c.text === "string" && c.text.trim())
+      .map(
+        (c): Record<string, unknown> => ({
+          ...c,
+          text: typeof c.text === "string" ? stripNul(c.text) : c.text,
+        }),
+      )
+      .filter((c) => typeof c.text === "string" && (c.text as string).trim())
       .filter((c) => {
         // (documentId, contentHash) is unique: repeated boilerplate blocks
         // (page headers, signatures) would otherwise fail the whole insert.
