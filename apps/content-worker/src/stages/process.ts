@@ -761,9 +761,14 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
       }
       result.failed += 1;
       logWarn("process failed", { worker: NAME, documentId: document.id, error: message });
+      // Network hiccups (slow CDN, doc-processor busy) get two more tries on later
+      // passes; everything else is final.
+      const transient = /aborted due to timeout|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|processor_unavailable/i.test(message);
+      const attempts = (document.attempts ?? 0) + 1;
       await content
         .patch(`/internal/documents/${document.id}`, {
-          status: "failed",
+          status: transient && attempts < 3 ? "pending" : "failed",
+          bumpAttempts: true,
           failReason: message.slice(0, 400),
         })
         .catch(() => undefined);

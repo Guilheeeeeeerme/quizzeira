@@ -261,7 +261,7 @@ export function isTransientProviderError(err: unknown): boolean {
   const code = llmErrorCode(err);
   if (code === "llm_budget_exceeded" || code === "guardrail_block" || code === "llm_shape") return false;
   const msg = err instanceof Error ? err.message : String(err ?? "");
-  return /\b(429|503)\b|high demand|overloaded|rate limit|no longer available|not found for api version/i.test(msg);
+  return /\b(429|503)\b|high demand|overloaded|rate limit|no longer available|not found for api version|is not enabled for|not supported for this model|does not support/i.test(msg);
 }
 
 export async function generateJson<T>(

@@ -86,7 +86,7 @@ function extractPositions(text: string): string[] {
 }
 
 const DOC_SKIP_RE =
-  /inscri[cç][ãa]o\s+online|boleto|cart[ãa]o\s+de\s+confirma[çc][ãa]o|perguntas\s+frequentes|facebook|instagram|twitter|linkedin|whatsapp|voltar\s+para/i;
+  /inscri[cç][ãa]o\s+online|boleto|cart[ãa]o\s+de\s+confirma[çc][ãa]o|perguntas\s+frequentes|facebook|instagram|twitter|linkedin|whatsapp|voltar\s+para|vlibras|libras\b/i;
 
 function editalNumberEditionKey(text: string): string | null {
   const m = text.match(/\bedital\s+(?:de\s+abertura\s+)?n[ºo°.]?\s*(\d[\d./-]*)/i);
