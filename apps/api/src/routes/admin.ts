@@ -2,7 +2,7 @@
 //
 // discovery-api and content-api have no public ingress. Every admin action goes
 // through here so it is checked against a real ADMIN session first; this file is
-// only a proxy, and the paths below mirror the upstream routes one-for-one.
+// mostly a proxy (paths mirror upstream), plus local study-plane user provisioning.
 import type { FastifyInstance } from "fastify";
 import type { PromptKey } from "@quizzeira/shared";
 import { requireAdmin } from "../plugins/auth";
@@ -12,6 +12,7 @@ import {
   listPromptProposals,
   rejectPromptProposal,
 } from "../services/prompt-store";
+import { createStudyUser, listAdminUsers } from "../services/admin-users";
 import { contentFetch, discoveryFetch } from "../lib/pipeline-clients";
 
 function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
@@ -21,6 +22,19 @@ function httpError(err: unknown, reply: { code: (n: number) => { send: (b: unkno
 
 export async function adminRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAdmin);
+
+  // Study-plane users (local MySQL). Always create role USER — study only.
+  app.get("/admin/users", async () => listAdminUsers());
+
+  app.post<{
+    Body: { email?: string; password?: string; displayName?: string; role?: string };
+  }>("/admin/users", async (request, reply) => {
+    const result = await createStudyUser(request.body ?? {});
+    if (!result.ok) {
+      return reply.code(result.status).send({ error: result.error });
+    }
+    return { user: result.user };
+  });
 
   // Concept: Prompt registry — proposals are staged by workers, applied here.
   app.get("/admin/proposals/prompts", async () => {

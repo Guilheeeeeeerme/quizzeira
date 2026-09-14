@@ -237,6 +237,7 @@ export function AdminLayout() {
     { to: "/admin/sources", label: t("Sources") },
     { to: "/admin/exams", label: t("Exams") },
     { to: "/admin/quality", label: t("Quality queue") },
+    { to: "/admin/users", label: t("Users") },
     { to: "/admin/health", label: t("Pipeline health") },
   ];
 
@@ -247,7 +248,9 @@ export function AdminLayout() {
           {t("Admin")}
         </Heading>
         <Text tone="secondary" size="bodySm">
-          {t("Manage ingestion sources, discovered exams, and the question quality queue.")}
+          {t(
+            "Manage ingestion sources, discovered exams, study users, and the question quality queue.",
+          )}
         </Text>
       </header>
 
@@ -1751,6 +1754,176 @@ export function AdminHealthPage() {
           </ul>
         )}
       </section>
+    </Stack>
+  );
+}
+
+// ── Users (study-only accounts) ─────────────────────────────────────────────
+
+interface AdminUserRow {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: "USER" | "ADMIN";
+  createdAt: string;
+}
+
+export function AdminUsersPage() {
+  const t = useT();
+  const formatAt = useFormatAt();
+  const emailId = useId();
+  const passwordId = useId();
+  const displayNameId = useId();
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [booting, setBooting] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const res = await api<{ items: AdminUserRow[] }>("/admin/users");
+      setUsers(res.items);
+    } catch (err) {
+      setError(errText(err, t));
+    } finally {
+      setBooting(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function createUser(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await api("/admin/users", {
+        method: "POST",
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          displayName: displayName.trim() || undefined,
+        }),
+      });
+      setEmail("");
+      setPassword("");
+      setDisplayName("");
+      setShowForm(false);
+      setNotice(t("Study user created. They can sign in with this email and password."));
+      await load();
+    } catch (err) {
+      setError(errText(err, t));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (booting) return <PageSkeleton />;
+
+  return (
+    <Stack gap={5}>
+      <div className={styles.sectionHead}>
+        <div>
+          <Heading level={2} size="section">
+            {t("Users")}
+          </Heading>
+          <Text tone="secondary" size="bodySm">
+            {t("Create study-only accounts. New users cannot access Admin.")}
+          </Text>
+        </div>
+        <div className={styles.sectionActions}>
+          <Button type="button" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? t("Cancel") : t("Create study user")}
+          </Button>
+        </div>
+      </div>
+
+      {error ? (
+        <Text tone="danger" size="caption" role="alert">
+          {error}
+        </Text>
+      ) : null}
+      {notice ? (
+        <Text tone="secondary" size="caption" role="status">
+          {notice}
+        </Text>
+      ) : null}
+
+      {showForm ? (
+        <form className={styles.form} onSubmit={(e) => void createUser(e)}>
+          <Field label={t("Email")} htmlFor={emailId}>
+            <Input
+              id={emailId}
+              type="email"
+              autoComplete="off"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label={t("Password")} htmlFor={passwordId} hint={t("At least 6 characters")}>
+            <Input
+              id={passwordId}
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={6}
+              required
+            />
+          </Field>
+          <Field label={t("Display name")} htmlFor={displayNameId}>
+            <Input
+              id={displayNameId}
+              type="text"
+              autoComplete="off"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </Field>
+          <div className={styles.formActions}>
+            <Button type="submit" loading={saving}>
+              {t("Create study user")}
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {users.length === 0 ? (
+        <EmptyState
+          title={t("No users yet.")}
+          description={t("Create a study-only account, or students can register themselves.")}
+        />
+      ) : (
+        <ul className={styles.list}>
+          {users.map((user) => (
+            <li key={user.id} className={styles.card}>
+              <div className={styles.cardMain}>
+                <div className={styles.cardTitleRow}>
+                  <Text size="body">{user.displayName?.trim() || user.email}</Text>
+                  <Badge tone={user.role === "ADMIN" ? "warning" : "success"}>
+                    {user.role === "ADMIN" ? t("Admin") : t("Study")}
+                  </Badge>
+                </div>
+                <Text size="caption" tone="tertiary">
+                  {user.email}
+                  {user.displayName?.trim() ? ` · ${user.displayName}` : ""}
+                  {` · ${formatAt(user.createdAt)}`}
+                </Text>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </Stack>
   );
 }

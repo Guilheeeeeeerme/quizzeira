@@ -16,6 +16,7 @@ import {
   AdminLayout,
   AdminQualityPage,
   AdminSourcesPage,
+  AdminUsersPage,
 } from "./features/admin/AdminPages";
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
@@ -56,6 +57,7 @@ export function App() {
               <Route path="sources" element={<AdminSourcesPage />} />
               <Route path="exams" element={<AdminExamsPage />} />
               <Route path="quality" element={<AdminQualityPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
               <Route path="health" element={<AdminHealthPage />} />
             </Route>
           </Route>

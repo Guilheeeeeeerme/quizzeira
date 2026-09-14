@@ -33,6 +33,8 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     Admin: "Admin",
     Sources: "Sources",
     Exams: "Exams",
+    Users: "Users",
+    Study: "Study",
     "Quality queue": "Quality queue",
     "Source registry, exams, and quality HITL queue.":
       "Source registry, exams, and quality HITL queue.",
@@ -58,6 +60,16 @@ const dictionaries: Record<Locale, Record<string, string>> = {
       "Exam, emphasis, and guidelines only — pick the exam from the open exams catalog.",
     "This removes the study config and related study pills.":
       "This removes the study config and related study pills.",
+    "Create study user": "Create study user",
+    "Create study-only accounts. New users cannot access Admin.":
+      "Create study-only accounts. New users cannot access Admin.",
+    "Study user created. They can sign in with this email and password.":
+      "Study user created. They can sign in with this email and password.",
+    "No users yet.": "No users yet.",
+    "Create a study-only account, or students can register themselves.":
+      "Create a study-only account, or students can register themselves.",
+    "Manage ingestion sources, discovered exams, study users, and the question quality queue.":
+      "Manage ingestion sources, discovered exams, study users, and the question quality queue.",
   },
   pt: {
     "AI Dev Quiz": "Quizzeira Concursos",
@@ -209,6 +221,8 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     Admin: "Admin",
     Sources: "Fontes",
     Exams: "Concursos",
+    Users: "Usuários",
+    Study: "Estudo",
     "Quality queue": "Fila de qualidade",
     "Source registry, exams, and quality HITL queue.":
       "Registro de fontes, concursos e fila HITL de qualidade.",
@@ -217,6 +231,16 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Source proposals": "Propostas de fonte",
     "No pending proposals.": "Nenhuma proposta pendente.",
     "No exams discovered yet.": "Nenhum concurso descoberto ainda.",
+    "Create study user": "Criar usuário de estudo",
+    "Create study-only accounts. New users cannot access Admin.":
+      "Crie contas só de estudo. Novos usuários não acessam o Admin.",
+    "Study user created. They can sign in with this email and password.":
+      "Usuário de estudo criado. Eles podem entrar com este e-mail e senha.",
+    "No users yet.": "Nenhum usuário ainda.",
+    "Create a study-only account, or students can register themselves.":
+      "Crie uma conta só de estudo, ou os estudantes podem se cadastrar sozinhos.",
+    "Manage ingestion sources, discovered exams, study users, and the question quality queue.":
+      "Gerencie as fontes de coleta, os concursos descobertos, os usuários de estudo e a fila de qualidade das questões.",
     "Nothing waiting for review.": "Nada aguardando revisão.",
     "Pass rate": "Taxa de aprovação",
     "Force publish": "Forçar publicação",
