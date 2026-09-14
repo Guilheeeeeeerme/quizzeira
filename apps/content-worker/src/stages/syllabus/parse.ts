@@ -283,9 +283,19 @@ export function parseProgrammeSpan(
     if (current) buffer.push(line);
   }
   flush();
-  // Drop subjects that collected no topics (headings of tables, names, etc.).
+  // Drop subjects that collected no topics (headings of tables, names, etc.),
+  // and merge repeats: the programme lists "Língua Portuguesa" once per cargo
+  // group, which must be one node (one canonicalKey for the planner).
   const withLeaves = new Set(nodes.filter((n) => n.depth === 1).map((n) => n.parentPathSlug));
-  return nodes.filter((n) => n.depth === 1 || withLeaves.has(n.pathSlug));
+  const seen = new Set<string>();
+  const merged: SyllabusNodeDraft[] = [];
+  for (const n of nodes) {
+    if (n.depth === 0 && !withLeaves.has(n.pathSlug)) continue;
+    if (seen.has(n.pathSlug)) continue;
+    seen.add(n.pathSlug);
+    merged.push({ ...n, ordinal: merged.length });
+  }
+  return merged;
 }
 
 export function parseSyllabusFromDocument(

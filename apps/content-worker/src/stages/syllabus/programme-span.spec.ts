@@ -54,6 +54,16 @@ describe("programme span parser", () => {
     assert.ok(leaves.length >= 20);
     const especificos = nodes.filter((n) => n.depth === 1 && n.parentPathSlug === "administrador");
     assert.ok(especificos.every((n) => n.scope === "specific"));
+    // Repeated subject headers collapse into one node.
+    const repeated = parseProgrammeSpan(
+      [
+        ...locateProgrammeSpan(sections),
+        sec(9, HEADER, `${HEADER}\nLÍNGUA PORTUGUESA\nCrase; pontuação; ortografia oficial; concordância verbal.`),
+      ],
+      ["administrador"],
+    );
+    assert.equal(repeated.filter((n) => n.depth === 0 && n.pathSlug === "lingua-portuguesa").length, 1);
+    assert.equal(repeated.filter((n) => n.pathSlug === "lingua-portuguesa/crase").length, 1);
   });
 
   it("parseSyllabusFromDocument prefers the programme span and activates it", () => {
