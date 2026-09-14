@@ -165,6 +165,16 @@ export function parseOabEdition(text: string): OabEdition | null {
  * Canonical exam slug. One exam row per edition and phase, so the objective and
  * practical papers never share a question pool.
  */
+/**
+ * Only the newest catalogued edition is an open exam for study; older
+ * editions stay in the catalog as past-paper holders but must not show as
+ * "open" (§11.2.5 status honesty).
+ */
+export function oabEditionStatus(edition: Pick<OabEdition, "number">): "open" | "closed" {
+  const newest = Math.max(...OAB_EDITIONS.map((e) => e.number));
+  return edition.number >= newest ? "open" : "closed";
+}
+
 export function oabExamSlug(edition: OabEdition, phase: OabPhase): string {
   const suffix = phase === "objective" ? "1-fase" : "2-fase";
   return `${OAB_SLUG_PREFIX}-${slugifyKey(edition.label)}-${suffix}`;

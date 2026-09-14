@@ -2,7 +2,8 @@
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
 import { concursoPathSlug,
-  isNavigationSlug, listingsFingerprint, oabEditionPageUrl, slugifyKey } from "@quizzeira/shared";
+  isNavigationSlug,
+  oabEditionStatus, listingsFingerprint, oabEditionPageUrl, slugifyKey } from "@quizzeira/shared";
 import {
   cesgranrioPortalEventId,
   fetchCesgranrioPortalDocuments,
@@ -539,7 +540,7 @@ function oabOpenExamRecord(source: CrawlerSource, group: OabExamGroup) {
     editalUrl: edital?.url ?? null,
     listingUrl: oabEditionPageUrl(group.edition.fgvKey),
     kind: "oab" as const,
-    status: "open" as const,
+    status: oabEditionStatus(group.edition),
     sourceId: source.id,
     sourceDomain: source.domain,
   };

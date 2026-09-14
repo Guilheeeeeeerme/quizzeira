@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  oabEditionStatus,
+  OAB_EDITIONS,
   classifyOabDocument,
   oabEditionByNumber,
   oabExamSlug,
@@ -155,5 +157,11 @@ describe("oabExamSlug", () => {
     assert.ok(edition);
     assert.equal(oabExamSlug(edition, "objective"), "oab-46-1-fase");
     assert.equal(oabExamSlug(edition, "practical"), "oab-46-2-fase");
+  });
+
+  it("marks only the newest edition as open", () => {
+    const newest = [...OAB_EDITIONS].sort((a, b) => b.number - a.number)[0]!;
+    assert.equal(oabEditionStatus(newest), "open");
+    assert.equal(oabEditionStatus({ number: newest.number - 1 }), "closed");
   });
 });
