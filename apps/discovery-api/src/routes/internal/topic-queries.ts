@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
 
+/** A productive search for a canonical topic serves every exam for a week. */
+const SHARED_TOPIC_TTL_MS = 7 * 24 * 60 * 60_000;
+
 export async function registerInternalTopicQueryRoutes(app: FastifyInstance): Promise<void> {
   // ── Topic queries (§11.3 / §17.5) ──────────────────────────────────────────
 
@@ -36,6 +39,24 @@ export async function registerInternalTopicQueryRoutes(app: FastifyInstance): Pr
       },
     });
     if (active) return { topicQuery: active, deduped: true };
+    // The same canonical topic ("lingua-portuguesa/concordancia-verbal") is
+    // shared by every exam that lists it; KUs are keyed by canonicalKey, so a
+    // recent productive search for another exam already covers this leaf.
+    // Four Transpetro editais must not run the same Portuguese queries 4×.
+    if (canonicalKey) {
+      const recentShared = await prisma.topicQuery.findFirst({
+        where: {
+          canonicalKey,
+          status: { in: ["queued", "running", "done"] },
+          OR: [
+            { status: { in: ["queued", "running"] } },
+            { finishedAt: { gte: new Date(Date.now() - SHARED_TOPIC_TTL_MS) }, candidatesStored: { gt: 0 } },
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (recentShared) return { topicQuery: recentShared, deduped: true, sharedCanonicalKey: true };
+    }
 
     const row = await prisma.topicQuery.create({
       data: {
