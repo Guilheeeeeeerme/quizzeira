@@ -240,7 +240,20 @@ export function classifyDocument(
   let roleConfidence: number;
   let roleMethod: string;
 
-  if (tier0 && tier0.weight >= 0.9 && tier0.role !== "unknown") {
+  // "Edital de resultado / relação de candidatos / isenção / convocação" are
+  // editais by name but administrative by content: no programme, no vagas.
+  // The `edital` provenance hint must not turn candidate lists into syllabi.
+  const adminTitle = [doc.metadata.title ?? "", doc.sections[0]?.heading ?? "", doc.sections[0]?.text.slice(0, 400) ?? ""].join("\n");
+  const fullText = doc.sections.map((s) => s.text).join("\n");
+  const administrativeEdital =
+    /resultado|rela[çc][ãa]o\s+de\s+candidatos|isen[çc][ãa]o|convoca[çc][ãa]o|homologa[çc][ãa]o|recursos?\s+interpostos|gabarito/i.test(adminTitle) &&
+    !/conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?|\bdas\s+vagas\b/i.test(fullText);
+
+  if (administrativeEdital && tier0?.role !== "evidence") {
+    role = "administrative";
+    roleConfidence = 0.85;
+    roleMethod = "tier1_admin_override";
+  } else if (tier0 && tier0.weight >= 0.9 && tier0.role !== "unknown") {
     role = tier0.role;
     roleConfidence = tier0.weight;
     roleMethod = "tier0_provenance";

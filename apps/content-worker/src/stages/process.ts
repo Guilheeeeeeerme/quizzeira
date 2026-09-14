@@ -462,7 +462,14 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
           });
       }
 
-      if (contentEnv.stageSyllabusEnabled && isSyllabusSourceRole(classification.role)) {
+      const hasProgrammeSignal = /conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?/i.test(
+        normalized.sections.map((s) => `${s.heading ?? ""}\n${s.text}`).join("\n"),
+      );
+      if (
+        contentEnv.stageSyllabusEnabled &&
+        isSyllabusSourceRole(classification.role) &&
+        hasProgrammeSignal
+      ) {
         const positions = discoverPositions(normalized, classification.sections);
         const parsed = parseSyllabusFromDocument(normalized, classification.sections, positions);
 

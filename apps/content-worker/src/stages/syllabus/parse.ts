@@ -29,7 +29,7 @@ export interface ParsedSyllabus {
 }
 
 const SUBJECT_HEADER_RE =
-  /^([A-ZÁÉÍÓÚÃÕÇ0-9][A-ZÁÉÍÓÚÃÕÇ0-9\s\-–—]{2,78}):?\s*$/;
+  /^([A-ZÁÉÍÓÚÂÊÔÀÃÕÇ0-9][A-ZÁÉÍÓÚÂÊÔÀÃÕÇ0-9\s\-–—,\/()&]{2,88}):?\s*$/;
 const OUTLINE_ITEM_RE = /(?:^|\n)\s*(?:\d+(?:\.\d+)*[.)]|[a-z]\))\s+([^\n;]+)/gi;
 const SCOPE_BASIC_RE = /conhecimentos?\s+(b[aá]sicos|gerais|comuns)/i;
 const SCOPE_SPECIFIC_RE = /conhecimentos?\s+espec[íi]ficos/i;
@@ -130,11 +130,186 @@ function buildPathSlug(parts: string[]): string {
   return parts.map((p) => slugifyKey(p)).join("/");
 }
 
+const PROGRAMME_START_RE =
+  /conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?|programa\s+de\s+prova/i;
+const ANNEX_HEADING_RE = /^\s*anexo\s+([ivx]+|\d+)\b/i;
+const PROGRAMME_STOP_RE =
+  /^\s*anexo\s+([ivx]+|\d+)\b|^\s*(cronograma|modelo\s+de|requerimento|laudo\s+m[ée]dico|rela[çc][ãa]o\s+de\s+exames)/i;
+
+/**
+ * Locate the programme annex ("Anexo II – Programa das Provas", "Conteúdo
+ * Programático") by anchors rather than by section role: PDF sectioning often
+ * splits it by running page headers and mislabels those pieces.
+ */
+export function locateProgrammeSpan(sections: ClassifiedSection[]): ClassifiedSection[] {
+  let start = -1;
+  for (let i = 0; i < sections.length; i += 1) {
+    const sec = sections[i]!.section;
+    const head = `${sec.heading ?? ""}\n${sec.text.slice(0, 240)}`;
+    if (PROGRAMME_START_RE.test(head) && !/\bcada\s+cargo\b|item\s+\d/i.test(sec.heading ?? "")) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return [];
+  const startAnnex = (sections[start]!.section.heading ?? "").match(ANNEX_HEADING_RE)?.[1] ?? null;
+  const span: ClassifiedSection[] = [sections[start]!];
+  for (let i = start + 1; i < sections.length; i += 1) {
+    const sec = sections[i]!.section;
+    const heading = sec.heading ?? "";
+    const firstLine = sec.text.split(/\n/)[0] ?? "";
+    const annex = heading.match(ANNEX_HEADING_RE)?.[1] ?? firstLine.match(ANNEX_HEADING_RE)?.[1] ?? null;
+    if (annex && annex !== startAnnex) break;
+    if (PROGRAMME_STOP_RE.test(heading) && !PROGRAMME_START_RE.test(heading)) break;
+    span.push(sections[i]!);
+  }
+  return span;
+}
+
+/** Lines repeated across the span (page headers/footers, "Página 3 de 40"). */
+function runningHeaderLines(lines: string[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const l of lines) {
+    const key = l.trim();
+    if (key.length < 4) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const out = new Set<string>();
+  for (const [k, n] of counts) if (n >= 3) out.add(k);
+  return out;
+}
+
+function looksLikeSubjectLine(line: string): boolean {
+  const t = line.trim().replace(/:$/, "");
+  if (t.length < 4 || t.length > 90) return false;
+  if (ANNEX_HEADING_RE.test(t) || ADMIN_ITEM_RE.test(t)) return false;
+  if (/^\d/.test(t)) return false;
+  if (!/[A-ZÁÉÍÓÚÂÊÔÀÃÕÇ]{3}/.test(t)) return false;
+  // all caps (allow digits, punctuation) or lexicon subject
+  const letters = t.replace(/[^A-Za-zÁÉÍÓÚÂÊÔÀÃÕÇáéíóúâêôàãõç]/g, "");
+  const upper = letters.replace(/[^A-ZÁÉÍÓÚÂÊÔÀÃÕÇ]/g, "");
+  if (letters.length >= 4 && upper.length / letters.length >= 0.9) return true;
+  return Boolean(canonicalizeSubject(t));
+}
+
+function splitTopics(body: string): string[] {
+  const text = body.replace(/\s+/g, " ").trim();
+  if (!text) return [];
+  const numbered = [...text.matchAll(/(?:^|\s)(?:\d+(?:\.\d+)*[.)])\s+([^;]+?)(?=(?:\s\d+(?:\.\d+)*[.)]\s)|$)/g)]
+    .map((m) => normalizeItem(m[1] ?? ""))
+    .filter((t) => t.length >= 4 && t.length <= 200 && !ADMIN_ITEM_RE.test(t));
+  if (numbered.length >= 3) return numbered;
+  const parts = (text.split(/;\s*/).length >= 3 ? text.split(/;\s*/) : text.split(/\.\s+(?=[A-ZÁÉÍÓÚ])/))
+    .map((t) => normalizeItem(t))
+    .filter((t) => t.length >= 4 && t.length <= 200 && !ADMIN_ITEM_RE.test(t));
+  return parts;
+}
+
+/**
+ * Programme-span parser: uppercase subject lines (with commas), scope markers,
+ * semicolon topic lists joined across wrapped lines, running headers removed.
+ */
+export function parseProgrammeSpan(
+  span: ClassifiedSection[],
+  positionSlugs: string[],
+): SyllabusNodeDraft[] {
+  const rawLines = span.flatMap((s) =>
+    `${s.section.heading ?? ""}\n${s.section.text}`.split(/\n+/).map((l) => l.trim()).filter(Boolean),
+  );
+  const headers = runningHeaderLines(rawLines);
+  const lines = rawLines.filter((l) => !headers.has(l) && !/^p[áa]gina\s+\d+/i.test(l) && !/^\d{1,3}$/.test(l));
+
+  const nodes: SyllabusNodeDraft[] = [];
+  let ordinal = 0;
+  let scope: "basic" | "specific" = "basic";
+  let current: { title: string; canonicalId: string | null; pathSlug: string; sectionId: string } | null = null;
+  let buffer: string[] = [];
+  const flush = () => {
+    if (!current || buffer.length === 0) return;
+    for (const item of splitTopics(buffer.join(" "))) {
+      const pathSlug = buildPathSlug([current.title, item]);
+      nodes.push({
+        depth: 1,
+        ordinal: ordinal++,
+        title: item,
+        rawText: item,
+        pathSlug,
+        canonicalSubjectId: null,
+        canonicalKey: pathSlug,
+        scope,
+        positionSlugs: scope === "basic" ? positionSlugs : positionSlugs.slice(0, 1),
+        parentPathSlug: current.pathSlug,
+        extraction: { method: "outline", confidence: 0.8, sourceSectionId: current.sectionId },
+      });
+    }
+    buffer = [];
+  };
+  const sectionIdFor = (line: string) =>
+    span.find((s) => s.section.text.includes(line))?.section.id ?? span[0]!.section.id;
+
+  for (const line of lines) {
+    if (SCOPE_BASIC_RE.test(line) && line.length < 60) {
+      flush();
+      scope = "basic";
+      continue;
+    }
+    if (SCOPE_SPECIFIC_RE.test(line) && line.length < 60) {
+      flush();
+      scope = "specific";
+      continue;
+    }
+    if (looksLikeSubjectLine(line)) {
+      flush();
+      const title = normalizeItem(line.replace(/:$/, ""));
+      const canonical = canonicalizeSubject(title);
+      const subjTitle = canonical?.title ?? title;
+      const pathSlug = buildPathSlug([subjTitle]);
+      current = { title: subjTitle, canonicalId: canonical?.id ?? null, pathSlug, sectionId: sectionIdFor(line) };
+      nodes.push({
+        depth: 0,
+        ordinal: ordinal++,
+        title: subjTitle,
+        rawText: line,
+        pathSlug,
+        canonicalSubjectId: canonical?.id ?? null,
+        canonicalKey: pathSlug,
+        scope,
+        positionSlugs: scope === "basic" ? positionSlugs : positionSlugs.slice(0, 1),
+        parentPathSlug: null,
+        extraction: { method: "outline", confidence: canonical ? 0.9 : 0.75, sourceSectionId: current.sectionId },
+      });
+      continue;
+    }
+    if (current) buffer.push(line);
+  }
+  flush();
+  // Drop subjects that collected no topics (headings of tables, names, etc.).
+  const withLeaves = new Set(nodes.filter((n) => n.depth === 1).map((n) => n.parentPathSlug));
+  return nodes.filter((n) => n.depth === 1 || withLeaves.has(n.pathSlug));
+}
+
 export function parseSyllabusFromDocument(
   doc: NormalizedDocument,
   sections: ClassifiedSection[],
   positions: DiscoveredPosition[],
 ): ParsedSyllabus {
+  const positionSlugsForSpan = (() => {
+    const slugs = positions.filter((p) => !p.implicit).map((p) => p.slug);
+    return slugs.length > 0 ? slugs : ["geral"];
+  })();
+  const span = locateProgrammeSpan(sections);
+  if (span.length > 0) {
+    const nodes = parseProgrammeSpan(span, positionSlugsForSpan);
+    const leaves = nodes.filter((n) => n.depth >= 1);
+    if (leaves.length >= 10) {
+      return {
+        positions: discoverPositions(doc, sections),
+        nodes,
+        status: leaves.length <= 900 ? "active" : "needs_review",
+      };
+    }
+  }
+
   const syllabusSections = sections.filter((s) => s.role === "syllabus");
   // Prefer syllabus-tagged sections; if none, scan the whole document.
   // When the only syllabus hit is an empty "Conteúdo Programático" wrapper,
