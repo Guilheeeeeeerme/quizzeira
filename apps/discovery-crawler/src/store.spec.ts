@@ -31,3 +31,17 @@ describe("storeArtifact RC-2", () => {
     assert.ok(detail.documentLinks.some((d) => d.kindHint === "edital"));
   });
 });
+
+import { canonicalArtifactUrl } from "./store.js";
+
+describe("canonicalArtifactUrl", () => {
+  it("drops rotating SAS signature params but keeps ordinary query strings", () => {
+    assert.equal(
+      canonicalArtifactUrl(
+        "https://concursos.cesgranrio.org.br/media/e/22/x.pdf?sv=2025-01-05&se=2036-09-10T17%3A48%3A49Z&sr=c&sp=r&sig=abc%3D",
+      ),
+      "https://concursos.cesgranrio.org.br/media/e/22/x.pdf",
+    );
+    assert.equal(canonicalArtifactUrl("https://x.org/doc?id=7"), "https://x.org/doc?id=7");
+  });
+});

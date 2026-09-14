@@ -26,6 +26,23 @@ export async function registerInternalArtifactRoutes(app: FastifyInstance): Prom
       byteSize = stored.byteSize;
     }
     const contentHash = (body.contentHash as string) || checksum;
+    // Idempotent per exam: the same bytes (or the same URL) must not become a
+    // second artifact/document every pass (§10.2 retries upsert, never duplicate).
+    const examId = (body.examId as string) || null;
+    const url = (body.url as string) || null;
+    if (examId) {
+      const existing = await prisma.artifact.findFirst({
+        where: {
+          examId,
+          OR: [
+            ...(contentHash ? [{ contentHash }] : []),
+            ...(url ? [{ url }] : []),
+          ],
+        },
+        orderBy: { fetchedAt: "asc" },
+      });
+      if (existing) return { artifact: existing, created: false };
+    }
     const artifact = await prisma.artifact.create({
       data: {
         examId: (body.examId as string) || null,
@@ -47,7 +64,7 @@ export async function registerInternalArtifactRoutes(app: FastifyInstance): Prom
         published: Boolean(body.published),
       },
     });
-    return { artifact };
+    return { artifact, created: true };
   });
 
   /** Content's extraction stage pulls unprocessed artifacts from here. */

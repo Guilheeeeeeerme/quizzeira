@@ -4,6 +4,26 @@ import { kindHintToArtifactKind } from "@quizzeira/shared";
 import { dmzPost, logWarn } from "@quizzeira/worker-kit";
 
 const NAME = "discovery-crawler";
+
+/** Azure/SAS-style signed query params (Cesgranrio media) rotate per request. */
+const SIGNED_QUERY_PARAMS = new Set(["sv", "se", "sr", "sp", "sig", "st", "spr", "skoid", "sktid", "skt", "ske", "sks", "skv"]);
+
+/** Stable identity for a document URL: drop rotating signature parameters. */
+export function canonicalArtifactUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    let changed = false;
+    for (const key of [...u.searchParams.keys()]) {
+      if (SIGNED_QUERY_PARAMS.has(key.toLowerCase())) {
+        u.searchParams.delete(key);
+        changed = true;
+      }
+    }
+    return changed ? u.toString().replace(/\?$/, "") : url;
+  } catch {
+    return url;
+  }
+}
 import { crawlerEnv } from "./env.js";
 import { fetchBytes } from "./fetch.js";
 import { htmlToRoughText, rejectAfterFetch } from "./search/postfetch.js";
@@ -95,7 +115,7 @@ export async function storeArtifact(
   }
 
   try {
-    await dmzPost("/internal/artifacts", {
+    const res = await dmzPost<{ created?: boolean }>("/internal/artifacts", {
       examId: input.examId ?? null,
       sourceId: input.sourceId,
       kind,
@@ -103,7 +123,7 @@ export async function storeArtifact(
       roleHint,
       anchorLabel: input.anchorLabel ?? null,
       topicQueryId: input.topicQueryId ?? null,
-      url: input.url,
+      url: canonicalArtifactUrl(input.url),
       contentType: contentType ?? "application/octet-stream",
       base64,
       contentHash,
@@ -111,7 +131,8 @@ export async function storeArtifact(
       lastModified: lastModified?.toISOString() ?? null,
       fetchSignals: input.fetchSignals ?? null,
     });
-    return { downloaded: Boolean(base64) };
+    // A known artifact costs no budget and produces no new document.
+    return { downloaded: Boolean(base64) && res?.created !== false };
   } catch (err) {
     // §33: never swallow silently — a 413/5xx here loses the edital.
     logWarn("artifact store failed", {
