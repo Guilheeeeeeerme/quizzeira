@@ -97,6 +97,15 @@ describe("provider order", () => {
     ]);
   });
 
+  it("fails over to the next ranked gemini model on 503 before leaving the provider", async () => {
+    geminiStatus = 503;
+    const result = await generateJson<{ ok: boolean }>("system", "user", { tier: "mid" });
+    expect(result).toEqual({ ok: true });
+    const urls = calls.map((c) => c.url);
+    expect(urls.filter((u) => u.includes(":generateContent")).length).toBeGreaterThanOrEqual(2);
+    expect(urls[urls.length - 1]).toEqual(expect.stringContaining("/chat/completions"));
+  });
+
   it("throws llm_unavailable when no provider key is set, without calling fetch", async () => {
     workerEnv.geminiApiKey = "";
     workerEnv.openaiApiKey = "";

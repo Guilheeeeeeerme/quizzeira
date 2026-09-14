@@ -1,5 +1,5 @@
 import { workerEnv } from "./env";
-import { llmError, type LlmErrorCode } from "./errors";
+import { llmError, llmErrorCode, type LlmErrorCode } from "./errors";
 import { extractJson, geminiProvider, type LlmProvider } from "./gemini";
 import { openaiProvider } from "./openai";
 import { fixtureProvider } from "./providers/fixture";
@@ -248,6 +248,17 @@ async function consumeStageBudget(stage: GenerateJsonOptions["stage"], tokens: n
   }
 }
 
+/** How many ranked models of one provider a single call may try. */
+const MODEL_FAILOVER_DEPTH = 3;
+
+/** 5xx / 429 / retired-model 404 from the provider: worth trying the next model. */
+export function isTransientProviderError(err: unknown): boolean {
+  const code = llmErrorCode(err);
+  if (code === "llm_budget_exceeded" || code === "guardrail_block" || code === "llm_shape") return false;
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /\b(429|503)\b|high demand|overloaded|rate limit|no longer available|not found for api version/i.test(msg);
+}
+
 export async function generateJson<T>(
   system: string,
   user: string,
@@ -275,23 +286,30 @@ export async function generateJson<T>(
     const rank = opts.tier
       ? rankForTier(provider.name, opts.tier)
       : rankFor(provider.name);
-    const model = rank[index] ?? provider.defaultModel();
-    try {
-      const completion = await provider.complete({
-        system: guardedSystem,
-        user: fencedUser,
-        model,
-        temperature: opts.temperature,
-        grounding: opts.grounding,
-      });
-      const tokens = Math.max(1, completion.usage.totalTokens);
-      await consumeBudget(Date.now(), { tokens, calls: 0 });
-      await consumeStageBudget(opts.stage, tokens);
-      const shaped = requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
-      if (opts.cacheKey) await writeCache(opts.cacheKey, shaped);
-      return shaped;
-    } catch (err) {
-      lastError = err;
+    // Transient provider errors (503 high demand, 429, retired model 404) fail
+    // over to the next ranked model of the same provider instead of failing
+    // the whole call — one busy model must not stall a stage.
+    const candidates = rank.slice(index, index + MODEL_FAILOVER_DEPTH);
+    if (candidates.length === 0) candidates.push(rank[index] ?? provider.defaultModel());
+    for (const model of candidates) {
+      try {
+        const completion = await provider.complete({
+          system: guardedSystem,
+          user: fencedUser,
+          model,
+          temperature: opts.temperature,
+          grounding: opts.grounding,
+        });
+        const tokens = Math.max(1, completion.usage.totalTokens);
+        await consumeBudget(Date.now(), { tokens, calls: 0 });
+        await consumeStageBudget(opts.stage, tokens);
+        const shaped = requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
+        if (opts.cacheKey) await writeCache(opts.cacheKey, shaped);
+        return shaped;
+      } catch (err) {
+        lastError = err;
+        if (!isTransientProviderError(err)) break;
+      }
     }
   }
   throw lastError ?? llmError("llm_unavailable", "llm_unavailable: no provider attempt ran");

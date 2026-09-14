@@ -116,6 +116,7 @@ async function loadGroundingContext(item: PendingItem): Promise<{
 
 export async function runEvalPass(): Promise<EvalPassResult> {
   const result: EvalPassResult = { reviewed: 0, published: 0, failed: 0, needsReview: 0 };
+  let judgeSkipped = 0;
 
   const { items } = await contentApi.get<{ items: PendingItem[] }>(
     `/internal/question-items/pending-review?limit=${qualityEnv.itemsPerPass}`,
@@ -192,7 +193,11 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       } catch (err) {
         const code = llmErrorCode(err);
         logWarn("judge unavailable", { worker: NAME, itemId: item.id, code });
+        // The item is fine; the provider is not. Leave it in draft so the next
+        // pass judges it, and stop the pass when the budget is gone.
         if (code === "llm_budget_exceeded") break;
+        judgeSkipped += 1;
+        continue;
       }
     }
 
@@ -249,6 +254,6 @@ export async function runEvalPass(): Promise<EvalPassResult> {
     else result.needsReview += 1;
   }
 
-  if (result.reviewed) logInfo("eval pass", { worker: NAME, ...result });
+  if (result.reviewed) logInfo("eval pass", { worker: NAME, ...result, judgeSkipped });
   return result;
 }
