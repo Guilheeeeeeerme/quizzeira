@@ -28,6 +28,8 @@ export interface PlannerPassResult {
 const MIN_KU_PER_LEAF = 4;
 const TARGET_KU_PER_LEAF = 12;
 const MAX_TOPIC_QUERIES_PER_PASS = 20;
+/** Candidates fetched per pass; queued/backoff leaves are skipped without consuming the cap. */
+const CANDIDATE_MULTIPLIER = 5;
 const BACKOFF_DAYS = [7, 14, 28, 56] as const;
 
 export async function runPlannerPass(): Promise<PlannerPassResult> {
@@ -35,15 +37,25 @@ export async function runPlannerPass(): Promise<PlannerPassResult> {
     return { enqueued: 0, skipped: 0, gapLeaves: 0 };
   }
 
+  // Only chase exams the catalog still considers open (§11.2.5); a closed
+  // 2022 syllabus must not consume the topic-query budget.
+  const openSlugs = await discovery
+    .get<{ items: Array<{ examSlug: string }> }>("/internal/open-exams")
+    .then((r) => Array.from(new Set(r.items.map((e) => e.examSlug).filter(Boolean))))
+    .catch(() => [] as string[]);
+
+  const candidateLimit = MAX_TOPIC_QUERIES_PER_PASS * CANDIDATE_MULTIPLIER;
   const { items } = await content.get<{ items: KnowledgeGapLeaf[] }>(
-    `/internal/coverage/knowledge-gaps?limit=${MAX_TOPIC_QUERIES_PER_PASS}` +
-      `&targetKu=${TARGET_KU_PER_LEAF}`,
+    `/internal/coverage/knowledge-gaps?limit=${candidateLimit}` +
+      `&targetKu=${TARGET_KU_PER_LEAF}` +
+      (openSlugs.length > 0 ? `&examSlugs=${encodeURIComponent(openSlugs.join(","))}` : ""),
   );
 
   let enqueued = 0;
   let skipped = 0;
 
   for (const leaf of items) {
+    if (enqueued >= MAX_TOPIC_QUERIES_PER_PASS) break;
     if (leaf.kuCount >= TARGET_KU_PER_LEAF) {
       skipped += 1;
       continue;
@@ -75,16 +87,7 @@ export async function runPlannerPass(): Promise<PlannerPassResult> {
       continue;
     }
 
-    const path = leaf.path.length > 0 ? leaf.path : leaf.pathSlug.split("/").filter(Boolean);
-    const subject = path[0] || leaf.title;
-    const topic = path.length > 1 ? path[1]! : leaf.title;
-    const subtopic = path.length > 2 ? path[path.length - 1]! : topic;
-    const queries = buildTopicQueries({
-      subject,
-      topic,
-      subtopic,
-      max: 3,
-    });
+    const queries = buildTopicQueries(queryVarsForLeaf(leaf));
 
     await discovery.post("/internal/topic-queries", {
       examSlug: leaf.examSlug,
@@ -101,9 +104,28 @@ export async function runPlannerPass(): Promise<PlannerPassResult> {
       enqueued,
       skipped,
       gapLeaves: items.length,
+      openExams: openSlugs.length,
     });
   }
   return { enqueued, skipped, gapLeaves: items.length };
+}
+
+/**
+ * Search text comes from the human-readable title path (subject › topic ›
+ * subtopic), never from slugs: "concordancia-verbal-e-nominal" is a poor
+ * web query, "Concordância verbal e nominal" is not.
+ */
+export function queryVarsForLeaf(
+  leaf: Pick<KnowledgeGapLeaf, "path" | "pathSlug" | "title">,
+): { subject: string; topic: string; subtopic: string; max: number } {
+  const looksSlug = (s: string) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s);
+  const humanize = (s: string) => (looksSlug(s) ? s.replace(/-/g, " ") : s);
+  const rawPath = leaf.path.length > 0 ? leaf.path : leaf.pathSlug.split("/").filter(Boolean);
+  const path = rawPath.map((p) => humanize(p.trim())).filter(Boolean);
+  const subject = path[0] || humanize(leaf.title);
+  const topic = path.length > 1 ? path[1]! : humanize(leaf.title);
+  const subtopic = path.length > 2 ? path[path.length - 1]! : topic;
+  return { subject, topic, subtopic, max: 3 };
 }
 
 /** Empty-result backoff ladder §17.5 / §34: 7d → 14d → 28d → 56d. */

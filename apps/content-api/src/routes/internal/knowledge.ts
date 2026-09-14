@@ -116,62 +116,108 @@ export async function registerInternalKnowledgeRoutes(app: FastifyInstance): Pro
 
   /**
    * Leaves under TARGET_KU coverage for the discovery TopicQuery planner (§17.5).
-   * Ordered by edital questionCount × weight, then PreviousQuestion frequency boost.
+   * Per syllabus, leaves are ranked by KU deficit first (breadth over depth),
+   * then edital questionCount × weight, then ordinal; syllabi are merged
+   * round-robin so one large programme cannot starve the others.
+   * `examSlugs` (comma-separated) restricts the pass to open exams.
    */
   app.get("/internal/coverage/knowledge-gaps", async (request) => {
-    const q = request.query as { limit?: string; targetKu?: string };
+    const q = request.query as { limit?: string; targetKu?: string; examSlugs?: string };
     const targetKu = Math.max(1, Number(q.targetKu || 12));
-    const limit = Math.min(40, Number(q.limit || 20));
+    const limit = Math.min(200, Math.max(1, Number(q.limit || 20)));
+    const examSlugs = String(q.examSlugs || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     const syllabi = await prisma.syllabus.findMany({
-      where: { status: "active" },
+      where: {
+        status: "active",
+        ...(examSlugs.length > 0 ? { examSlug: { in: examSlugs } } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: 40,
     });
 
-    const scored: Array<Record<string, unknown> & { _rank: number }> = [];
+    type GapRow = {
+      id: string;
+      parentId: string | null;
+      title: string;
+      pathSlug: string;
+      canonicalKey: string;
+      questionCount: number | null;
+      weight: number | null;
+      kuCount: bigint | number;
+    };
+
+    const perSyllabus: Array<Array<Record<string, unknown>>> = [];
 
     for (const syllabus of syllabi) {
-      const leaves = await prisma.syllabusNode.findMany({
-        where: { syllabusId: syllabus.id, depth: { gte: 1 }, status: "active" },
-        take: 120,
+      const rows = await prisma.$queryRaw<GapRow[]>`
+        select n.id, n."parentId", n.title, n."pathSlug", n."canonicalKey",
+               n."questionCount", n.weight,
+               (select count(*) from "KnowledgeUnit" k
+                 where k.status = 'active'
+                   and (k."syllabusNodeId" = n.id or k."canonicalKey" = n."canonicalKey")) as "kuCount"
+          from "SyllabusNode" n
+         where n."syllabusId" = ${syllabus.id}
+           and n.depth >= 1
+           and n.status = 'active'
+           and not exists (select 1 from "SyllabusNode" c where c."parentId" = n.id and c.status = 'active')
+         order by "kuCount" asc,
+                  coalesce(n."questionCount", 1) * coalesce(n.weight, 1) desc,
+                  n.depth desc, n.ordinal asc
+         limit ${limit}
+      `;
+      const gaps = rows.filter((r) => Number(r.kuCount) < targetKu);
+      if (gaps.length === 0) continue;
+
+      const ancestors = await prisma.syllabusNode.findMany({
+        where: { syllabusId: syllabus.id },
+        select: { id: true, parentId: true, title: true },
       });
+      const byId = new Map(ancestors.map((n) => [n.id, n]));
+      const titlePath = (leaf: GapRow): string[] => {
+        const out: string[] = [];
+        let cur: { id: string; parentId: string | null; title: string } | undefined = leaf;
+        let guard = 0;
+        while (cur && guard++ < 12) {
+          out.unshift(cur.title.trim());
+          cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+        }
+        return out.filter(Boolean);
+      };
 
-      for (const leaf of leaves) {
-        const kuCount = await prisma.knowledgeUnit.count({
-          where: {
-            status: "active",
-            OR: [{ syllabusNodeId: leaf.id }, { canonicalKey: leaf.canonicalKey }],
-          },
-        });
-        if (kuCount >= targetKu) continue;
-
-        const previousQuestionCount = await prisma.previousQuestion.count({
-          where: {
-            OR: [{ syllabusNodeId: leaf.id }, { canonicalKey: leaf.canonicalKey }],
-          },
-        });
-
-        const pathParts = leaf.pathSlug.split("/").map((p) => p.trim()).filter(Boolean);
-        const editalWeight = (leaf.questionCount ?? 1) * (leaf.weight ?? 1);
-        scored.push({
-          examSlug: syllabus.examSlug,
-          syllabusNodeId: leaf.id,
-          pathSlug: leaf.pathSlug,
-          canonicalKey: leaf.canonicalKey,
-          title: leaf.title,
-          path: pathParts.length > 0 ? pathParts : [leaf.title],
-          kuCount,
-          questionCount: leaf.questionCount,
-          weight: leaf.weight,
-          previousQuestionCount,
-          _rank: editalWeight + previousQuestionCount * 2,
-        });
-      }
+      perSyllabus.push(
+        gaps.map((leaf) => {
+          const path = titlePath(leaf);
+          return {
+            examSlug: syllabus.examSlug,
+            syllabusNodeId: leaf.id,
+            pathSlug: leaf.pathSlug,
+            canonicalKey: leaf.canonicalKey,
+            title: leaf.title,
+            path: path.length > 0 ? path : [leaf.title],
+            kuCount: Number(leaf.kuCount),
+            questionCount: leaf.questionCount,
+            weight: leaf.weight,
+          };
+        }),
+      );
     }
 
-    scored.sort((a, b) => b._rank - a._rank);
-    const items = scored.slice(0, limit).map(({ _rank: _ignored, ...rest }) => rest);
+    const items: Array<Record<string, unknown>> = [];
+    for (let i = 0; items.length < limit; i += 1) {
+      let any = false;
+      for (const list of perSyllabus) {
+        if (i < list.length) {
+          any = true;
+          items.push(list[i]!);
+          if (items.length >= limit) break;
+        }
+      }
+      if (!any) break;
+    }
     return { items };
   });
 

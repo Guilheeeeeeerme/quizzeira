@@ -46,6 +46,14 @@ LLM token/call budgets are enforced in Redis via worker-kit guardrails (`docs/gu
 
 ## Topic-query discovery (study material)
 
+The planner (`content-worker/planner`) asks discovery for `/internal/open-exams`
+and only plans leaves of those syllabi; closed editions never consume the
+per-pass cap (20 enqueues, 100 candidates). `/internal/coverage/knowledge-gaps`
+ranks leaves per syllabus by KU deficit, then edital weight, and merges syllabi
+round-robin so a 4000-leaf programme cannot starve a 100-leaf one. Search text
+comes from the title path (`Língua Portuguesa › Sintaxe › Concordância`), never
+from slugs.
+
 The planner writes `TopicQuery` rows, but the crawler only dequeues them while
 crawling a Source with `discoveryMode = topic_query` (§11.3). Register one per
 deployment (admin action, §17.6), e.g. `kind=educational_site`,
