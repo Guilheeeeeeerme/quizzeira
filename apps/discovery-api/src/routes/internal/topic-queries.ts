@@ -52,6 +52,7 @@ export async function registerInternalTopicQueryRoutes(app: FastifyInstance): Pr
   app.get("/internal/topic-queries", async (request) => {
     const q = request.query as {
       status?: string;
+      id?: string;
       limit?: string;
       syllabusNodeId?: string;
       examId?: string;
@@ -60,6 +61,7 @@ export async function registerInternalTopicQueryRoutes(app: FastifyInstance): Pr
       where: {
         ...(q.status ? { status: q.status } : {}),
         ...(q.syllabusNodeId ? { syllabusNodeId: String(q.syllabusNodeId) } : {}),
+        ...(q.id ? { id: String(q.id) } : {}),
         ...(q.examId ? { examId: String(q.examId) } : {}),
       },
       orderBy: [{ nextRunAt: "asc" }, { createdAt: "asc" }],

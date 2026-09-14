@@ -19,7 +19,7 @@ export interface ChunkMapResult {
   syllabusNodeId: string;
   canonicalKey: string;
   score: number;
-  method: "lexical_t1" | "embedding_t2" | "llm_t3";
+  method: "lexical_t1" | "embedding_t2" | "llm_t3" | "topic_hint";
 }
 
 const STOPWORDS = new Set([

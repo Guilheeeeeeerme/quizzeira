@@ -68,6 +68,7 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
         storageKey: d.storageKey,
         contentType: d.contentType,
         attempts: d.attempts,
+        discoveryArtifactId: d.discoveryArtifactId,
       })),
     };
   });

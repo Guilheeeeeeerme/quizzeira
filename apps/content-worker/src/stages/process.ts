@@ -62,6 +62,31 @@ interface QueuedDocument {
   storageKey: string | null;
   contentType: string | null;
   attempts: number;
+  discoveryArtifactId?: string | null;
+}
+
+/** Leaves considered for tier-2/3 mapping per document (embedding calls are per leaf). */
+const MAX_MAPPING_LEAVES = 120;
+
+/**
+ * §11.3: a topic-query document was fetched FOR a syllabus leaf. Resolve that
+ * leaf so mapping is seeded with it and restricted to its subject instead of
+ * embedding every leaf of a 4 000-leaf syllabus per document.
+ */
+async function resolveTopicLeafId(document: QueuedDocument): Promise<string | null> {
+  if (!document.discoveryArtifactId) return null;
+  try {
+    const { artifact } = await discovery.get<{ artifact: { topicQueryId: string | null } }>(
+      `/internal/artifacts/${encodeURIComponent(document.discoveryArtifactId)}`,
+    );
+    if (!artifact?.topicQueryId) return null;
+    const { items } = await discovery.get<{ items: Array<{ syllabusNodeId: string }> }>(
+      `/internal/topic-queries?id=${encodeURIComponent(artifact.topicQueryId)}&limit=1`,
+    );
+    return items[0]?.syllabusNodeId ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export interface ProcessPassResult {
@@ -270,7 +295,30 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
         }
       }
 
-      const mapResults = leaves.length > 0 ? mapChunksLexical(deduped.chunks, leaves) : [];
+      // Topic-hint: restrict to the target subject and seed every chunk with the
+      // leaf the crawler fetched this page for.
+      let topicMaps: ReturnType<typeof mapChunksLexical> = [];
+      if (leaves.length > 0 && deduped.chunks.length > 0) {
+        const topicLeafId = await resolveTopicLeafId(document);
+        const topicLeaf = topicLeafId ? leaves.find((l) => l.id === topicLeafId) : undefined;
+        if (topicLeaf) {
+          const subject = topicLeaf.pathSlug.split("/")[0];
+          const sameSubject = leaves.filter((l) => l.pathSlug.split("/")[0] === subject);
+          leaves = (sameSubject.length > 0 ? sameSubject : leaves).slice(0, MAX_MAPPING_LEAVES);
+          if (!leaves.some((l) => l.id === topicLeaf.id)) leaves.push(topicLeaf);
+          topicMaps = deduped.chunks.map((c) => ({
+            chunkOrdinal: c.ordinal,
+            syllabusNodeId: topicLeaf.id,
+            canonicalKey: topicLeaf.canonicalKey,
+            score: 0.85,
+            method: "topic_hint" as const,
+          }));
+        } else if (leaves.length > MAX_MAPPING_LEAVES) {
+          leaves = leaves.slice(0, MAX_MAPPING_LEAVES);
+        }
+      }
+      const mapResults =
+        leaves.length > 0 ? mergeMapResults(mapChunksLexical(deduped.chunks, leaves), topicMaps) : topicMaps;
       let embMaps: typeof mapResults = [];
       if (leaves.length > 0 && hasEmbeddingProvider() && deduped.chunks.length > 0) {
         try {
