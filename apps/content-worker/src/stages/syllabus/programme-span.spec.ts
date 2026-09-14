@@ -40,6 +40,7 @@ describe("programme span parser", () => {
   it("extracts subjects with commas, joins wrapped semicolon lists, drops running headers", () => {
     const nodes = parseProgrammeSpan(locateProgrammeSpan(sections), ["administrador"]);
     const subjects = nodes.filter((n) => n.depth === 0).map((n) => n.title);
+    assert.ok(!nodes.some((n) => /habilita|conte[úu]do program/i.test(n.title)), "preamble leaked into nodes");
     assert.deepEqual(subjects, [
       "Língua Portuguesa",
       "Raciocínio Lógico, Estatística E Análise De Dados".replace(/ E /, " E "),

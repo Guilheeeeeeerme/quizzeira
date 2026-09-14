@@ -224,6 +224,10 @@ export function parseProgrammeSpan(
   let scope: "basic" | "specific" = "basic";
   let current: { title: string; canonicalId: string | null; pathSlug: string; sectionId: string } | null = null;
   let buffer: string[] = [];
+  // Annex preamble ("1. Habilitação: …" table, "2. Conteúdo Programático:
+  // Observação …") is not syllabus content: nothing is collected until the
+  // first real subject line.
+  let started = false;
   const flush = () => {
     if (!current || buffer.length === 0) return;
     for (const item of splitTopics(buffer.join(" "))) {
@@ -258,7 +262,8 @@ export function parseProgrammeSpan(
       scope = "specific";
       continue;
     }
-    if (looksLikeSubjectLine(line)) {
+    if (looksLikeSubjectLine(line) && !PROGRAMME_START_RE.test(line) && !/^habilita[çc][ãa]o\b/i.test(line)) {
+      started = true;
       flush();
       const title = normalizeItem(line.replace(/:$/, ""));
       const canonical = canonicalizeSubject(title);
@@ -280,7 +285,7 @@ export function parseProgrammeSpan(
       });
       continue;
     }
-    if (current) buffer.push(line);
+    if (current && started) buffer.push(line);
   }
   flush();
   // Drop subjects that collected no topics (headings of tables, names, etc.),
