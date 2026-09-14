@@ -37,7 +37,10 @@ export function AuthLayout({
 
       <div className={styles.panel}>
         <div className={styles.brandBlock}>
-          <p className={styles.brand}>{t("Quizzeira")}</p>
+          <p className={styles.brand}>
+            <img src="/brand.svg" alt="" width={22} height={22} className={styles.brandMark} />
+            {t("Quizzeira")}
+          </p>
           <Heading level={1} size="display" className={styles.title}>
             {title}
           </Heading>

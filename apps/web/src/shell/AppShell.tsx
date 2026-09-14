@@ -86,7 +86,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={styles.shell}>
       <aside className={styles.sidebar} aria-label={t("Primary")}>
         <div className={styles.sidebarBrand}>
-          <p className={styles.sidebarBrandName}>{t("Quizzeira")}</p>
+          <p className={styles.sidebarBrandName}>
+            <img src="/brand.svg" alt="" width={18} height={18} className={styles.brandMark} />
+            {t("Quizzeira")}
+          </p>
           <h1 className={styles.sidebarSubtitle}>{t("Exam study")}</h1>
         </div>
         <nav className={styles.sidebarNav}>
@@ -140,6 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <MenuIcon />
               </IconButton>
               <Text size="body" className={styles.mobileBrand}>
+                <img src="/brand.svg" alt="" width={18} height={18} className={styles.brandMark} />
                 {t("Quizzeira")}
               </Text>
             </div>

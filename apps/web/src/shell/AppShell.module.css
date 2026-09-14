@@ -27,6 +27,14 @@
   font-weight: 500;
   text-transform: uppercase;
   color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brandMark {
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
 }
 
 .sidebarSubtitle {
@@ -110,6 +118,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .actions {
