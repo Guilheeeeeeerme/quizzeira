@@ -2,19 +2,14 @@ import { workerEnv } from "./env";
 import { llmError, llmErrorCode, type LlmErrorCode } from "./errors";
 import { extractJson, geminiProvider, type LlmProvider } from "./gemini";
 import { openaiProvider } from "./openai";
-<<<<<<< HEAD
 import { fixtureProvider } from "./providers/fixture";
-import { fenceUntrusted, renderPrompt, screenUntrusted } from "./guardrails";
-import { rankFor, rankForTier } from "./model-rank";
-=======
 import {
   fenceUntrusted,
   neutralizeUntrusted,
   renderPrompt,
   screenUntrusted,
 } from "./guardrails";
-import { rankFor } from "./model-rank";
->>>>>>> 74abfa9 (fix(security): harden LLM boundaries per OWASP LLM Top 10 2026)
+import { rankFor, rankForTier } from "./model-rank";
 import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
 
 const PROVIDERS: Record<string, LlmProvider> = {
@@ -282,7 +277,6 @@ export async function generateJson<T>(
   if (providers.length === 0) {
     throw llmError("llm_unavailable", "llm_unavailable: no provider API key configured");
   }
-<<<<<<< HEAD
 
   if (opts.cacheKey) {
     const cached = await readCache(opts.cacheKey);
@@ -291,15 +285,11 @@ export async function generateJson<T>(
     }
   }
 
-  await consumeBudget(Date.now(), { calls: 1 });
-=======
->>>>>>> 74abfa9 (fix(security): harden LLM boundaries per OWASP LLM Top 10 2026)
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
   const fencedUser = fenceUntrusted(cleanUser);
   const index = Math.max(0, opts.attempt ?? 0);
   let lastError: unknown;
   for (const provider of providers) {
-<<<<<<< HEAD
     const rank = opts.tier
       ? rankForTier(provider.name, opts.tier)
       : rankFor(provider.name);
@@ -309,6 +299,8 @@ export async function generateJson<T>(
     const candidates = rank.slice(index, index + MODEL_FAILOVER_DEPTH);
     if (candidates.length === 0) candidates.push(rank[index] ?? provider.defaultModel());
     for (const model of candidates) {
+      // Every failover attempt is a separate billable call (OWASP LLM06).
+      await consumeBudget(Date.now(), { calls: 1 });
       try {
         const completion = await provider.complete({
           system: guardedSystem,
@@ -327,28 +319,6 @@ export async function generateJson<T>(
         lastError = err;
         if (!isTransientProviderError(err)) break;
       }
-=======
-    // Every failover attempt is a separate billable call, so charge each one
-    // rather than the request as a whole (OWASP LLM06).
-    await consumeBudget(Date.now(), { calls: 1 });
-    const rank = rankFor(provider.name);
-    const model = rank[index] ?? provider.defaultModel();
-    try {
-      const completion = await provider.complete({
-        system: guardedSystem,
-        user: fencedUser,
-        model,
-        temperature: opts.temperature,
-        grounding: opts.grounding,
-      });
-      await consumeBudget(Date.now(), {
-        tokens: Math.max(1, completion.usage.totalTokens),
-        calls: 0,
-      });
-      return requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
-    } catch (err) {
-      lastError = err;
->>>>>>> 74abfa9 (fix(security): harden LLM boundaries per OWASP LLM Top 10 2026)
     }
   }
   throw lastError ?? llmError("llm_unavailable", "llm_unavailable: no provider attempt ran");
