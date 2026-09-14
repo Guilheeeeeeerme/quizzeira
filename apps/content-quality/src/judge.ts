@@ -3,6 +3,7 @@
 //
 // The judge scores, it does not rewrite. V2 adds relevance / durability /
 // grounding axes so metadata trivia cannot publish on a high overall score alone.
+import { qualityEnv } from "./env.js";
 import {
   generateJson,
   hasLlmProvider,
@@ -56,7 +57,7 @@ export function buildJudgePrompt(input: JudgeInput): string {
     .map((o, i) => `${i}: ${o}`)
     .join("\n");
   const path = (input.syllabusPath ?? []).join(" ▸ ") || input.subject;
-  const kus = (input.knowledgeUnitStatements ?? []).slice(0, 8);
+  const kus = (input.knowledgeUnitStatements ?? []).slice(0, 6);
 
   return [
     `Concurso: ${input.examSlug}`,
@@ -118,7 +119,7 @@ export async function judgeItem(input: JudgeInput): Promise<JudgeVerdict> {
   const raw = await generateJson<Record<string, unknown>>(
     JUDGE_SYSTEM_PROMPT,
     buildJudgePrompt(input),
-    { temperature: 0, requiredKeys: JUDGE_REQUIRED_KEYS, tier: "mid", stage: "judge" },
+    { temperature: 0, requiredKeys: JUDGE_REQUIRED_KEYS, tier: qualityEnv.judgeTier, stage: "judge" },
   );
 
   return normalizeJudgeResponse(raw);

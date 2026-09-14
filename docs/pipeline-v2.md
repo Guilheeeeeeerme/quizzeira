@@ -40,7 +40,8 @@ CI: `.github/workflows/pipeline-v2.yml` runs shared/quality/discovery/content te
    published deficit, soonest exam first, breadth first; first attempt `mid`,
    one `strong` retry only when the first returned nothing.
 6. **Evaluate** (content-quality): structural → relevance → grounding are free;
-   the LLM judge (`mid`, stage `judge`) only sees items that passed all three.
+   the LLM judge (tier `CONTENT_QUALITY_JUDGE_TIER`, default `cheap`, stage
+   `judge`) only sees items that passed all three and at most 6 cited KUs.
 7. **Study** (api + quiz-corrector `cheap`, stage `corrector`).
 
 Budgets live in Redis (`llm:tokens:<day>`, `llm:stage:<stage>:<day>`). When a

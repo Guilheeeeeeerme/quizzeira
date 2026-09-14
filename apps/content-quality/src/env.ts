@@ -15,6 +15,8 @@ export const qualityEnv = {
   itemsPerPass: Math.max(1, num("CONTENT_QUALITY_ITEMS_PER_PASS", 10)),
   /** Publish/fail thresholds for the judge score; see gate.ts. */
   publishThreshold: num("CONTENT_QUALITY_PUBLISH_THRESHOLD", 0.8),
+  /** LLM tier for the judge: cheap (default) | mid | strong. Deterministic gates run first. */
+  judgeTier: ((process.env.CONTENT_QUALITY_JUDGE_TIER || "cheap").trim() as "cheap" | "mid" | "strong"),
   failThreshold: num("CONTENT_QUALITY_FAIL_THRESHOLD", 0.5),
   /**
    * When the LLM judge cannot run, still publish `origin=extraction` items that
