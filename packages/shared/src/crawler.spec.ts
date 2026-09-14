@@ -148,3 +148,10 @@ describe("crawler helpers", () => {
     );
   });
 });
+
+describe("inferExamKind title precedence", () => {
+  it("keeps a concurso a concurso despite banca chrome in the page text", () => {
+    assert.equal(inferExamKind("Concurso Transpetro 2026", "AVALIAÇÃO EDUCAÇÃO MESTRADO E PÓS VESTIBULARES"), "concurso");
+    assert.equal(inferExamKind("Vestibular PUC-Rio 2026", ""), "vestibular");
+  });
+});

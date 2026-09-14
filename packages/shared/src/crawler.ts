@@ -327,6 +327,11 @@ function isRegistrationOpen(window: RegistrationWindow, now = new Date()): boole
 export function inferExamKind(title: string, pageText = ""): ExamKind {
   const blob = `${title} ${pageText}`.replace(/<[^>]+>/g, " ");
   if (/\boab\b|exame\s+de\s+ordem/i.test(blob)) return "oab";
+  // "Concurso Transpetro 2026": the title settles it before page chrome
+  // ("MESTRADO E PÓS", "VESTIBULARES" in banca navigation) can vote.
+  if (/\bconcurso\b/i.test(title) && !NON_CONCURSO_RE.test(title) && !/\bvestibular\b/i.test(title)) {
+    return "concurso";
+  }
   if (/\bvestibular\b/i.test(blob) && !/\bconcurso\s+p[uú]blico\b/i.test(blob)) {
     return "vestibular";
   }

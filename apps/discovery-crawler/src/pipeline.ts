@@ -190,10 +190,12 @@ async function crawlListingMode(
     const self = parseDetailHtml(listingPageHtml, listingPageUrl, source.name);
     if (isSelfDetailPage(self, listings.map((l) => l.href))) {
       remaining = await upsertExamWithDocuments(source, summary, self, listingPageUrl, remaining);
-      await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
-        fingerprint,
-        listingCount: listings.length,
-      });
+      if (remaining > 0) {
+        await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
+          fingerprint,
+          listingCount: listings.length,
+        });
+      }
       return remaining;
     }
   }
@@ -212,6 +214,22 @@ async function crawlListingMode(
       const html = (await fetchPage(listing.href, source)).html;
       detail = parseDetailHtml(html, listing.href, listing.title);
       detail = await enrichDetailWithPortal(detail, html);
+    }
+
+    // Several editais under one banca event (Transpetro Mar/Terra, médio/superior):
+    // each is its own concurso with its own syllabus and question bank. The
+    // umbrella page itself is not an exam.
+    if (detail.subExams && detail.subExams.length >= 2) {
+      for (const sub of detail.subExams) {
+        remaining = await upsertExamWithDocuments(
+          source,
+          summary,
+          sub,
+          `${listing.href}#${sub.examSlug ?? sub.editionKey ?? "edital"}`,
+          remaining,
+        );
+      }
+      continue;
     }
 
     if (!hasExamIdentity(detail)) {
@@ -265,21 +283,6 @@ async function crawlListingMode(
 
     if (upserted.changed) summary.openDiscovered += 1;
 
-    // Several editais under one banca event (Transpetro Mar/Terra, médio/superior):
-    // each is its own concurso with its own syllabus and question bank.
-    if (detail.subExams && detail.subExams.length >= 2) {
-      for (const sub of detail.subExams) {
-        remaining = await upsertExamWithDocuments(
-          source,
-          summary,
-          sub,
-          `${listing.href}#${sub.examSlug ?? sub.editionKey ?? "edital"}`,
-          remaining,
-        );
-      }
-      continue;
-    }
-
     if (upserted.record.status !== "open" && !withinRegistrationGrace(detail.registrationEnd)) {
       continue;
     }
@@ -305,10 +308,20 @@ async function crawlListingMode(
     }
   }
 
-  await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
-    fingerprint,
-    listingCount: listings.length,
-  });
+  // Persisting the fingerprint means "this listing is done". If the artifact
+  // budget ran out mid-pass, leave it unset so the next pass resumes the
+  // remaining documents instead of skipping the source until the page changes.
+  if (remaining > 0) {
+    await dmzPut(`/internal/sources/${source.id}/listing-fingerprint`, {
+      fingerprint,
+      listingCount: listings.length,
+    });
+  } else {
+    logInfo("listing budget exhausted; fingerprint not persisted", {
+      worker: NAME,
+      sourceId: source.id,
+    });
+  }
 
   for (const domain of outboundDomains.slice(0, 2)) {
     const proposed = await dmzPost<{ proposed?: boolean }>("/internal/sources/propose", {
@@ -339,6 +352,7 @@ async function enrichDetailWithPortal(
       examSlug: `${baseSlug}-edital-${e.number}`,
       editionKey: e.editionKey ?? detail.editionKey,
       emphasis: e.emphasis,
+      kind: "concurso",
       documentLinks: e.documentLinks,
       editalUrl: e.documentLinks.find((d) => d.kindHint === "edital")?.url ?? null,
       subExams: undefined,
