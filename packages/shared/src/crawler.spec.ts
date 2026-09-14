@@ -168,6 +168,9 @@ describe("inferExamKind title precedence", () => {
     assert.equal(concursoPathSlug("https://www.cebraspe.org.br/o-que-fazemos/concurso/"), null);
     assert.equal(concursoPathSlug("https://www.cesgranrio.org.br/concursos"), null);
     assert.equal(isNavigationSlug("em-andamento"), true);
+    assert.equal(isNavigationSlug("novos-concursos"), true);
+    assert.equal(isNavigationSlug("concursos-encerrados"), true);
+    assert.equal(isNavigationSlug("pm-al-26"), false);
     assert.equal(isNavigationSlug("santos-concurso-publico-74-2026"), false);
   });
 

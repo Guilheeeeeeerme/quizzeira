@@ -444,12 +444,22 @@ export function concursoPathSlug(href: string): string | null {
   }
 }
 
-const NAV_SLUG_RE =
-  /^(?:concursos?|concluidos?|encerrados?|novos?|em-andamento|andamento|inscricoes-abertas|abertos?|premios-e-concursos|cultural|vestibulares?|selecoes|processos-seletivos|editais|provas|resultados|index|home|todos)$/;
+const NAV_WORDS = new Set([
+  "concurso", "concursos", "concluido", "concluidos", "encerrado", "encerrados", "novo", "novos",
+  "em", "andamento", "inscricoes", "inscricao", "abertas", "aberto", "abertos", "premios", "e",
+  "cultural", "vestibular", "vestibulares", "selecoes", "selecao", "processos", "seletivos",
+  "editais", "edital", "provas", "resultados", "index", "home", "todos", "proximos", "lista",
+  "publico", "publicos", "geral", "outros", "mais", "informacoes",
+]);
 
-/** Menu-like slugs ("concursos", "em-andamento") are not exam identities. */
+/**
+ * Menu-like slugs ("concursos", "em-andamento", "novos-concursos") are not
+ * exam identities: every token is navigation vocabulary.
+ */
 export function isNavigationSlug(slug: string): boolean {
-  return NAV_SLUG_RE.test(slug.toLowerCase());
+  const tokens = slug.toLowerCase().split("-").filter(Boolean);
+  if (tokens.length === 0) return true;
+  return tokens.every((t) => NAV_WORDS.has(t));
 }
 
 /** Rendered-template leftovers or site chrome that must never be an exam title. */
