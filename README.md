@@ -15,7 +15,7 @@ Concurso-only study platform: continuous **Ingestion** of public exams → **Ext
 
 ## Technical docs (GitHub Pages)
 
-**https://guilheeeeeeerme.github.io/promptdesk/** — shared ecosystem docs (`/en/quizzeira/…`). Hosted from the PromptDesk Pages site (infra repo is private).
+**https://guilheeeeeeerme.github.io/ferredemo-docs/** — shared ecosystem docs (`/en/quizzeira/…`). Hosted in dedicated repo [`ferredemo-docs`](https://github.com/Guilheeeeeeerme/ferredemo-docs).
 
 ## AI engineering (audit-honest)
 
