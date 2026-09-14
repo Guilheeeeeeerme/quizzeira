@@ -121,6 +121,10 @@ export async function runEvalPass(): Promise<EvalPassResult> {
     `/internal/question-items/pending-review?limit=${qualityEnv.itemsPerPass}`,
   );
 
+  // Stems published earlier in this same pass, per leaf: two near-identical
+  // drafts judged back-to-back must not both publish (§26 question layer).
+  const passStems = new Map<string, string[]>();
+
   for (const item of items) {
     const requiresPassage = /interpreta[cç][aã]o|compreens[aã]o de texto/i.test(item.subject);
     const structural = validateStructure({
@@ -153,7 +157,7 @@ export async function runEvalPass(): Promise<EvalPassResult> {
           syllabusNodeId: item.syllabusNodeId,
           syllabusLeafValid: ctx.leafValid,
           previousQuestionStems: ctx.previousStems,
-          leafStems: ctx.leafStems,
+          leafStems: [...ctx.leafStems, ...(passStems.get(item.syllabusNodeId ?? "") ?? [])],
         })
       : null;
 
@@ -236,6 +240,10 @@ export async function runEvalPass(): Promise<EvalPassResult> {
     });
 
     result.reviewed += 1;
+    if (verdict.decision === "published" && item.syllabusNodeId) {
+      const key = item.syllabusNodeId;
+      passStems.set(key, [...(passStems.get(key) ?? []), item.prompt]);
+    }
     if (verdict.decision === "published") result.published += 1;
     else if (verdict.decision === "failed") result.failed += 1;
     else result.needsReview += 1;

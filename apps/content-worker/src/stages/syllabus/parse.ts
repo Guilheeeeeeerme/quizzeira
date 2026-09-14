@@ -141,16 +141,28 @@ const PROGRAMME_STOP_RE =
  * Programático") by anchors rather than by section role: PDF sectioning often
  * splits it by running page headers and mislabels those pieces.
  */
+const PROGRAMME_HEADING_RE =
+  /^\s*(?:anexo\s+\S+\s*[-–:]\s*)?(?:conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?(?:\s+e\s+\w+)?)\s*:?\s*$/i;
+const PROGRAMME_REFERENCE_RE =
+  /\b(?:no|do|deste|constantes?\s+(?:do|no)|especificad[oa]s?\s+no|previst[oa]s?\s+no)\s+anexo\b|cada\s+cargo|item\s+\d/i;
+
 export function locateProgrammeSpan(sections: ClassifiedSection[]): ClassifiedSection[] {
+  // Prefer a section whose HEADING is the annex title ("ANEXO IV - CONTEÚDOS
+  // PROGRAMÁTICOS"); a body sentence "…conteúdos programáticos especificados no
+  // Anexo IV" is only a reference and must not win.
   let start = -1;
+  let weak = -1;
   for (let i = 0; i < sections.length; i += 1) {
     const sec = sections[i]!.section;
-    const head = `${sec.heading ?? ""}\n${sec.text.slice(0, 240)}`;
-    if (PROGRAMME_START_RE.test(head) && !/\bcada\s+cargo\b|item\s+\d/i.test(sec.heading ?? "")) {
+    const heading = (sec.heading ?? "").trim();
+    if (PROGRAMME_HEADING_RE.test(heading)) {
       start = i;
       break;
     }
+    const head = `${heading}\n${sec.text.slice(0, 240)}`;
+    if (weak < 0 && PROGRAMME_START_RE.test(head) && !PROGRAMME_REFERENCE_RE.test(head)) weak = i;
   }
+  if (start < 0) start = weak;
   if (start < 0) return [];
   const startAnnex = (sections[start]!.section.heading ?? "").match(ANNEX_HEADING_RE)?.[1] ?? null;
   const span: ClassifiedSection[] = [sections[start]!];
@@ -179,6 +191,19 @@ function runningHeaderLines(lines: string[]): Set<string> {
   return out;
 }
 
+/** Lexicon match only when the label IS the subject (or an alias), never a fuzzy neighbour. */
+function canonicalIfExact(title: string): { id: string; title: string } | null {
+  const canonical = canonicalizeSubject(title);
+  if (!canonical) return null;
+  const norm = (v: string) =>
+    v.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const t = norm(title);
+  const c = norm(canonical.title);
+  if (t === c || (canonical.aliases ?? []).some((a) => norm(a) === t)) return canonical;
+  if (t.includes(c) && t.length <= c.length + 12) return canonical;
+  return null;
+}
+
 function looksLikeSubjectLine(line: string): boolean {
   const t = line.trim().replace(/:$/, "");
   if (t.length < 4 || t.length > 90) return false;
@@ -199,7 +224,12 @@ function splitTopics(body: string): string[] {
     .map((m) => normalizeItem(m[1] ?? ""))
     .filter((t) => t.length >= 4 && t.length <= 200 && !ADMIN_ITEM_RE.test(t));
   if (numbered.length >= 3) return numbered;
-  const parts = (text.split(/;\s*/).length >= 3 ? text.split(/;\s*/) : text.split(/\.\s+(?=[A-ZÁÉÍÓÚ])/))
+  const bySemicolon = text.split(/;\s*/);
+  const bySentence = text.split(/\.\s+(?=[A-ZÁÉÍÓÚ])/);
+  const byComma = text.split(/,\s+(?=[A-ZÁÉÍÓÚ])/);
+  const raw =
+    bySemicolon.length >= 3 ? bySemicolon : bySentence.length >= 3 ? bySentence : byComma.length >= 3 ? byComma : bySentence;
+  const parts = raw
     .map((t) => normalizeItem(t))
     .filter((t) => t.length >= 4 && t.length <= 200 && !ADMIN_ITEM_RE.test(t));
   return parts;
@@ -213,8 +243,17 @@ export function parseProgrammeSpan(
   span: ClassifiedSection[],
   positionSlugs: string[],
 ): SyllabusNodeDraft[] {
+  // Cesgranrio-style inline labels ("LÍNGUA PORTUGUESA: 1. …", "ÊNFASE 1:
+  // ADMINISTRAÇÃO", "ADMINISTRAÇÃO FINANCEIRA E ORÇAMENTÁRIA: Matemática…") are
+  // hoisted onto their own line so they become subject lines.
+  const INLINE_LABEL_RE =
+    /(^|[.;]\s+)([A-ZÁÉÍÓÚÂÊÔÀÃÕÇ][A-ZÁÉÍÓÚÂÊÔÀÃÕÇ0-9 ,\/\-–()]{3,90}?):\s+(?=[A-ZÁÉÍÓÚ0-9(])/gm;
   const rawLines = span.flatMap((s) =>
-    `${s.section.heading ?? ""}\n${s.section.text}`.split(/\n+/).map((l) => l.trim()).filter(Boolean),
+    `${s.section.heading ?? ""}\n${s.section.text}`
+      .replace(INLINE_LABEL_RE, (_m, pre: string, label: string) => `${pre.trim()}\n${label}:\n`)
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(Boolean),
   );
   const headers = runningHeaderLines(rawLines);
   const lines = rawLines.filter((l) => !headers.has(l) && !/^p[áa]gina\s+\d+/i.test(l) && !/^\d{1,3}$/.test(l));
@@ -266,7 +305,7 @@ export function parseProgrammeSpan(
       started = true;
       flush();
       const title = normalizeItem(line.replace(/:$/, ""));
-      const canonical = canonicalizeSubject(title);
+      const canonical = canonicalIfExact(title);
       const subjTitle = canonical?.title ?? title;
       const pathSlug = buildPathSlug([subjTitle]);
       current = { title: subjTitle, canonicalId: canonical?.id ?? null, pathSlug, sectionId: sectionIdFor(line) };

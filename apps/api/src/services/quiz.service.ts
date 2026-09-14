@@ -148,9 +148,11 @@ export async function correctAttempt(attemptId: string) {
     if (question.type === QuestionType.MULTIPLE_CHOICE) {
       isCorrect = answer.selectedIndex === question.correctIndex;
       grade = isCorrect ? 1 : 0;
+      // The generated explanation is written for the correct answer ("Muito
+      // bem! Você identificou…"); never show it as the verdict of a wrong answer.
       comment = isCorrect
-        ? (question.explanation ?? "Correct answer.")
-        : (question.explanation ?? "Review this topic and try again.");
+        ? (question.explanation ?? "Resposta correta.")
+        : "Resposta incorreta. Veja a alternativa correta e a explicação abaixo.";
     } else {
       const text = answer.openText?.toLowerCase() ?? "";
       const ref = question.referenceAnswer?.toLowerCase() ?? "";
