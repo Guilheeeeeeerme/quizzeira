@@ -1,7 +1,8 @@
 // Concept: Ingestion (one crawl pass over the enabled Source registry)
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
-import { concursoPathSlug, listingsFingerprint, oabEditionPageUrl, slugifyKey } from "@quizzeira/shared";
+import { concursoPathSlug,
+  isNavigationSlug, listingsFingerprint, oabEditionPageUrl, slugifyKey } from "@quizzeira/shared";
 import {
   cesgranrioPortalEventId,
   fetchCesgranrioPortalDocuments,
@@ -247,6 +248,16 @@ async function crawlListingMode(
       baseOpen.examSlug ||
       concursoPathSlug(listing.href) ||
       baseOpen.examSlug;
+
+    if (!examSlug || isNavigationSlug(examSlug)) {
+      logInfo("listing skipped: navigation slug", {
+        worker: NAME,
+        sourceId: source.id,
+        href: listing.href.slice(0, 160),
+        examSlug,
+      });
+      continue;
+    }
 
     const openPayload = {
       ...baseOpen,

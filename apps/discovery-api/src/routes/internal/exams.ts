@@ -110,10 +110,16 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
    */
   app.get("/internal/open-exams", async () => {
     const graceStart = new Date(Date.now() - CATALOG_GRACE_DAYS * 86_400_000);
+    // A known registration end older than the grace window closes the exam
+    // for study purposes even when a listing regex once said "open".
     const items = await prisma.exam.findMany({
       where: {
         kind: { in: ["concurso", "oab"] },
-        OR: [{ status: "open" }, { status: "unknown", registrationEnd: { gte: graceStart } }],
+        OR: [
+          { status: "open", registrationEnd: null },
+          { status: "open", registrationEnd: { gte: graceStart } },
+          { status: "unknown", registrationEnd: { gte: graceStart } },
+        ],
       },
       orderBy: { lastSeenAt: "desc" },
       take: 200,

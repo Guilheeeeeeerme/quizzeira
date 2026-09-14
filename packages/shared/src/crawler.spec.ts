@@ -6,6 +6,11 @@ import {
   inferExamKind,
   listingsFingerprint,
   looksLikelyOpen,
+  concursoPathSlug,
+  extractEditionKey,
+  isNavigationSlug,
+  isJunkExamTitle,
+  titleFromPathSegment,
   looksOpen,
   normalizeOpenExam,
   openExamFingerprint,
@@ -117,7 +122,7 @@ describe("crawler helpers", () => {
   it("detects open copy and domains", () => {
     assert.equal(looksLikelyOpen("Inscrições abertas até 30/09"), true);
     assert.equal(looksOpen("Inscrições abertas até 30/09"), true);
-    assert.equal(looksLikelyOpen("Concurso Público para a Prefeitura"), true);
+    assert.equal(looksLikelyOpen("Concurso Público para a Prefeitura"), false);
     assert.equal(looksLikelyOpen("01- Edital de Abertura"), true);
     assert.equal(looksLikelyOpen("Resultado final homologado"), false);
     assert.equal(domainFromUrl("https://www.FCC.org.br/path"), "fcc.org.br");
@@ -153,5 +158,31 @@ describe("inferExamKind title precedence", () => {
   it("keeps a concurso a concurso despite banca chrome in the page text", () => {
     assert.equal(inferExamKind("Concurso Transpetro 2026", "AVALIAÇÃO EDUCAÇÃO MESTRADO E PÓS VESTIBULARES"), "concurso");
     assert.equal(inferExamKind("Vestibular PUC-Rio 2026", ""), "vestibular");
+  });
+
+  it("derives path slugs for Cebraspe and FGV portals but never for nav segments", () => {
+    assert.equal(concursoPathSlug("https://www.cebraspe.org.br/concursos/PM_AL_26"), "pm-al-26");
+    assert.equal(concursoPathSlug("https://conhecimento.fgv.br/concursos/dperj2026"), "dperj2026");
+    assert.equal(concursoPathSlug("https://www.cesgranrio.org.br/concurso/transpetro-2026/"), "transpetro-2026");
+    assert.equal(concursoPathSlug("https://www.cebraspe.org.br/concursos/encerrado"), null);
+    assert.equal(concursoPathSlug("https://www.cebraspe.org.br/o-que-fazemos/concurso/"), null);
+    assert.equal(concursoPathSlug("https://www.cesgranrio.org.br/concursos"), null);
+    assert.equal(isNavigationSlug("em-andamento"), true);
+    assert.equal(isNavigationSlug("santos-concurso-publico-74-2026"), false);
+  });
+
+  it("reads two-digit editions and humanizes path titles", () => {
+    assert.equal(extractEditionKey("PM AL 26", "https://www.cebraspe.org.br/concursos/PM_AL_26"), "2026");
+    assert.equal(extractEditionKey("x", "https://www.cebraspe.org.br/concursos/TJ_CE_25_NOTARIOS"), "2025");
+    assert.equal(titleFromPathSegment("https://www.cebraspe.org.br/concursos/PM_AL_26"), "PM AL 26");
+    assert.equal(titleFromPathSegment("https://www.cebraspe.org.br/concursos/novos"), null);
+  });
+
+  it("rejects template garbage and site chrome as exam titles", () => {
+    assert.equal(isJunkExamTitle("'+ $(document).attr('title') +'"), true);
+    assert.equal(isJunkExamTitle("CONCURSOS – Cesgranrio"), true);
+    assert.equal(isJunkExamTitle("Cebraspe | O melhor em avaliação de pessoas"), true);
+    assert.equal(isJunkExamTitle("Concurso Transpetro 2026 — Edital nº 1 (Mar)"), false);
+    assert.equal(isJunkExamTitle("PM AL 26"), false);
   });
 });

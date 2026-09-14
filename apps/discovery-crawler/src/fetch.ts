@@ -29,8 +29,22 @@ function hashBody(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex");
 }
 
-function isSpaShell(html: string): boolean {
-  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+/**
+ * A client-rendered shell (Cebraspe's React portal, WordPress + app root)
+ * carries kilobytes of inline script/CSS but almost no visible text; only
+ * the visible text decides, and explicit "enable JavaScript" hints win.
+ */
+export function isSpaShell(html: string): boolean {
+  if (/habilitar\s+o\s+javascript|enable\s+javascript|<noscript>[^<]*javascript/i.test(html)) {
+    return true;
+  }
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return text.length < 2000;
 }
 

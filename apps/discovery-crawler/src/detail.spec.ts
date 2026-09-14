@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import { inferExamKind } from "@quizzeira/shared";
-import { parseDetailHtml } from "./detail.js";
+import { parseDetailHtml, resolveDetailTitle } from "./detail.js";
 
 describe("parseDetailHtml", () => {
   it("extracts document links with kind and role hints", () => {
@@ -118,6 +118,38 @@ describe("hasExamIdentity", () => {
         documentLinks: [{ url: "https://x/edital.pdf", anchorLabel: "Edital", kindHint: "edital", roleHint: "specification" }],
       }),
       true,
+    );
+  });
+
+  it("names a Cebraspe rendered page from its <h2> and reads the registration window", () => {
+    const html = `<html><head><title>Cebraspe | O melhor em avaliação de pessoas</title></head><body>
+      <div id="root"><a href="#main">Ir para o conteúdo</a>
+      <h2>PM AL 26</h2><h2>Vagas</h2><p>530</p>
+      <h2>Período de inscrições</h2><p>De 14/09/2026 até 16/10/2026 às 18:00, horário oficial de Brasília/DF</p>
+      <h2>Cargos</h2><ul><li>CARGO 1: OFICIAL DE ESTADO-MAIOR</li></ul>
+      <a href="https://cdn.cebraspe.org.br/concursos/PM_AL_26/arquivos/4F19.pdf">Edital nº 1 - Abertura</a>
+      </div></body></html>`;
+    const parsed = parseDetailHtml(html, "https://www.cebraspe.org.br/concursos/PM_AL_26", "PM_AL_26");
+    assert.equal(parsed.title, "PM AL 26");
+    assert.equal(parsed.editionKey, "1");
+    assert.equal(parsed.registrationEnd?.toISOString().slice(0, 10), "2026-10-16");
+    assert.ok(parsed.documentLinks.some((d) => d.roleHint === "specification"));
+    assert.equal(hasExamIdentity(parsed), true);
+    assert.equal(
+      resolveDetailTitle("<title>Cebraspe | x</title>", "", "https://www.cebraspe.org.br/concursos/TJ_CE_25_NOTARIOS", "TJ_CE_25_NOTARIOS"),
+      "TJ CE 25 NOTARIOS",
+    );
+  });
+
+  it("rejects JS-template titles as exam identity", () => {
+    assert.equal(
+      hasExamIdentity({
+        title: "'+ $(document).attr('title') +'",
+        editionKey: "2026",
+        registrationEnd: null,
+        documentLinks: [],
+      }),
+      false,
     );
   });
 });

@@ -347,6 +347,9 @@ export function extractEditionKey(title: string, href: string): string | null {
   if (pathSlug) {
     const yearInSlug = pathSlug.match(/(20\d{2})/);
     if (yearInSlug?.[1]) return yearInSlug[1];
+    // Cebraspe-style two-digit editions: PM_AL_26, TJ_CE_25_NOTARIOS.
+    const shortYear = pathSlug.match(/(?:^|-)(2\d)(?:-|$)/);
+    if (shortYear?.[1]) return `20${shortYear[1]}`;
   }
 
   const hyphenated = href.match(/\/concursos?\/[^/?#]+-(20\d{2})(?:\/|$)/i);
@@ -426,13 +429,49 @@ export function normalizeOpenExam(input: {
 export function concursoPathSlug(href: string): string | null {
   try {
     const path = new URL(href).pathname;
-    const m = path.match(/\/concurso\/([^/]+)\/?$/i);
+    // Cesgranrio: /concurso/transpetro-2026/; Cebraspe: /concursos/PM_AL_26;
+    // FGV Conhecimento: /concursos/dperj2026. Listing/nav segments never
+    // become exams (§11.2.2 identity = org + edition, not a menu label).
+    const m = path.match(/\/concursos?\/([^/]+)\/?$/i);
     if (!m?.[1]) return null;
     const raw = decodeURIComponent(m[1]).replace(/[-_]+/g, " ").trim();
-    return raw ? slugifyKey(raw) : null;
+    const slug = raw ? slugifyKey(raw) : null;
+    // Numeric ids ("/concursos/1") and menu labels are not exam identities.
+    if (!slug || slug.length < 4 || !/[a-z]/.test(slug) || isNavigationSlug(slug)) return null;
+    return slug;
   } catch {
     return null;
   }
+}
+
+const NAV_SLUG_RE =
+  /^(?:concursos?|concluidos?|encerrados?|novos?|em-andamento|andamento|inscricoes-abertas|abertos?|premios-e-concursos|cultural|vestibulares?|selecoes|processos-seletivos|editais|provas|resultados|index|home|todos)$/;
+
+/** Menu-like slugs ("concursos", "em-andamento") are not exam identities. */
+export function isNavigationSlug(slug: string): boolean {
+  return NAV_SLUG_RE.test(slug.toLowerCase());
+}
+
+/** Rendered-template leftovers or site chrome that must never be an exam title. */
+export function isJunkExamTitle(title: string): boolean {
+  const t = title.trim();
+  if (t.length < 4) return true;
+  if (/\$\(|\+\s*'|\{\{|<\/?\w+>/.test(t)) return true;
+  if (/\|/.test(t)) return true;
+  if (/^(?:mais informa|nosso portf|concursos?|em andamento|inscri[cç][oõ]es abertas|conclu[ií]dos|encerrados|cultural|pr[eê]mios e concursos)\s*(?:[-–|].*)?$/i.test(t)) {
+    return true;
+  }
+  return false;
+}
+
+/** `/concursos/PM_AL_26` → "PM AL 26" when the page title is site chrome. */
+export function titleFromPathSegment(href: string): string | null {
+  const slug = concursoPathSlug(href);
+  if (!slug) return null;
+  return slug
+    .split("-")
+    .map((part) => (/^\d+$/.test(part) ? part : part.toUpperCase()))
+    .join(" ");
 }
 
 const ORG_RE =
@@ -440,7 +479,7 @@ const ORG_RE =
 const BANCA_RE =
   /\b(cesgranrio|fgv|fcc|cebraspe|cespe|vunesp|ibfc|iades|fundatec|ibamsp)\b/i;
 const OPEN_RE =
-  /\b(inscri[cç][oõ]es?\s+abertas?|edital\s+(?:publicado|de\s+abertura)|concurso\s+(?:aberto|p[uú]blico)|aceita\s+inscri|prazo\s+de\s+inscri)/i;
+  /\b(inscri[cç][oõ]es?\s+abertas?|edital\s+(?:publicado|de\s+abertura)|concurso\s+aberto|aceita\s+inscri|prazo\s+de\s+inscri)/i;
 const EMPHASIS_RE =
   /\b(administra[cç][aã]o|engenharia(?:\s+\w+)?|direito|contabilidade|tecnologia\s+da\s+informa[cç][aã]o|\bTI\b|enfermagem|medicina)\b/gi;
 

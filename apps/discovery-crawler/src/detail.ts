@@ -7,8 +7,10 @@ import {
   extractKnownBanca,
   extractKnownOrg,
   inferExamKind,
+  isJunkExamTitle,
   looksLikelyOpen,
   parseRegistrationWindow,
+  titleFromPathSegment,
 } from "@quizzeira/shared";
 
 export interface DocumentLinkCandidate {
@@ -91,6 +93,30 @@ function editalNumberEditionKey(text: string): string | null {
   return m?.[1] ? m[1].replace(/\s+/g, "") : null;
 }
 
+/**
+ * Title precedence: concurso headline → <h1> → first <h2> that is not chrome →
+ * URL segment (Cebraspe `/concursos/PM_AL_26` renders its name in an <h2> and
+ * keeps the site <title>) → listing anchor. Never site chrome or JS templates.
+ */
+export function resolveDetailTitle(
+  html: string,
+  pageText: string,
+  detailUrl: string,
+  listingTitle: string,
+): string {
+  const headline = extractConcursoHeadline(pageText);
+  if (headline) return headline;
+  const fromHtml = titleFromHtml(html, "");
+  if (fromHtml && !isJunkExamTitle(fromHtml)) return fromHtml;
+  for (const m of html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/gi)) {
+    const t = textOf(m[1] ?? "");
+    if (t.length >= 5 && t.length <= 120 && !isJunkExamTitle(t)) return t;
+  }
+  const fromPath = titleFromPathSegment(detailUrl);
+  if (fromPath) return fromPath;
+  return isJunkExamTitle(listingTitle) ? fromHtml || listingTitle : listingTitle;
+}
+
 /** Parse a concurso detail page for identity, status, and document links (§11.2). */
 export function parseDetailHtml(
   html: string,
@@ -98,7 +124,7 @@ export function parseDetailHtml(
   listingTitle: string,
 ): DetailPageParse {
   const pageText = textOf(html);
-  const title = extractConcursoHeadline(pageText) ?? titleFromHtml(html, listingTitle);
+  const title = resolveDetailTitle(html, pageText, detailUrl, listingTitle);
   // Identity comes from the title block, not the whole page: banca sites put
   // every current concurso in the nav/banner, which made SEMA-MT resolve to
   // "transpetro-2026" (§11.2.2 exam identity = org + edition key).
@@ -215,9 +241,7 @@ export function isSelfDetailPage(
 export function hasExamIdentity(
   parse: Pick<DetailPageParse, "editionKey" | "registrationEnd" | "documentLinks" | "title">,
 ): boolean {
-  if (/\|/.test(parse.title) || /^\s*(mais informa|nosso portf|concursos?\s*$)/i.test(parse.title)) {
-    return false;
-  }
+  if (isJunkExamTitle(parse.title)) return false;
   if (parse.editionKey || parse.registrationEnd) return true;
   return parse.documentLinks.some((d) => d.roleHint === "specification");
 }
