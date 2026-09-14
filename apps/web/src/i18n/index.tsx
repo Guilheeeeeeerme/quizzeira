@@ -92,8 +92,8 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     Register: "Criar conta",
     "Login failed": "Falha no login",
     "Create account": "Criar conta",
-    "Start with a level that matches your pace.": "Escolha um concurso aberto e comece uma pill de estudo.",
-    "Pick an open exam and start a study pill.": "Escolha um concurso aberto e comece uma pill de estudo.",
+    "Start with a level that matches your pace.": "Escolha um concurso aberto e comece uma pílula de estudo.",
+    "Pick an open exam and start a study pill.": "Escolha um concurso aberto e comece uma pílula de estudo.",
     "Display name": "Nome de exibição",
     "At least 6 characters": "Pelo menos 6 caracteres",
     "Registration failed": "Falha no cadastro",
@@ -137,7 +137,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Track attempts and scores across your topics.":
       "Acompanhe tentativas e pontuações nos seus tópicos.",
     "Start a study pill from an open exam to see history here.":
-      "Inicie uma pill a partir de um concurso aberto para ver o histórico aqui.",
+      "Inicie uma pílula a partir de um concurso aberto para ver o histórico aqui.",
     Topic: "Tópico",
     "All attempts": "Todas as tentativas",
     Status: "Status",
@@ -156,7 +156,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Exam study": "Estudo para exames",
     "My studies": "Meus estudos",
     "Pick an open public exam we track, then set tempo, pill, and focus.":
-      "Escolha um exame público aberto que acompanhamos; depois defina tempo, pill e foco.",
+      "Escolha um exame público aberto que acompanhamos; depois defina tempo, pílula e foco.",
     "No open exams yet.": "Nenhum concurso aberto ainda.",
     "The catalog fills when the crawler discovers published exams. Nothing is invented here.":
       "O catálogo preenche quando o crawler descobre exames publicados. Nada é inventado aqui.",
@@ -260,7 +260,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Exam, emphasis, and guidelines only — pick the exam from the open exams catalog.":
       "Somente exame, ênfase e diretrizes — escolha o concurso no catálogo.",
     "This removes the study config and related study pills.":
-      "Isso remove a configuração de estudo e as pills relacionadas.",
+      "Isso remove a configuração de estudo e as pílulas relacionadas.",
     "Studies unused for 30 days are deleted automatically.":
       "Estudos sem uso por 30 dias são apagados automaticamente.",
     "Only open exam preset is available in this product phase":
@@ -271,7 +271,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     Primary: "Principal",
     "Your topics": "Seus estudos",
     "Create study topics, attach materials, and take short daily pills.":
-      "Prepare um concurso aberto e faça pills curtas de estudo.",
+      "Prepare um concurso aberto e faça pílulas curtas de estudo.",
     "Topics unused for 30 days are deleted automatically.":
       "Estudos sem uso por 30 dias são apagados automaticamente.",
     "New topic": "Novo estudo",
@@ -298,7 +298,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Delete topic": "Excluir tópico",
     "Delete topic?": "Excluir tópico?",
     "This removes the topic, materials, and related study pills.":
-      "Isso remove o tópico, materiais e pills relacionadas.",
+      "Isso remove o tópico, materiais e pílulas relacionadas.",
     "What do you want to focus on today?": "No que você quer focar hoje?",
     "Optional — skip to let the AI use your topic guidelines":
       "Opcional — pule para a IA usar as diretrizes do tópico",
@@ -309,15 +309,15 @@ const dictionaries: Record<Locale, Record<string, string>> = {
       "ex.: enfatizar raciocínio lógico; evitar legislação hoje",
     "Session length": "Duração da sessão",
     "Default is a short pill. Pick a time to scale depth.":
-      "O padrão é uma pill curta. Escolha um tempo para aumentar a profundidade.",
-    "Pill (default)": "Pill (padrão)",
+      "O padrão é uma pílula curta (sessão rápida). Escolha um tempo para aumentar a profundidade.",
+    "Pill (default)": "Pílula (padrão)",
     "{n} min": "{n} min",
     "The AI is inferring subjects and building a timed session.":
       "A IA está inferindo matérias e montando uma sessão cronometrada.",
     Examples: "Exemplos",
     "Start studying": "Começar a estudar",
     "Skip and start": "Pular e começar",
-    "Preparing your study pill": "Preparando sua pill de estudo",
+    "Preparing your study pill": "Preparando sua pílula de estudo",
     "The AI is choosing question types and length for a short session.":
       "A IA está escolhendo tipos e quantidade de questões para uma sessão curta.",
     "Topic not found": "Tópico não encontrado",
@@ -328,8 +328,8 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     Pending: "Pendente",
     "In correction": "Em correção",
     Corrected: "Corrigido",
-    "Timed out waiting for pill": "Tempo esgotado ao gerar a pill",
-    "Pill generation failed": "Falha ao gerar a pill",
+    "Timed out waiting for pill": "Tempo esgotado ao gerar a pílula",
+    "Pill generation failed": "Falha ao gerar a pílula",
     "title and guidelines required": "título e diretrizes obrigatórios",
     "Invalid presetSlug": "Preset inválido",
     "Invalid durationMinutes": "Duração inválida",
@@ -432,6 +432,62 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Last generation run": "Última geração",
     "{n} drafted": "{n} rascunhos",
     "No generation run yet.": "Nenhuma geração executada ainda.",
+
+    // Admin — source form, exam-kind filters, provenance, pipeline metrics (previously
+    // fell back to raw English keys for pt-BR users; filled in during the 2026-09-14 audit)
+    Kind: "Tipo",
+    "banca_portal, legislation, educational_site, …": "banca_portal, legislation, educational_site, …",
+    "Discovery mode": "Modo de descoberta",
+    "listing | topic | direct": "listing | topic | direct",
+    "Allowed roles": "Funções permitidas",
+    "Comma or newline separated DocumentRole values.":
+      "Valores de DocumentRole separados por vírgula ou quebra de linha.",
+    "Authority score (0–1)": "Nota de autoridade (0–1)",
+    "License note": "Nota de licença",
+    "e.g. official gazette; reuse OK": "ex.: diário oficial; reuso permitido",
+    Roles: "Funções",
+    All: "Todos",
+    "No active syllabus.": "Nenhum programa ativo.",
+    "{nodes} nodes · {kus} leaves with KUs · {pub} published":
+      "{nodes} nós · {kus} folhas com KUs · {pub} publicadas",
+    "Raw sections (needs review)": "Seções brutas (requer revisão)",
+    "(no heading)": "(sem título)",
+    "Coverage / syllabus": "Cobertura / programa",
+    "Provenance": "Proveniência",
+    "Provenance chain": "Cadeia de proveniência",
+    "Raw JSON": "JSON bruto",
+    "Eval metrics (24h)": "Métricas de avaliação (24h)",
+    "Syllabus mapped": "Programa mapeado",
+    "Admin reject share": "Taxa de rejeição do admin",
+    "Metadata fails": "Falhas de metadados",
+    "Publish rate": "Taxa de publicação",
+    "Tokens / published": "Tokens / publicadas",
+    "Pipeline metrics unavailable.": "Métricas do pipeline indisponíveis.",
+    "Stage funnel (24h)": "Funil de etapas (24h)",
+    "No stage metrics yet.": "Nenhuma métrica de etapa ainda.",
+    "Rejection reasons (24h)": "Motivos de rejeição (24h)",
+    "No rejection reasons in the window.": "Nenhum motivo de rejeição neste período.",
+    "Documents (roles)": "Documentos (funções)",
+    "No content documents yet.": "Nenhum documento de conteúdo ainda.",
+    Sections: "Seções",
+    "Stats JSON": "JSON de estatísticas",
+    "Topic queries": "Consultas de tópico",
+    "No topic queries recorded.": "Nenhuma consulta de tópico registrada.",
+
+    // Exams — exam-kind filter (SegmentedControl on Open exams)
+    "Filter by exam kind": "Filtrar por tipo de concurso",
+    "All kinds": "Todos os tipos",
+    Concurso: "Concurso",
+    OAB: "OAB",
+
+    // Study focus — syllabus leaf picker
+    "Syllabus focus": "Foco do programa",
+    "Pick syllabus leaves to sample from, or leave empty for the full bank.":
+      "Escolha tópicos do programa para focar, ou deixe vazio para usar o banco completo.",
+
+    // Topic editor
+    "Editable — open exam guidelines are a starting point.":
+      "Editável — as diretrizes do concurso são só um ponto de partida.",
   },
 };
 
