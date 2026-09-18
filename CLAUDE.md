@@ -11,7 +11,7 @@ Agent behavioral rules: see [AGENTS.md](./AGENTS.md). Concept map: [docs/ai-swe-
 | Web | https://app.quizzeira.ferredemo.dev |
 | API | https://api.quizzeira.ferredemo.dev |
 
-Production deploys are owned by the **infra** repo (Jenkins job `quizzeira`). Quizzeira workers skip Headroom (`LLM_USE_HEADROOM=false`) — see infra `docs/quizzeira-headroom.md`.
+Production deploys are owned by the **infra** repo (Jenkins job `quizzeira`). Study/Discovery/Content Postgres are Supabase schemas; workers skip Headroom (`LLM_USE_HEADROOM=false`) — see infra `docs/quizzeira-headroom.md` and `docs/supabase.md`.
 
 ## Layout
 
@@ -21,7 +21,7 @@ npm workspaces (`apps/*`, `packages/*`):
 | --- | --- | --- |
 | Discovery | `discovery-api`, `discovery-crawler` | Postgres `quizzeira_discovery` + MinIO |
 | Content | `content-api`, `content-worker`, `content-quality` | Postgres `quizzeira_content` + pgvector |
-| Study | `api`, `web`, `quiz-corrector` | MySQL + Redis |
+| Study | `api`, `web`, `quiz-corrector` | Postgres `quizzeira_study` + Redis |
 
 Shared packages: `packages/shared`, `packages/worker-kit`.
 
@@ -30,15 +30,19 @@ Specs / agent tooling: `docs/`, `specs/`, `.specify/`, `.agents/skills/` (e.g. R
 ## Stack
 
 - TypeScript/Node, Prisma, React
-- MySQL (study) + Postgres/pgvector (discovery + content) + Redis + MinIO
-- Gemini/OpenAI via `worker-kit`
+- Postgres/pgvector (Study + Discovery + Content) + Redis + MinIO
+- Gemini/OpenAI via `worker-kit` (workers: `LLM_USE_HEADROOM=false`)
 
 ## Local
 
 ```bash
-cp .env.sample .env
+cp .env.sample .env.local.docker    # Compose Postgres (study/discovery/content)
+bash ../infra/scripts/supabase_dev_tunnel.sh -f
+python3 ../infra/scripts/write_local_supabase_env.py   # .env → remote via tunnel
 docker compose up --build
 ```
+
+**DB switch:** `.env` = remote Supabase schemas; `.env.local.docker` = internal Compose Postgres (Study is Postgres, not MySQL).
 
 User seed only (no question-bank seed):
 

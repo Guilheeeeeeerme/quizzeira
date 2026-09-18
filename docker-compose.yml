@@ -1,10 +1,11 @@
 # Local Quizzeira stack.
 #
-# Three data stores, three planes:
-#   mysql    → quizzeira          (Study: users, topics, attempts)
-#   postgres → quizzeira_discovery (Ingestion: Source registry, Document store)
-#            → quizzeira_content   (Extraction/Generation/Eval + pgvector)
-#   redis    → LLM budgets and rate limits only (no domain state)
+# One Postgres (pgvector) hosts three schemas/DBs:
+#   quizzeira_study     (Study: users, topics, attempts) — was MySQL
+#   quizzeira_discovery (Ingestion)
+#   quizzeira_content   (Extraction/Generation/Eval + pgvector)
+# Redis → LLM budgets and rate limits only (no domain state)
+# MinIO → local object store (prod also keeps MinIO on the VPS; Supabase Free Storage is not used)
 #
 # Internal APIs are never LAN-exposed: only web (5173) and the study API
 # (127.0.0.1:3000) publish ports. discovery-api and content-api stay on the
@@ -18,24 +19,6 @@
 # content-worker, content-quality, and quiz-corrector honor it via env_file and
 # the LLM_PROVIDER passthrough below (worker-kit fixture provider).
 services:
-  mysql:
-    image: mysql:8.0
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-quizzeira}
-      MYSQL_USER: ${MYSQL_USER:-quizzeira}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-quizzeira}
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    networks:
-      - private
-
   # pgvector image so quizzeira_content can CREATE EXTENSION vector.
   postgres:
     image: pgvector/pgvector:pg16
@@ -46,8 +29,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-quizzeira_discovery}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Creates quizzeira_content alongside quizzeira_discovery and enables
-      # pgvector in both. Runs once, on an empty volume.
+      # Creates study/content DBs alongside discovery and enables pgvector.
       - ./scripts/local-postgres-init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quizzeira} -d ${POSTGRES_DB:-quizzeira_discovery}"]
@@ -104,7 +86,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: mysql://${MYSQL_USER:-quizzeira}:${MYSQL_PASSWORD:-quizzeira}@mysql:3306/${MYSQL_DATABASE:-quizzeira}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-quizzeira}:${POSTGRES_PASSWORD:-quizzeira}@postgres:5432/quizzeira_study?schema=public
+      DATABASE_DIRECT_URL: postgresql://${POSTGRES_USER:-quizzeira}:${POSTGRES_PASSWORD:-quizzeira}@postgres:5432/quizzeira_study?schema=public
       REDIS_URL: redis://redis:6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       INTERNAL_API_KEY_CORRECTOR: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
@@ -131,7 +114,7 @@ services:
       - /app/node_modules
       - /app/apps/api/node_modules
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -481,7 +464,6 @@ services:
       - private
 
 volumes:
-  mysql_data:
   postgres_data:
   minio_data:
   redis_data:

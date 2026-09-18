@@ -1,5 +1,6 @@
-// Concept: Document store (MinIO object put for PDFs/editais)
-import { CreateBucketCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+// Concept: Document store (S3-compatible put for PDFs/editais).
+// Buckets are pre-provisioned on Supabase Storage — never CreateBucket here.
+import { HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createHash } from "node:crypto";
 import { env } from "./env";
 
@@ -15,13 +16,9 @@ const client = new S3Client({
 
 let bucketReady = false;
 
-async function ensureBucket(): Promise<void> {
+async function assertBucket(): Promise<void> {
   if (bucketReady) return;
-  try {
-    await client.send(new HeadBucketCommand({ Bucket: env.s3Bucket }));
-  } catch {
-    await client.send(new CreateBucketCommand({ Bucket: env.s3Bucket }));
-  }
+  await client.send(new HeadBucketCommand({ Bucket: env.s3Bucket }));
   bucketReady = true;
 }
 
@@ -42,7 +39,7 @@ export async function putArtifactObject(
   body: Buffer,
   contentType: string,
 ): Promise<{ storageKey: string; checksum: string; byteSize: number }> {
-  await ensureBucket();
+  await assertBucket();
   const checksum = createHash("sha256").update(body).digest("hex");
   const storageKey = key?.trim() || contentAddressedArtifactKey(checksum, contentType);
   await client.send(

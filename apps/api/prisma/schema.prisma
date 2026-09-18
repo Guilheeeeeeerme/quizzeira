@@ -5,13 +5,17 @@
 // published set and materialized per attempt. Anything curriculum-shaped
 // (difficulty levels, topic attachments/links, question pools) was removed —
 // producing questions is Content's job, not Study's.
+//
+// Production: Supabase schema `quizzeira_study` (Postgres). Local Compose may
+// still use a local Postgres with the same schema name via DATABASE_URL.
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
 }
 
 enum QuestionType {
@@ -50,7 +54,7 @@ model Topic {
   userId          String
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   title           String
-  guidelines      String        @db.Text
+  guidelines      String
   presetSlug      String?
   preferredLocale String?
   lastUsedAt      DateTime      @default(now())
@@ -72,15 +76,15 @@ model Question {
   topic            Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
   sourceAttemptId  String?
   type             QuestionType
-  prompt           String            @db.Text
+  prompt           String
   options          Json?
   /** Optional stem figures: QuestionMediaRef[] */
   promptMedia      Json?
   /** Optional per-option figures: (QuestionMediaRef[] | null)[] */
   optionMedia      Json?
   correctIndex     Int?
-  referenceAnswer  String?           @db.Text
-  explanation      String?           @db.Text
+  referenceAnswer  String?
+  explanation      String?
   isActive         Boolean           @default(true)
   lastReviewedAt   DateTime?
   answers          QuizAnswer[]
@@ -96,12 +100,12 @@ model QuizAttempt {
   topicId             String?
   topic               Topic?            @relation(fields: [topicId], references: [id], onDelete: Cascade)
   locale              String            @default("en")
-  focusText           String?           @db.Text
+  focusText           String?
   /// Session length in minutes; null = default short pill.
   durationMinutes     Int?
   score               Int?
   maxScore            Int               @default(5)
-  generalComment      String?           @db.Text
+  generalComment      String?
   status              AttemptStatus     @default(IN_PROGRESS)
   startedAt           DateTime          @default(now())
   submittedAt         DateTime?
@@ -133,11 +137,11 @@ model QuizAnswer {
   questionId           String
   question             Question    @relation(fields: [questionId], references: [id])
   selectedIndex        Int?
-  openText             String?     @db.Text
+  openText             String?
   grade                Int?
-  comment              String?     @db.Text
-  explanation          String?     @db.Text
-  correctAnswerSummary String?     @db.Text
+  comment              String?
+  explanation          String?
+  correctAnswerSummary String?
   isCorrect            Boolean?
   correctedAt          DateTime?
 

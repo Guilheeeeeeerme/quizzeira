@@ -12,7 +12,8 @@ Coding-agent rules for this repository. Project map: [CLAUDE.md](./CLAUDE.md), [
 
 - **No question-bank seed.** Do not add fixtures that fake published curriculum; ingestion + Eval only.
 - **Publish gate**: Study Sampling may use Eval-approved items only.
-- **Planes stay separate**: Discovery / Content / Study databases and APIs — do not collapse stores or cross-wire without an explicit migration task.
+- **Planes stay separate**: Discovery / Content / Study use distinct Supabase schemas (and local DBs in dev) — do not collapse stores or cross-wire without an explicit migration task.
+- **Study is Postgres** (`quizzeira_study`); do not reintroduce MySQL for Study without an explicit task.
 - **LLM**: workers use `LLM_USE_HEADROOM=false` by design; do not point them at Headroom without fixing network/auth (see infra `docs/quizzeira-headroom.md`). Follow [docs/guardrails.md](./docs/guardrails.md).
 - **Keys**: scoped `INTERNAL_API_KEY_*`; never commit real secrets or leave default internal keys for prod.
 - **Env**: `.env.sample` → `.env`; never commit `.env`.

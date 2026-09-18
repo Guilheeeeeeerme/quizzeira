@@ -1,10 +1,14 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.sample
 *.log
 .DS_Store
 *.tsbuildinfo
-apps/api/prisma/migrations/**/migration_lock.toml
+# Ignore nested generated locks only; keep the repo root Study lock tracked.
+apps/api/prisma/migrations/*/**/migration_lock.toml
+!apps/api/prisma/migrations/migration_lock.toml
 
 # Prisma clients generated at build/migrate time
 apps/*/src/generated/

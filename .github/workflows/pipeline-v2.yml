@@ -13,7 +13,8 @@ env:
   # Prisma generate only — no live DB required for these gates.
   CONTENT_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/content
   DISCOVERY_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/discovery
-  DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/study
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/study?schema=quizzeira_study
+  DATABASE_DIRECT_URL: postgresql://ci:ci@127.0.0.1:5432/study?schema=quizzeira_study
 
 jobs:
   node-gates:

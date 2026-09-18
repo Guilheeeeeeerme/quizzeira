@@ -1,4 +1,6 @@
 #!/bin/bash
+# Dev-only: create Study/Discovery/Content databases on local pgvector.
+# Hosted Supabase uses one database + schemas (see infra/supabase/).
 set -euo pipefail
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
   DO \$\$ BEGIN
@@ -6,6 +8,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
       CREATE ROLE quizzeira LOGIN PASSWORD 'quizzeira';
     END IF;
   END \$\$;
+  SELECT 'CREATE DATABASE quizzeira_study OWNER quizzeira'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'quizzeira_study')\gexec
   SELECT 'CREATE DATABASE quizzeira_discovery OWNER quizzeira'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'quizzeira_discovery')\gexec
   SELECT 'CREATE DATABASE quizzeira_content OWNER quizzeira'

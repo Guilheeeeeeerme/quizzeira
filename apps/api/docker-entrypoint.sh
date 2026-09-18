@@ -8,11 +8,10 @@ npm run dev -w @quizzeira/shared &
 
 cd /app/apps/api
 
-echo "Waiting for database..."
-# Local Compose schema drift may drop obsolete columns/tables (e.g. DifficultyLevel).
-# Accept data loss here so the API does not loop forever on interactive Prisma prompts.
+echo "Waiting for database (prisma migrate deploy)..."
+# Never use `db push --accept-data-loss` against managed Supabase.
 for i in $(seq 1 30); do
-  if npx prisma db push --skip-generate --accept-data-loss; then
+  if npx prisma migrate deploy; then
     break
   fi
   echo "Retry $i..."

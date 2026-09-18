@@ -37,13 +37,16 @@ Guardrails: [`docs/guardrails.md`](docs/guardrails.md). Concepts: [`docs/ai-swe-
 | --- | --- | --- |
 | Discovery | `discovery-api`, `discovery-crawler` | Postgres + MinIO |
 | Content | `content-api`, `content-worker`, `content-quality` | Postgres + pgvector |
-| Study | `api`, `web`, `quiz-corrector` | MySQL + Redis |
+| Study | `api`, `web`, `quiz-corrector` | Postgres `quizzeira_study` + Redis |
 
 Brand mark: [`branding/quizzeira.svg`](branding/quizzeira.svg) — exam card + Eval check gate.
 
 ## Quick start
 
 ```bash
+# Standalone local Postgres: cp .env.sample .env.local.docker && cp .env.local.docker .env
+# Remote Supabase (tunnel): bash ../infra/scripts/supabase_dev_tunnel.sh -f
+#                          python3 ../infra/scripts/write_local_supabase_env.py
 cp .env.sample .env
 docker compose up --build
 ```
