@@ -38,6 +38,18 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
         : existing?.status === "open" && incomingStatus === "unknown"
           ? "open"
           : incomingStatus;
+    // Do not demote lifecycle once past registration; crawler only seeds early phases.
+    const nextPhase =
+      existing?.lifecyclePhase &&
+      !["announced", "registration_open", "registration_closed"].includes(
+        existing.lifecyclePhase,
+      )
+        ? existing.lifecyclePhase
+        : nextStatus === "open"
+          ? "registration_open"
+          : nextStatus === "closed"
+            ? "registration_closed"
+            : "announced";
     const row = await prisma.exam.upsert({
       where: { examSlug_listingUrl: { examSlug, listingUrl } },
       create: {
@@ -56,6 +68,7 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
         statusSource,
         positions,
         status: nextStatus as never,
+        lifecyclePhase: nextPhase as never,
         sourceId: String(body.sourceId || ""),
         sourceDomain: String(body.sourceDomain || ""),
       },
@@ -73,6 +86,7 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
         positions,
         lastSeenAt: new Date(),
         status: nextStatus as never,
+        lifecyclePhase: nextPhase as never,
       },
     });
     return {
@@ -115,6 +129,7 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
     const items = await prisma.exam.findMany({
       where: {
         kind: { in: ["concurso", "oab"] },
+        lifecyclePhase: { notIn: ["past_due", "archived", "cancelled"] },
         OR: [
           { status: "open", registrationEnd: null },
           { status: "open", registrationEnd: { gte: graceStart } },

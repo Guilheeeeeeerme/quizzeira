@@ -294,6 +294,38 @@ services:
       - dmz
       - private
 
+  discovery-lifecycle:
+    build:
+      context: .
+      dockerfile: apps/discovery-lifecycle/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3012
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      WORKER_INTERVAL_MS: ${DISCOVERY_LIFECYCLE_INTERVAL_MS:-900000}
+      WORKER_WINDOWS: ${DISCOVERY_LIFECYCLE_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_LIFECYCLE_ENABLED: ${DISCOVERY_LIFECYCLE_ENABLED:-true}
+      DISCOVERY_LIFECYCLE_SOFT_ARCHIVE_DAYS: ${DISCOVERY_LIFECYCLE_SOFT_ARCHIVE_DAYS:-30}
+      DISCOVERY_LIFECYCLE_HARD_DELETE_DAYS: ${DISCOVERY_LIFECYCLE_HARD_DELETE_DAYS:-90}
+      DISCOVERY_LIFECYCLE_DROP_TOMBSTONE: ${DISCOVERY_LIFECYCLE_DROP_TOMBSTONE:-false}
+      DISCOVERY_LIFECYCLE_BATCH_SIZE: ${DISCOVERY_LIFECYCLE_BATCH_SIZE:-50}
+    volumes:
+      - ./apps/discovery-lifecycle:/app/apps/discovery-lifecycle
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/discovery-lifecycle/node_modules
+    depends_on:
+      discovery-api:
+        condition: service_healthy
+    networks:
+      - private
+
   # ── Content plane (Extraction, Generation, Eval) ──────────────────────────
 
   doc-processor:
