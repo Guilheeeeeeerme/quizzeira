@@ -307,6 +307,7 @@ services:
     env_file:
       - .env
     environment:
+      PORT: 3013
       INTERNAL_API_URL: http://discovery-api:3010
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
       WORKER_INTERVAL_MS: ${DISCOVERY_SOCIAL_INTERVAL_MS:-3600000}

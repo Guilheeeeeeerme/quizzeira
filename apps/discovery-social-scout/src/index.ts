@@ -1,3 +1,4 @@
+import Fastify from "fastify";
 import { logInfo, runLoop, workerEnv } from "@quizzeira/worker-kit";
 import { socialEnv } from "./env.js";
 import { runSocialScoutPass } from "./pipeline.js";
@@ -24,13 +25,31 @@ async function tick(): Promise<void> {
   }
 }
 
-logInfo("interval mode", {
-  worker: NAME,
-  intervalMs: workerEnv.intervalMs,
-  enabled: socialEnv.enabled,
-  fixture: socialEnv.fixtureMode,
-  adapters: socialEnv.adapters,
-  windows: workerEnv.windows || "(any)",
-  timeZone: workerEnv.timeZone,
+async function bootstrap(): Promise<void> {
+  // Same shape as discovery-lifecycle: the deploy's `compose up --wait`
+  // health-checks every service, and an operator can force one pass.
+  const app = Fastify({ logger: false });
+  app.get("/health", async () => ({ ok: true, service: NAME }));
+  app.post("/internal/tick", async () => {
+    await tick();
+    return { ok: true };
+  });
+  await app.listen({ port: socialEnv.port, host: "0.0.0.0" });
+
+  logInfo("interval mode", {
+    worker: NAME,
+    intervalMs: workerEnv.intervalMs,
+    port: socialEnv.port,
+    enabled: socialEnv.enabled,
+    fixture: socialEnv.fixtureMode,
+    adapters: socialEnv.adapters,
+    windows: workerEnv.windows || "(any)",
+    timeZone: workerEnv.timeZone,
+  });
+  void runLoop(NAME, workerEnv.intervalMs, tick);
+}
+
+bootstrap().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });
-void runLoop(NAME, workerEnv.intervalMs, tick);

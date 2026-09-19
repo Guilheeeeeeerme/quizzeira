@@ -26,7 +26,11 @@ export function createRedditPublicAdapter(opts?: {
   userAgentEnv?: string;
   fetchFn?: FetchLike;
   keywords?: string[];
+  /** Allow the credential-less public .json path (default: env REDDIT_ALLOW_ANONYMOUS). */
+  allowAnonymous?: boolean;
 }): SocialSourceAdapter {
+  const allowAnonymous =
+    opts?.allowAnonymous ?? (process.env.REDDIT_ALLOW_ANONYMOUS ?? "false") === "true";
   const idKey = opts?.clientIdEnv ?? "REDDIT_CLIENT_ID";
   const secretKey = opts?.clientSecretEnv ?? "REDDIT_CLIENT_SECRET";
   const subsKey = opts?.subredditsEnv ?? "REDDIT_SUBREDDITS";
@@ -49,6 +53,11 @@ export function createRedditPublicAdapter(opts?: {
 
       if (subreddits.length === 0) {
         return disabledResult(`missing config: ${subsKey}`);
+      }
+      // Anonymous public JSON is opt-in: without OAuth credentials the adapter
+      // stays disabled unless REDDIT_ALLOW_ANONYMOUS=true.
+      if (!(clientId && clientSecret) && !allowAnonymous) {
+        return disabledResult(`missing credentials: ${idKey}/${secretKey} (set REDDIT_ALLOW_ANONYMOUS=true for public JSON)`);
       }
 
       // Prefer OAuth token when present; otherwise public .json with User-Agent.

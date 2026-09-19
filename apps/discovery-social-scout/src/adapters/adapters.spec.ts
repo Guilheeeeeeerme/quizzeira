@@ -219,6 +219,21 @@ describe("social adapters", () => {
     );
   });
 
+  it("reddit-public stays disabled without credentials unless anonymous is allowed", async () => {
+    delete process.env.REDDIT_CLIENT_ID;
+    delete process.env.REDDIT_CLIENT_SECRET;
+    delete process.env.REDDIT_ALLOW_ANONYMOUS;
+    process.env.REDDIT_SUBREDDITS = "concursos";
+    let called = 0;
+    const fetchFn = mockFetch(() => {
+      called += 1;
+      return jsonResponse({ data: { children: [] } });
+    });
+    const result = await createRedditPublicAdapter({ fetchFn }).fetchRecent();
+    assert.equal(result.status, "disabled");
+    assert.equal(called, 0);
+  });
+
   it("reddit-public searches public JSON with mocked listing", async () => {
     process.env.REDDIT_SUBREDDITS = "concursos";
     const fetchFn = mockFetch(() =>
@@ -240,6 +255,7 @@ describe("social adapters", () => {
       }),
     );
     const result = await createRedditPublicAdapter({
+      allowAnonymous: true,
       fetchFn,
       keywords: ["edital"],
     }).fetchRecent();

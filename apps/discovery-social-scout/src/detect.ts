@@ -62,6 +62,8 @@ function looksFileish(url: string, label: string): boolean {
 
 function candidateFromUrl(url: string, label: string): SocialFileCandidate | null {
   const clean = stripTrailingPunct(url);
+  // Attachment URLs bypass URL_RE, so the scheme must be checked here too.
+  if (!/^https?:\/\//i.test(clean)) return null;
   const domain = domainFromUrl(clean);
   if (!domain || isSocialHost(domain)) return null;
   if (!looksFileish(clean, label)) return null;

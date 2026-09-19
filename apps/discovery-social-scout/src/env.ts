@@ -22,6 +22,12 @@ function list(key: string, fallback: string[]): string[] {
 
 export const socialEnv = {
   enabled: (process.env.DISCOVERY_SOCIAL_ENABLED ?? "false") === "true",
+  /** /health + /internal/tick listener (compose/infra healthcheck). */
+  port: num("PORT", 3013),
+  /** Reddit's anonymous .json endpoint is the only credential-less live path;
+   * it must be opted into explicitly so FIXTURE_MODE=false never reaches the
+   * public internet by accident. */
+  redditAllowAnonymous: (process.env.REDDIT_ALLOW_ANONYMOUS ?? "false") === "true",
   /** Prefer fixture posts over live adapters (CI / first boot). */
   fixtureMode: (process.env.DISCOVERY_SOCIAL_FIXTURE_MODE ?? "true") !== "false",
   /** Also POST URL-only artifacts with social provenance. Default observe-only. */

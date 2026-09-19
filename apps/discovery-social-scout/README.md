@@ -42,7 +42,7 @@ Optional `DISCOVERY_SOCIAL_LOCALE=en` flips X/Google/YouTube params for experime
 | `google-cse` | Google | Custom Search JSON API | `GOOGLE_CSE_API_KEY`, `GOOGLE_CSE_CX` |
 | `instagram-graph` | Instagram | Graph API (Business/Creator) | `INSTAGRAM_ACCESS_TOKEN` (or `META_GRAPH_ACCESS_TOKEN`), `INSTAGRAM_BUSINESS_ACCOUNT_IDS` |
 | `facebook-graph` | Facebook | Graph API Page feed | `FACEBOOK_ACCESS_TOKEN` (or `META_GRAPH_ACCESS_TOKEN`), `FACEBOOK_PAGE_IDS` |
-| `reddit-public` | Reddit | public `.json` / optional OAuth | `REDDIT_SUBREDDITS` (default `concursos,brasil`); optional `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USER_AGENT` |
+| `reddit-public` | Reddit | OAuth, or public `.json` only with `REDDIT_ALLOW_ANONYMOUS=true` | `REDDIT_SUBREDDITS` (default `concursos,brasil`); `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USER_AGENT`; without credentials the adapter reports `disabled` unless anonymous is explicitly allowed |
 | `youtube-data` | YouTube | Data API v3 search | `YOUTUBE_API_KEY` |
 | `telegram-public` | Telegram | Bot API `getUpdates` | `TELEGRAM_BOT_TOKEN` |
 
@@ -106,6 +106,6 @@ Live API keys (set only when enabling the matching adapter):
 | `META_GRAPH_ACCESS_TOKEN` | shared Meta fallback for IG/FB |
 | `YOUTUBE_API_KEY` | `youtube-data` |
 | `TELEGRAM_BOT_TOKEN` | `telegram-public` |
-| `REDDIT_SUBREDDITS`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` | `reddit-public` |
+| `REDDIT_SUBREDDITS`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT`, `REDDIT_ALLOW_ANONYMOUS` | `reddit-public` |
 
 See `NOTES.md` for infra / Workstream C handoff.
