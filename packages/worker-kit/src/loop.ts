@@ -1,5 +1,5 @@
 import { workerEnv } from "./env";
-import { logError, logInfo } from "./log";
+import { logError, logInfo, logWarn } from "./log";
 
 const MINUTES_PER_DAY = 1440;
 const WINDOW_TOLERANCE_MINUTES = 30;
@@ -82,18 +82,32 @@ export async function runLoop(
   }
 
   let firstRun = true;
+  // Single-flight: a new interval pass never starts while the previous one is
+  // still running; the overlap is recorded instead of stacking up.
+  let inFlight = false;
   const run = async () => {
+    if (inFlight) {
+      logWarn("interval pass skipped: previous pass still active", {
+        worker: name,
+        event: "loop_overlap_skipped",
+        outcome: "skipped",
+      });
+      return;
+    }
     const gated =
       windows.length > 0 &&
       !firstRun &&
       !isWithinWindows(now(), windows, timeZone);
     if (gated) return;
     firstRun = false;
+    inFlight = true;
     try {
       await tick();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError("tick failed", { worker: name, err: message });
+    } finally {
+      inFlight = false;
     }
   };
 

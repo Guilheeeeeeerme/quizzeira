@@ -7,6 +7,14 @@ import {
   requireJsonShape,
   resetBudgetForTests,
 } from "./llm";
+import {
+  circuitGuard,
+  circuitHealth,
+  circuitRecordFailure,
+  circuitRecordSuccess,
+  classifyProviderError,
+  resetCircuitsForTests,
+} from "./circuit";
 import { resetModelRankForTests } from "./model-rank";
 
 type CallRecord = { url: string; body: Record<string, unknown> };
@@ -70,12 +78,33 @@ beforeEach(() => {
   workerEnv.allowMemoryBudget = true;
   resetBudgetForTests();
   resetModelRankForTests();
+  void resetCircuitsForTests();
   vi.stubGlobal("fetch", vi.fn(stubFetch));
 });
 
 afterEach(() => {
   Object.assign(workerEnv, saved);
   vi.unstubAllGlobals();
+});
+
+describe("provider circuits gate failed providers", () => {
+  it("records success, failure classification, and deferrability", async () => {
+    await circuitRecordSuccess("gemini");
+    await circuitRecordFailure("gemini", new Error("Gemini 401: API key not valid"));
+    expect((await circuitHealth("gemini")).state).toBe("open");
+    await resetCircuitsForTests();
+    expect(classifyProviderError(new Error("OpenAI 429: no credits"))).toBe("billing");
+  });
+
+  it("does not charge the budget while provider circuits are open", async () => {
+    await circuitRecordFailure("gemini", new Error("Gemini 401: API key not valid"));
+    await circuitRecordFailure("openai", new Error("OpenAI 403: no credits"));
+    await expect(generateJson("system", "user")).rejects.toMatchObject({
+      code: "llm_unavailable",
+    });
+    expect(calls).toHaveLength(0);
+    await resetCircuitsForTests();
+  });
 });
 
 describe("provider order", () => {

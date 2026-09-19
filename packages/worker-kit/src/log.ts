@@ -7,6 +7,10 @@ export type LogFields = Record<string, unknown>;
 const serviceFromEnv = (): string =>
   process.env.SERVICE_NAME?.trim() || "quizzeira";
 
+const environment = () => process.env.NODE_ENV?.trim() || "production";
+const version = () =>
+  process.env.GIT_SHA || process.env.SERVICE_VERSION?.trim() || "dev";
+
 export function logInfo(message: string, fields: LogFields = {}): void {
   write("INFO", message, fields);
 }
@@ -27,8 +31,11 @@ function write(
 ): void {
   const payload: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
+    severity: level,
     level,
     service: serviceFromEnv(),
+    version: version(),
+    environment: environment(),
     message,
     ...sanitize(fields),
   };
