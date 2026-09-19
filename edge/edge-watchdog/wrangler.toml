@@ -1,0 +1,27 @@
+name = "quizzeira-edge-watchdog"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# Free tier: one Cron trigger every five minutes (limit: five triggers).
+# Bounded public health/readiness checks only — never internal endpoints,
+# never payload bodies. State lives in Workers KV (limit: 1,000 writes/day;
+# one state record per 5 min is ~288/day, far under the cap).
+[triggers]
+cron = ["*/5 * * * *"]
+
+# Secrets (set with `wrangler secret put`):
+#   WATCH_TARGETS   JSON array of { name, url } public health endpoints
+#   ALERT_WEBHOOK   operator webhook (Slack-compatible) for state changes
+#   WATCH_SECRET    optional bearer token echoed as x-watch-secret
+# Vars must stay metadata-only inside free-tier 10 ms CPU/invocation.
+
+[[kv_namespaces]]
+binding = "WATCH_STATE"
+id = "replace-me-with-your-kv-namespace-id"
+
+[observability]
+enabled = true
+
+[vars]
+# Alert again if a target stays unhealthy for this many consecutive checks.
+WATCH_UNHEALTHY_THRESHOLD = "3"
