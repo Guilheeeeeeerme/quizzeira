@@ -215,6 +215,11 @@ export function hasLlmProvider(): boolean {
   return providerOrder().length > 0;
 }
 
+/** Configured + available provider names, in attempt order (§9 readiness). */
+export function configuredProviderNames(): string[] {
+  return providerOrder().map((provider) => provider.name);
+}
+
 function stageBudgetCap(stage: GenerateJsonOptions["stage"]): number {
   switch (stage) {
     case "ku":

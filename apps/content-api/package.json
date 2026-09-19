@@ -14,6 +14,7 @@
     "@aws-sdk/client-s3": "^3.758.0",
     "@prisma/client": "^6.1.0",
     "@quizzeira/shared": "*",
+    "@quizzeira/worker-kit": "*",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0"
   },

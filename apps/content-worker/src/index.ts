@@ -2,7 +2,15 @@
 //
 // Pipeline v2 only: import → process → planner → eligible embeddings → leaf generation.
 // Legacy exam-level generation and hand-rolled PDF extraction are removed (§48.8).
-import { logInfo, logWarn, newRunId, runLoop, withRunIdAsync, workerEnv } from "@quizzeira/worker-kit";
+import {
+  checkProviderReadiness,
+  logInfo,
+  logWarn,
+  newRunId,
+  runLoop,
+  withRunIdAsync,
+  workerEnv,
+} from "@quizzeira/worker-kit";
 import { contentEnv } from "./env.js";
 import { runEmbeddingPass } from "./embeddings/index.js";
 import { runGenerationPass } from "./generation/index.js";
@@ -80,4 +88,26 @@ logInfo("interval mode", {
   windows: workerEnv.windows || "(any)",
   timeZone: workerEnv.timeZone,
 });
+
+/**
+ * Startup readiness (§9): the generation pass is provider-dependent, so a
+ * missing/exhausted provider is loud in logs even though the pass itself
+ * already no-ops via `hasLlmProvider()` — this doesn't gate the loop, the
+ * per-call circuit breaker already does that.
+ */
+if (runsGenerationPass && contentEnv.generationEnabled) {
+  checkProviderReadiness().then((readiness) => {
+    if (!readiness.ready) {
+      logWarn("provider readiness check failed at startup", {
+        worker: NAME,
+        event: "readiness_unhealthy",
+        reason: readiness.reason,
+        providers: readiness.providers,
+      });
+    } else {
+      logInfo("provider readiness ok", { worker: NAME, providers: readiness.providers });
+    }
+  });
+}
+
 void runLoop(NAME, workerEnv.intervalMs, tick);

@@ -1,5 +1,6 @@
 import type { AttemptCorrectionInput, PendingReviewAttempt } from "@quizzeira/shared";
 import {
+  checkProviderReadiness,
   dmzPost,
   generateJson,
   hasLlmProvider,
@@ -98,4 +99,19 @@ async function tick(): Promise<void> {
 }
 
 logInfo("starting", { worker: NAME, intervalMs: workerEnv.intervalMs });
+
+/** Startup readiness (§9): grading is provider-dependent end to end. */
+checkProviderReadiness().then((readiness) => {
+  if (!readiness.ready) {
+    logWarn("provider readiness check failed at startup", {
+      worker: NAME,
+      event: "readiness_unhealthy",
+      reason: readiness.reason,
+      providers: readiness.providers,
+    });
+  } else {
+    logInfo("provider readiness ok", { worker: NAME, providers: readiness.providers });
+  }
+});
+
 void runLoop(NAME, workerEnv.intervalMs, tick);
