@@ -11,7 +11,20 @@ export type SocialPlatform =
   | "reddit"
   | "x"
   | "facebook"
+  | "instagram"
+  | "google"
+  | "youtube"
   | "unknown";
+
+/** Structured outcome so operators can tell idle/missing-keys from empty feeds. */
+export type AdapterStatusKind = "ok" | "disabled" | "error";
+
+export interface AdapterFetchResult {
+  posts: SocialPost[];
+  status: AdapterStatusKind;
+  /** e.g. "missing credentials: X_BEARER_TOKEN" */
+  detail?: string;
+}
 
 /** One public post / message from an adapter. */
 export interface SocialPost {
@@ -49,12 +62,29 @@ export interface ScoutHandoffResult {
   detail?: string;
 }
 
+export type FetchLike = (
+  input: string | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
 export interface SocialSourceAdapter {
   readonly id: string;
   readonly platform: SocialPlatform;
   /**
-   * Fetch recent public/consented posts. Must not attempt auth-wall bypass.
-   * Fixture / stubs return canned data; live clients wire official APIs later.
+   * Fetch recent public/consented posts via official APIs only.
+   * Missing credentials → status "disabled" and empty posts (service still boots).
    */
-  fetchRecent(): Promise<SocialPost[]>;
+  fetchRecent(): Promise<AdapterFetchResult>;
+}
+
+export function disabledResult(detail: string): AdapterFetchResult {
+  return { posts: [], status: "disabled", detail };
+}
+
+export function okResult(posts: SocialPost[]): AdapterFetchResult {
+  return { posts, status: "ok" };
+}
+
+export function errorResult(detail: string): AdapterFetchResult {
+  return { posts: [], status: "error", detail };
 }

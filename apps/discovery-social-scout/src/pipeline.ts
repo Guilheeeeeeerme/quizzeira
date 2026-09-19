@@ -3,14 +3,22 @@ import { resolveAdapters } from "./adapters/index.js";
 import { analyzePost } from "./detect.js";
 import { socialEnv } from "./env.js";
 import { handoffFile } from "./handoff.js";
-import type { ScoutHandoffResult, SocialSignal } from "./types.js";
+import type { AdapterFetchResult, ScoutHandoffResult, SocialSignal } from "./types.js";
 
 const NAME = "discovery-social-scout";
+
+export interface AdapterStatusRow {
+  id: string;
+  status: AdapterFetchResult["status"];
+  detail?: string;
+  posts: number;
+}
 
 export interface SocialPassSummary {
   posts: number;
   signals: number;
   filesProposed: number;
+  adapters: AdapterStatusRow[];
   handoffs: ScoutHandoffResult[];
 }
 
@@ -18,9 +26,17 @@ export interface SocialPassSummary {
 export async function runSocialScoutPass(): Promise<SocialPassSummary> {
   const adapters = resolveAdapters(socialEnv.adapters, socialEnv.fixtureMode);
   const posts = [];
+  const adapterRows: AdapterStatusRow[] = [];
+
   for (const adapter of adapters) {
-    const batch = await adapter.fetchRecent();
-    posts.push(...batch);
+    const result = await adapter.fetchRecent();
+    adapterRows.push({
+      id: adapter.id,
+      status: result.status,
+      detail: result.detail,
+      posts: result.posts.length,
+    });
+    posts.push(...result.posts);
   }
   const limited = posts.slice(0, socialEnv.maxPostsPerPass);
 
@@ -48,13 +64,14 @@ export async function runSocialScoutPass(): Promise<SocialPassSummary> {
     posts: limited.length,
     signals: signals.length,
     filesProposed,
-    adapters: adapters.map((a) => a.id),
+    adapters: adapterRows,
   });
 
   return {
     posts: limited.length,
     signals: signals.length,
     filesProposed,
+    adapters: adapterRows,
     handoffs,
   };
 }

@@ -1,18 +1,19 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SocialPost, SocialSourceAdapter } from "../types.js";
+import { okResult, type SocialPost, type SocialSourceAdapter } from "../types.js";
 
 /** Deterministic adapter for CI / local boot — no network. */
 export function createFixtureAdapter(): SocialSourceAdapter {
   return {
     id: "fixture",
     platform: "fixture",
-    async fetchRecent(): Promise<SocialPost[]> {
+    async fetchRecent() {
       try {
         const path = join(__dirname, "../../fixtures/posts.json");
-        return JSON.parse(readFileSync(path, "utf8")) as SocialPost[];
+        const posts = JSON.parse(readFileSync(path, "utf8")) as SocialPost[];
+        return okResult(posts);
       } catch {
-        return INLINE_FIXTURE;
+        return okResult(INLINE_FIXTURE);
       }
     },
   };
