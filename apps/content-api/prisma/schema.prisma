@@ -87,6 +87,14 @@ enum GenerationRunStatus {
   failed
 }
 
+enum JobStatus {
+  queued
+  leased
+  deferred
+  done
+  dead
+}
+
 /// A source PDF/HTML pulled from Discovery's Document store. `discoveryArtifactId`
 /// is the join key back to quizzeira_discovery — the databases stay separate.
 model Document {
@@ -452,6 +460,35 @@ model QualityReview {
 
   @@index([itemId, createdAt])
   @@index([decision, createdAt])
+}
+
+/// Generic durable job lease table (§5). Every async boundary in content-api
+/// enqueues here instead of polling entity tables directly. Workers claim
+/// rows atomically with `FOR UPDATE SKIP LOCKED`; a crashed lease simply
+/// expires and the next claim picks the row back up — no separate recovery
+/// path. `dedupeKey` makes enqueue idempotent per (kind, entity, cause).
+model Job {
+  id             String    @id @default(cuid())
+  kind           String
+  entityId       String
+  dedupeKey      String    @unique
+  status         JobStatus @default(queued)
+  priority       Int       @default(0)
+  availableAt    DateTime  @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  lastErrorCode  String?
+  lastError      String?
+  correlationId  String?
+  causationId    String?
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  @@index([kind, status, availableAt])
+  @@index([status, leaseExpiresAt])
 }
 
 /// Hourly stage funnel counters (§31.1) — admin dashboards without a log backend.
