@@ -79,6 +79,8 @@ async function geminiRequest(input: ProviderCompleteInput): Promise<LlmCompletio
     headers: {
       "content-type": "application/json",
       "x-goog-api-key": workerEnv.geminiApiKey,
+      // AI Gateway metadata-only logging (§9.1): never collect payloads.
+      "cf-aig-collect-log-payload": "false",
     },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
