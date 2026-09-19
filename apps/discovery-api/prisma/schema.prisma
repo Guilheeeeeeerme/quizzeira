@@ -156,6 +156,31 @@ model SourceProposal {
   @@index([status])
 }
 
+/// Evidence-bearing candidate from autonomous scouting (§6.1). Candidates are
+/// scored deterministically and quarantined unless policy auto-activates them;
+/// the crawler can never widen its own reach by itself.
+model SourceCandidate {
+  id           String   @id @default(cuid())
+  domain       String
+  name         String
+  startUrls    Json
+  url          String?
+  notes        String?
+  score        Float
+  classification String @default("unknown")
+  signals      Json
+  decision     String   @default("observe")
+  status       String   @default("observed")
+  observedAt   DateTime @default(now())
+  decidedAt    DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, score])
+  @@index([domain])
+}
+
 model Exam {
   id              String     @id
   examSlug        String
