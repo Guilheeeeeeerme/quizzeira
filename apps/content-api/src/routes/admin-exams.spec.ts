@@ -70,6 +70,16 @@ describe("prune and retention never destroy referenced data", () => {
     assert.doesNotMatch(TRIAGE, /role = 'specification'|role = 'evidence'|role = 'unknown'/);
   });
 
+  it("terminal-failure regex uses Postgres word boundaries, not JS \\b", () => {
+    assert.match(TRIAGE, /TERMINAL_FAIL_SQL =/);
+    assert.doesNotMatch(TRIAGE, /\\b\|/);
+    assert.match(TRIAGE, /\\\\y/);
+  });
+
+  it("prune leaves a shared object alone when any other live holder still has bytes", () => {
+    assert.match(TRIAGE, /if \(prunedIds\.has\(h\.id\) \|\| h\.bytesPurgedAt\) continue;\s*keyBlocked\.add/);
+  });
+
   it("retention only deletes a content-addressed key when every holder is terminal", () => {
     assert.match(RETENTION, /storageKey: \{ in: keys \}/);
     assert.match(RETENTION, /!\(d\.status === "extracted" \|\| d\.status === "failed"\)/);

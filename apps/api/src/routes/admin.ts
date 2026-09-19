@@ -203,14 +203,17 @@ export async function adminRoutes(app: FastifyInstance) {
       const byUrl = new Map(
         documents.items.filter((d) => d.sourceUrl).map((d) => [d.sourceUrl!, d]),
       );
+      type ArtifactRow = (typeof artifacts.items)[number];
+      type DocumentRow = (typeof documents.items)[number];
       const used = new Set<string>();
-      const files = artifacts.items.map((a) => {
-        const doc = byArtifact.get(a.id) ?? (a.url ? byUrl.get(a.url) : undefined) ?? null;
-        if (doc) used.add(doc.id);
-        return { artifact: a, document: doc };
-      });
+      const files: Array<{ artifact: ArtifactRow | null; document: DocumentRow | null }> =
+        artifacts.items.map((a) => {
+          const doc = byArtifact.get(a.id) ?? (a.url ? byUrl.get(a.url) : undefined) ?? null;
+          if (doc) used.add(doc.id);
+          return { artifact: a, document: doc };
+        });
       for (const doc of documents.items) {
-        if (!used.has(doc.id)) files.push({ artifact: null as never, document: doc });
+        if (!used.has(doc.id)) files.push({ artifact: null, document: doc });
       }
       return { exam: artifacts.exam, files };
     } catch (err) {

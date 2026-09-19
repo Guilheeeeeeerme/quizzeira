@@ -16,8 +16,10 @@ const ADMIN_ROLE_METHOD = "admin_override";
 const LOW_CONFIDENCE = 0.55;
 /** Files younger than this are left alone — the process pass may still act. */
 const PRUNE_MIN_AGE_DAYS = 2;
-/** Fail reasons that never resolve on retry. */
-const TERMINAL_FAIL = /^(too_short|duplicate_document:|skipped: vlibras|unsupported_format|fetch 40[34]\b|fetch 410\b)/;
+/** Fail reasons that never resolve on retry. Postgres ARE syntax (`\y` is the
+ * word boundary; `\b` would be a backspace there). */
+const TERMINAL_FAIL_SQL =
+  "^(too_short|duplicate_document:|skipped: vlibras|unsupported_format|fetch 40[34]\\y|fetch 410\\y)";
 
 export type PruneReason = "administrative" | "terminal_failure" | "no_usable_content";
 
@@ -73,7 +75,7 @@ export async function registerInternalTriageRoutes(app: FastifyInstance): Promis
           SELECT d.id, d."storageKey", d."discoveryArtifactId", d."failReason",
             CASE
               WHEN d.role = 'administrative' AND d.status = 'extracted' THEN 'administrative'
-              WHEN d.status = 'failed' AND d."failReason" ~ ${TERMINAL_FAIL.source} THEN 'terminal_failure'
+              WHEN d.status = 'failed' AND d."failReason" ~ ${TERMINAL_FAIL_SQL} THEN 'terminal_failure'
               WHEN d.role = 'knowledge' AND d.status = 'extracted'
                 AND NOT EXISTS (
                   SELECT 1 FROM "Chunk" c WHERE c."documentId" = d.id
@@ -100,8 +102,9 @@ export async function registerInternalTriageRoutes(app: FastifyInstance): Promis
 
       if (rows.length === 0) return { pruned: [], dryRun };
 
-      // Content-addressed keys can be shared; only delete an object when no
-      // live (non-pruned, non-terminal) document still needs it.
+      // Content-addressed keys can be shared; only delete an object when every
+      // other holder is already purged or is being pruned in this same batch.
+      // Anything else is left to the retention pass and its grace period.
       const keys = Array.from(new Set(rows.map((r) => r.storageKey).filter((k): k is string => Boolean(k))));
       const prunedIds = new Set(rows.map((r) => r.id));
       const holders = keys.length
@@ -113,7 +116,7 @@ export async function registerInternalTriageRoutes(app: FastifyInstance): Promis
       const keyBlocked = new Set<string>();
       for (const h of holders) {
         if (prunedIds.has(h.id) || h.bytesPurgedAt) continue;
-        if (h.status === "pending" || h.status === "extracting") keyBlocked.add(h.storageKey!);
+        keyBlocked.add(h.storageKey!);
       }
 
       const pruned: Array<{ id: string; reason: PruneReason; artifactId: string | null; bytesDeleted: boolean }> = [];
