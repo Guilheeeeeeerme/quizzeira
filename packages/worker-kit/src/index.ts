@@ -4,6 +4,7 @@ export {
   generateJson,
   requireJsonShape,
   hasLlmProvider,
+  configuredProviderNames,
   consumeBudget,
   resetBudgetForTests,
   type GenerateJsonOptions,
@@ -33,5 +34,10 @@ export {
   neutralizeUntrusted,
 } from "./guardrails";
 export { rankFor, rankForTier, type ModelTier } from "./model-rank";
+export {
+  checkProviderReadiness,
+  type ProviderReadiness,
+  type ProviderCircuitStatus,
+} from "./readiness";
 export { fixtureProvider, createFixtureProvider, fixturePayloadKey, type FixtureTurn } from "./providers/fixture";
 export { currentRunId, withRunId, withRunIdAsync, newRunId } from "./run-id";
