@@ -7,9 +7,15 @@ import { recordStageMetric } from "../../lib/stage-metrics";
 export async function registerInternalQualityRoutes(app: FastifyInstance): Promise<void> {
   /** Drafts awaiting an Eval verdict; content-quality drains this. */
   app.get("/internal/question-items/pending-review", async (request) => {
-    const q = request.query as { limit?: string };
+    const q = request.query as { limit?: string; excludeIds?: string };
+    // Deferred items (e.g. judge provider outage) are excluded so one blocked
+    // draft can never starve the rest of the queue (§8.2).
+    const excludeIds = (q.excludeIds ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
     const items = await prisma.questionItem.findMany({
-      where: { status: "draft" },
+      where: { status: "draft", ...(excludeIds.length ? { id: { notIn: excludeIds } } : {}) },
       orderBy: { createdAt: "asc" },
       take: Math.min(50, Number(q.limit || 10)),
     });
@@ -136,5 +142,52 @@ export async function registerInternalQualityRoutes(app: FastifyInstance): Promi
   app.get("/internal/metrics/pipeline", async (request) => {
     const q = request.query as { hours?: string };
     return computePipelineMetrics(prisma, { hours: Number(q.hours || 24) });
+  });
+
+  /**
+   * Revalidation (§8.3): quarantine a published item whose evidence is gone
+   * or changed. Never rewrites the published content — applicability rows get
+   * state=revoked/quarantined and the question leaves circulation by moving
+   * to needs_review with an evidence reason. A replacement, when generated,
+   * becomes a new question and remaps fresh applicability.
+   */
+  app.post<{
+    Body: { itemId: string; reason?: string; validThrough?: string | null; state?: string };
+  }>("/internal/question-items/quarantine", async (request) => {
+    const body = request.body;
+    if (!body?.itemId) {
+      throw Object.assign(new Error("itemId is required"), { statusCode: 400 });
+    }
+    const reason = String(body.reason || "evidence_missing_or_changed").slice(0, 200);
+    const state = body.state === "revoked" ? "revoked" : "quarantined";
+    const validThrough = body.validThrough ? new Date(body.validThrough) : null;
+    const item = await prisma.questionItem.update({
+      where: { id: body.itemId },
+      data: {
+        status: "needs_review",
+        failReasons: [reason],
+        publishedAt: null,
+      },
+    });
+    const applicabilities = await prisma.questionApplicability.updateMany({
+      where: { questionItemId: body.itemId, state: "active" },
+      data: {
+        state,
+        validThrough: validThrough ?? new Date(),
+        lastValidatedAt: new Date(),
+      },
+    });
+    await prisma.qualityReview.create({
+      data: {
+        itemId: body.itemId,
+        stage: "revalidation",
+        decision: state,
+        score: 0,
+        notes: reason,
+        reasons: [reason],
+        model: null,
+      },
+    });
+    return { item, applicabilityRows: applicabilities.count };
   });
 }

@@ -107,6 +107,7 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
         applicabilities: {
           some: {
             state: "active",
+            OR: [{ validThrough: null }, { validThrough: { gt: new Date() } }],
             ...(leafIds.length > 0
               ? { syllabusNodeId: { in: leafIds } }
               : { syllabusNode: { syllabus: { examSlug, status: "active" } } }),

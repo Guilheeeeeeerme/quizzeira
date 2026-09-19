@@ -10,6 +10,29 @@ import { validateStructure } from "./structural.js";
 
 const NAME = "content-quality";
 
+/**
+ * Deferred drafts awaiting the judge (§8.2): a provider outage parks the item
+ * with exponential backoff instead of re-selecting the same oldest draft on
+ * every pass and blocking every later draft behind it.
+ */
+const deferredJudge = new Map<string, { until: number; attempt: number }>();
+
+function deferJudgeFor(itemId: string, prior: number | undefined): void {
+  const attempt = Math.min(6, (prior ?? 0) + 1);
+  const waitMs = Math.min(30 * 60_000, Number(60_000 * 2 ** attempt));
+  deferredJudge.set(itemId, { until: Date.now() + waitMs, attempt });
+  logWarn("judge deferred next attempt", {
+    worker: NAME,
+    itemId,
+    attempt,
+    retryInMs: waitMs,
+  });
+}
+
+function reclaimJudgeFor(itemId: string): void {
+  deferredJudge.delete(itemId);
+}
+
 interface PendingItem {
   id: string;
   examSlug: string;
@@ -118,8 +141,17 @@ export async function runEvalPass(): Promise<EvalPassResult> {
   const result: EvalPassResult = { reviewed: 0, published: 0, failed: 0, needsReview: 0 };
   let judgeSkipped = 0;
 
+  // Free deferrals whose backoff has elapsed, then exclude still-parked ones.
+  const now = Date.now();
+  for (const [itemId, rec] of deferredJudge) {
+    if (rec.until <= now) deferredJudge.delete(itemId);
+  }
+  const excludeIds = [...deferredJudge.keys()];
+  const excludeQuery =
+    excludeIds.length > 0 ? `&excludeIds=${encodeURIComponent(excludeIds.join(","))}` : "";
+
   const { items } = await contentApi.get<{ items: PendingItem[] }>(
-    `/internal/question-items/pending-review?limit=${qualityEnv.itemsPerPass}`,
+    `/internal/question-items/pending-review?limit=${qualityEnv.itemsPerPass}${excludeQuery}`,
   );
 
   // Stems published earlier in this same pass, per leaf: two near-identical
@@ -193,12 +225,14 @@ export async function runEvalPass(): Promise<EvalPassResult> {
       } catch (err) {
         const code = llmErrorCode(err);
         logWarn("judge unavailable", { worker: NAME, itemId: item.id, code });
-        // The item is fine; the provider is not. Leave it in draft so the next
-        // pass judges it, and stop the pass when the budget is gone.
-        if (code === "llm_budget_exceeded") break;
+        // The item is fine; the provider is not. Defer THIS draft with
+        // exponential backoff so the rest of the queue keeps moving (§8.2).
+        deferJudgeFor(item.id, deferredJudge.get(item.id)?.attempt);
         judgeSkipped += 1;
+        if (code === "llm_budget_exceeded") break;
         continue;
       }
+      reclaimJudgeFor(item.id);
     }
 
     let verdict = decide({
