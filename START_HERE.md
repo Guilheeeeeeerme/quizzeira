@@ -18,6 +18,7 @@
 | 5 | `53250eb` | judge deferral w/ exponential backoff (`deferredJudge` map + `pending-review?excludeIds=`), `/internal/question-items/quarantine` (revokes applicability, never rewrites content), sampling honours `validThrough` | `npm run test:quality` (green) + typecheck |
 | 6 | `84f0064` | `edge/edge-watchdog`: Workers Free cron `*/5`, KV state, metadata-only serial probes, state-change-only webhook alerts, local type shims, `tsc --noEmit` clean | `cd edge/edge-watchdog && npx tsc --noEmit -p tsconfig.json` |
 | 7 | `d3d1d3b` | `cf-aig-collect-log-payload: false` on Gemini+OpenAI calls; `docs/quizzeira-pipeline-runbook.md` | grep for header string |
+| 8 | `18d081a` | prod readiness gate (§9): `checkProviderReadiness()` in worker-kit (`readiness.ts` + `configuredProviderNames()`); startup readiness log in content-worker (generation pass only), content-quality, quiz-corrector; `providerReadiness` surfaced on content-api `/admin/health` (same Redis circuit state) | worker-kit/content-worker/content-quality/quiz-corrector `tsc --noEmit` clean; `npm run test:quality` 107/107; content-api test 3/3 |
 
 Repo note: worktree commits were cherry-picked into `/home/ferre/Code/quizzeira` (origin).
 Worktree at `/home/ferre/Code/.codex-worktrees/quizzeira-autonomy` contains the originals (`codex/quizzeira-autonomy`) — future work should be committed on the PR branch in the main checkout to avoid re-sync.
@@ -33,18 +34,19 @@ Pre-existing failures (identical on baseline, pre-change) — do not investigate
 - 4 content-worker golden/role-classification failures (`EDT-002`, `KNW-002`, fuzz §41.6, edital-estadual-tce leaf coverage)
 - 1 worker-kit `fixture LLM provider > yields a draftable MCQ` (unreachable `redis://redis:6379` from `.env` in test env)
 
+**Environment gotcha (this host, 2026-09-19):** `packages/shared/dist/`, `apps/discovery-api/src/generated/prisma/`, and `apps/content-api/src/generated/prisma/` had root-owned files (leftover from a `docker compose` build run as root), blocking `npm run typecheck` / `npm run db:generate` with `EACCES`. Removing `packages/shared/dist` worked (plain user owned the dir); the two `generated/prisma` dirs are root-owned themselves and need `sudo chown -R $USER` before `db:generate` will work — didn't do that unprompted. Until fixed, verify changed packages in isolation: `cd <pkg> && npx tsc --noEmit -p tsconfig.json`. The 173 content-api and ~60 discovery-api repo-wide typecheck errors you'll see are this stale-client issue, not real regressions — confirmed via `git stash` against baseline.
+
 ## Next (pick topmost unfinished)
 
-1. [ ] **prod readiness gate (§9)** — provider-dependent workers must fail readiness when no configured provider passes a capability probe; APIs and deterministic workers stay healthy. Add `circuitHealth`/`hasLlmProvider`-based readiness check to worker startup + admin health endpoint. Files: `packages/worker-kit` (new `readiness.ts` or extend `circuit.ts`), `apps/content-worker/src/index.ts`, `apps/content-quality`.
-2. [ ] **durable job lease layer** — generic typed Postgres job table per plane (fields per §5: kind, dedupeKey, status queued/leased/deferred/done/dead, leaseOwner/leaseExpiresAt, attempts, lastErrorCode, correlation/causation). Workers claim via `FOR UPDATE SKIP LOCKED`; add to content-api first, then discovery-api. Contentworker passes convert to claims.
-3. [ ] **weighted fair scheduling** (§9): one exam/provider/poison job can't consume the queue; queue depth/age into `StageMetric`.
-4. [ ] **backfill wiring**: add `/internal/canonical/backfill` invocation to a migration-ish script or admin-triggered CI step; dual-read parity assertion before switching fully.
-5. [ ] **shadow metrics report**: after running compose with `shadow` profile, compare per-stage `StageMetric` of split vs monolith, then flip default profile (§12 slice 2 exit).
-6. [ ] **scouting autonomous enablement** (§12 slice 4 exit): compare observe-only decisions vs admin review for a full cycle → then set `DISCOVERY_SCOUT_AUTO_ACTIVATE=true` in infra prod only with the wave-2 backoff bands (1d/3d/7d/30d probes; source suspend; blocklist expiry).
-7. [ ] **canary (§12 verification)**: one topic, one exam, concurrency 1; acceptance per spec §14 (24 h stable memory, no overlap, correct backoff, full log correlation, bounded provider calls, one published/rejected outcome).
-8. [ ] **dashboard + alerts wiring (§10.3)**: Grafana overview + per-correlation drill-down; alerts listed in runbook table; AI Gateway account config (payload logging disabled); workers-AI golden-set benchmark only if someone opts in to that adapter.
-9. [ ] **Edge watchdog deploy**: take `wrangler.toml` out of `replace-me` KV id, set secrets, add synthetic public-health failure fixture for the "one state-change alert" acceptance criterion.
-10. [ ] **PR graduation**: when canary exits clean, drop draft → ready for review; then land and deploy per infra repo (not this repo).
+1. [ ] **durable job lease layer** — generic typed Postgres job table per plane (fields per §5: kind, dedupeKey, status queued/leased/deferred/done/dead, leaseOwner/leaseExpiresAt, attempts, lastErrorCode, correlation/causation). Workers claim via `FOR UPDATE SKIP LOCKED`; add to content-api first, then discovery-api. Contentworker passes convert to claims.
+2. [ ] **weighted fair scheduling** (§9): one exam/provider/poison job can't consume the queue; queue depth/age into `StageMetric`.
+3. [ ] **backfill wiring**: add `/internal/canonical/backfill` invocation to a migration-ish script or admin-triggered CI step; dual-read parity assertion before switching fully.
+4. [ ] **shadow metrics report**: after running compose with `shadow` profile, compare per-stage `StageMetric` of split vs monolith, then flip default profile (§12 slice 2 exit).
+5. [ ] **scouting autonomous enablement** (§12 slice 4 exit): compare observe-only decisions vs admin review for a full cycle → then set `DISCOVERY_SCOUT_AUTO_ACTIVATE=true` in infra prod only with the wave-2 backoff bands (1d/3d/7d/30d probes; source suspend; blocklist expiry).
+6. [ ] **canary (§12 verification)**: one topic, one exam, concurrency 1; acceptance per spec §14 (24 h stable memory, no overlap, correct backoff, full log correlation, bounded provider calls, one published/rejected outcome).
+7. [ ] **dashboard + alerts wiring (§10.3)**: Grafana overview + per-correlation drill-down; alerts listed in runbook table; AI Gateway account config (payload logging disabled); workers-AI golden-set benchmark only if someone opts in to that adapter.
+8. [ ] **Edge watchdog deploy**: take `wrangler.toml` out of `replace-me` KV id, set secrets, add synthetic public-health failure fixture for the "one state-change alert" acceptance criterion.
+9. [ ] **PR graduation**: when canary exits clean, drop draft → ready for review; then land and deploy per infra repo (not this repo).
 
 ## Working conventions
 
