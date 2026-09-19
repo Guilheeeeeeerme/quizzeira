@@ -54,8 +54,8 @@ Date-driven rules (pure `deriveNextPhase`):
 | Step | When | Effect |
 | --- | --- | --- |
 | Soft archive | `examDate + softArchiveGraceDays` (default 30) | `lifecyclePhase=archived`, `archivedAt=now`; stop catalog refresh |
-| Hard delete | `archivedAt + hardDeleteGraceDays` (default 90) | Delete Artifact rows + MinIO objects + TopicQuery for that exam |
-| Tombstone | optional `DISCOVERY_LIFECYCLE_DROP_TOMBSTONE` | Delete Exam row; default **keep** tombstone |
+| Hard delete | `archivedAt + hardDeleteGraceDays` (default 90) | Delete Artifact rows + TopicQuery for that exam. MinIO objects are content-addressed and shared: an object is deleted **only** if no artifact of another exam holds the key **and** the artifact was never imported into Content (`published=false`). Imported bytes belong to Content's retention pass (`Document.bytesPurgedAt`). A failed object delete keeps its Artifact row for retry. |
+| Tombstone | optional `DISCOVERY_LIFECYCLE_DROP_TOMBSTONE` | Delete Exam row; default **keep** tombstone. Content/Study reference exams by `examSlug` without FK, so dropping it orphans their rows for that slug; refused (409) while artifacts remain. |
 
 Never Study/Content.
 

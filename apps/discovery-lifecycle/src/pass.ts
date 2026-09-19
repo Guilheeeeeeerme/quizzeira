@@ -157,7 +157,7 @@ async function processExam(exam: LifecycleExamDto, now: Date): Promise<void> {
 
 /** One lifecycle pass over a Discovery exam batch. */
 export async function runLifecyclePass(now = new Date()): Promise<{ scanned: number }> {
-  const items = await listLifecycleExams(lifecycleEnv.batchSize);
+  const items = await listLifecycleExams(lifecycleEnv.batchSize, lifecycleEnv.hardDeleteGraceDays);
   for (const exam of items) {
     try {
       await processExam(exam, now);

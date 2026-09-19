@@ -32,9 +32,12 @@ export interface PurgeRequest {
   deleteExamTombstone: boolean;
 }
 
-export async function listLifecycleExams(limit: number): Promise<LifecycleExamDto[]> {
+export async function listLifecycleExams(
+  limit: number,
+  hardDeleteGraceDays: number,
+): Promise<LifecycleExamDto[]> {
   const res = await dmzGet<{ items: LifecycleExamDto[] }>(
-    `/internal/lifecycle/exams?limit=${limit}`,
+    `/internal/lifecycle/exams?limit=${limit}&hardDeleteGraceDays=${hardDeleteGraceDays}`,
   );
   return res.items ?? [];
 }

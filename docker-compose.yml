@@ -294,7 +294,9 @@ services:
       - dmz
       - private
 
+  # Opt-in locally: `docker compose --profile lifecycle up discovery-lifecycle`.
   discovery-lifecycle:
+    profiles: ["lifecycle"]
     build:
       context: .
       dockerfile: apps/discovery-lifecycle/Dockerfile.dev
