@@ -97,6 +97,33 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
       rows = [...rows, ...more];
     }
 
+    // Dual-read (§12 canonical bank): fill remaining slots through active
+    // applicability mappings — a question published under one mapping serves
+    // any compatible syllabus node, exam-independent.
+    if (rows.length < limit) {
+      const seen = new Set([...exclude, ...rows.map((r) => r.id)]);
+      const applicabilityWhere = {
+        status: "published" as const,
+        applicabilities: {
+          some: {
+            state: "active",
+            OR: [{ validThrough: null }, { validThrough: { gt: new Date() } }],
+            ...(leafIds.length > 0
+              ? { syllabusNodeId: { in: leafIds } }
+              : { syllabusNode: { syllabus: { examSlug, status: "active" } } }),
+          },
+        },
+        ...(rows.length ? { id: { notIn: [...exclude, ...rows.map((r) => r.id)] } } : {}),
+      };
+      const mapped = await sampleRows(applicabilityWhere, limit - rows.length);
+      for (const row of mapped) {
+        if (rows.length >= limit) break;
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        rows.push(row);
+      }
+    }
+
     rows = applyTranscriptionMixCap(rows, transcriptionCap);
 
     return {

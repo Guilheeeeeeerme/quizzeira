@@ -3,6 +3,7 @@
 // Reached through the study API's /admin/content/* proxy. Everything an admin
 // can do here is a decision the automated Eval stage deliberately deferred.
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { checkProviderReadiness } from "@quizzeira/worker-kit";
 import { env } from "../lib/env";
 import { computePipelineMetrics } from "../lib/metrics";
 import { prisma } from "../lib/prisma";
@@ -111,7 +112,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/admin/health", async () => {
-    const [documents, chunks, embedded, grouped, lastRun] = await Promise.all([
+    const [documents, chunks, embedded, grouped, lastRun, providerReadiness] = await Promise.all([
       prisma.document.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.chunk.count(),
       prisma.$queryRaw<Array<{ count: bigint }>>`
@@ -119,6 +120,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       `,
       prisma.questionItem.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.generationRun.findFirst({ orderBy: { startedAt: "desc" } }),
+      // Same Redis circuit-state keys the generation/judge workers write to
+      // (§9 readiness) — reused here rather than re-derived per process.
+      checkProviderReadiness(),
     ]);
 
     const countBy = (rows: Array<{ status: string; _count: { _all: number } }>, key: string) =>
@@ -132,6 +136,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         failed: countBy(documents as never, "failed"),
       },
       chunks: { total: chunks, embedded: Number(embedded[0]?.count ?? 0) },
+      providerReadiness,
       questionItems: {
         draft: countBy(grouped as never, "draft"),
         needsReview: countBy(grouped as never, "needs_review"),

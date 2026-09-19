@@ -262,7 +262,10 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
         return true;
       });
 
-    await prisma.$transaction(async (tx) => {
+    // Large document outputs exceed Prisma's default interactive-transaction
+    // timeout; bound explicitly (§11) so partial writes never surface.
+    await prisma.$transaction(
+      async (tx) => {
       await tx.chunk.deleteMany({ where: { documentId } });
       await tx.section.deleteMany({ where: { documentId } });
 
@@ -311,7 +314,12 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
           failReason: null,
         },
       });
-    });
+      },
+      {
+        timeout: 120_000,
+        maxWait: 10_000,
+      },
+    );
 
     return { sectionCount: sections.length, chunkCount: chunks.length };
   });

@@ -87,6 +87,14 @@ enum GenerationRunStatus {
   failed
 }
 
+enum JobStatus {
+  queued
+  leased
+  deferred
+  done
+  dead
+}
+
 /// A source PDF/HTML pulled from Discovery's Document store. `discoveryArtifactId`
 /// is the join key back to quizzeira_discovery — the databases stay separate.
 model Document {
@@ -206,7 +214,7 @@ model Position {
 model SyllabusNode {
   id                 String   @id @default(cuid())
   syllabusId         String
-  syllabus           Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+  syllabus            Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
   parentId           String?
   depth              Int
   ordinal            Int
@@ -222,9 +230,44 @@ model SyllabusNode {
   status             String   @default("active")
   extraction         Json
   embedding          Unsupported("vector(768)")?
+  topicMaps          SyllabusTopicMap[]
+  applicabilities    QuestionApplicability[]
 
   @@index([syllabusId, depth])
   @@index([canonicalKey])
+}
+
+/// Exam-independent curriculum identity (§7). SyllabusTopicMap links each
+/// exam's SyllabusNode to exactly one durable topic; questions and knowledge
+/// attach to the topic so multiple compatible exams reuse them.
+model CanonicalTopic {
+  id          String             @id @default(cuid())
+  key         String             @unique
+  subject     String
+  subjectSlug String
+  title       String
+  status      String   @default("active")
+  createdAt   DateTime           @default(now())
+  nodeMaps    SyllabusTopicMap[]
+  questionItems QuestionItem[]
+  knowledgeUnits KnowledgeUnit[]
+  applicabilities QuestionApplicability[]
+
+  @@index([subjectSlug, status])
+}
+
+/// Many-to-many syllabus-node ↔ canonical-topic mapping with provenance.
+model SyllabusTopicMap {
+  syllabusNodeId  String
+  syllabusNode    SyllabusNode  @relation(fields: [syllabusNodeId], references: [id], onDelete: Cascade)
+  canonicalTopicId String
+  canonicalTopic  CanonicalTopic @relation(fields: [canonicalTopicId], references: [id], onDelete: Cascade)
+  method          String        @default("canonicalKey")
+  confidence      Float         @default(1)
+  createdAt       DateTime      @default(now())
+
+  @@id([syllabusNodeId, canonicalTopicId])
+  @@index([canonicalTopicId])
 }
 
 model ChunkSyllabusMap {
@@ -254,10 +297,35 @@ model KnowledgeUnit {
   mergedIntoId   String?
   extraction     Json
   embedding      Unsupported("vector(768)")?
+  canonicalTopicId String?
+  canonicalTopic   CanonicalTopic? @relation(fields: [canonicalTopicId], references: [id])
   createdAt      DateTime                     @default(now())
 
   @@index([syllabusNodeId, status])
   @@index([canonicalKey, status])
+}
+
+/// Exam-independent applicability: one published question may serve any
+/// compatible syllabus node through its canonical topic (§7).
+model QuestionApplicability {
+  id              String          @id @default(cuid())
+  questionItemId  String
+  questionItem    QuestionItem    @relation(fields: [questionItemId], references: [id], onDelete: Cascade)
+  syllabusNodeId  String
+  syllabusNode    SyllabusNode    @relation(fields: [syllabusNodeId], references: [id], onDelete: Cascade)
+  canonicalTopicId String?
+  canonicalTopic  CanonicalTopic? @relation(fields: [canonicalTopicId], references: [id])
+  matchConfidence Float           @default(1)
+  mappingMethod   String          @default("canonicalKey")
+  constraints     Json            @default("{}")
+  state           String          @default("active")
+  validThrough    DateTime?
+  lastValidatedAt DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([questionItemId, syllabusNodeId])
+  @@index([syllabusNodeId, state])
 }
 
 model PreviousQuestion {
@@ -340,6 +408,9 @@ model QuestionItem {
   updatedAt           DateTime           @updatedAt
   publishedAt         DateTime?
   reviews             QualityReview[]
+  canonicalTopicId    String?
+  canonicalTopic      CanonicalTopic?    @relation(fields: [canonicalTopicId], references: [id])
+  applicabilities     QuestionApplicability[]
 
   @@index([status, examSlug])
   @@index([examSlug, subjectSlug, status])
@@ -391,6 +462,35 @@ model QualityReview {
   @@index([decision, createdAt])
 }
 
+/// Generic durable job lease table (§5). Every async boundary in content-api
+/// enqueues here instead of polling entity tables directly. Workers claim
+/// rows atomically with `FOR UPDATE SKIP LOCKED`; a crashed lease simply
+/// expires and the next claim picks the row back up — no separate recovery
+/// path. `dedupeKey` makes enqueue idempotent per (kind, entity, cause).
+model Job {
+  id             String    @id @default(cuid())
+  kind           String
+  entityId       String
+  dedupeKey      String    @unique
+  status         JobStatus @default(queued)
+  priority       Int       @default(0)
+  availableAt    DateTime  @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  lastErrorCode  String?
+  lastError      String?
+  correlationId  String?
+  causationId    String?
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  @@index([kind, status, availableAt])
+  @@index([status, leaseExpiresAt])
+}
+
 /// Hourly stage funnel counters (§31.1) — admin dashboards without a log backend.
 model StageMetric {
   id            String   @id @default(cuid())
@@ -398,12 +498,17 @@ model StageMetric {
   stage         String
   decision      String
   reason        String   @default("")
+  /// Emitting SERVICE_NAME (§12 slice 2: shadow-profile comparison). Empty
+  /// string for content-api's own direct emitters (a single process, so no
+  /// split to distinguish); content-worker's shadow-profile instances
+  /// (documents/embeddings/generation) each set their own distinct value.
+  service       String   @default("")
   count         Int      @default(0)
   tokensIn      Int      @default(0)
   tokensOut     Int      @default(0)
   durationMsSum Int      @default(0)
   updatedAt     DateTime @updatedAt
 
-  @@unique([hourBucket, stage, decision, reason])
+  @@unique([hourBucket, stage, decision, reason, service])
   @@index([hourBucket, stage])
 }

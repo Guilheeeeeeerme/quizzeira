@@ -414,6 +414,122 @@ services:
       - dmz
       - private
 
+  # Worker-extraction profiles (§12 slice 2): same image as content-worker,
+  # separate failure domain per resource profile. Opt-in shadow services —
+  # enable alongside the monolith (`docker compose up content-worker-embedded
+  # content-worker-generation`) to compare metrics before switching.
+  content-worker-documents:
+    build:
+      context: .
+      dockerfile: apps/content-worker/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CONTENT_WORKER_PROFILE: documents
+      DISCOVERY_API_URL: http://discovery-api:3010
+      CONTENT_API_URL: http://content-api:3020
+      INTERNAL_API_KEY_DISCOVERY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
+      WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
+      LLM_USE_HEADROOM: "false"
+      DOC_PROCESSOR_URL: http://doc-processor:3030
+      SERVICE_NAME: quizzeira-contentworker-documents
+    volumes:
+      - ./apps/content-worker:/app/apps/content-worker
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/content-worker/node_modules
+    depends_on:
+      content-api:
+        condition: service_healthy
+      discovery-api:
+        condition: service_healthy
+      doc-processor:
+        condition: service_healthy
+    profiles: ["shadow"]
+    networks:
+      - dmz
+      - private
+
+  content-worker-embeddings:
+    build:
+      context: .
+      dockerfile: apps/content-worker/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CONTENT_WORKER_PROFILE: embeddings
+      CONTENT_API_URL: http://content-api:3020
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
+      WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
+      LLM_USE_HEADROOM: "false"
+      SERVICE_NAME: quizzeira-contentworker-embeddings
+    volumes:
+      - ./apps/content-worker:/app/apps/content-worker
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/content-worker/node_modules
+    depends_on:
+      content-api:
+        condition: service_healthy
+    profiles: ["shadow"]
+    networks:
+      - dmz
+      - private
+
+  content-worker-generation:
+    build:
+      context: .
+      dockerfile: apps/content-worker/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CONTENT_WORKER_PROFILE: generation
+      CONTENT_API_URL: http://content-api:3020
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
+      WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://redis:6379
+      LLM_USE_HEADROOM: "false"
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_BASE_URL: https://generativelanguage.googleapis.com
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
+      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
+      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
+      SERVICE_NAME: quizzeira-contentworker-generation
+    volumes:
+      - ./apps/content-worker:/app/apps/content-worker
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/content-worker/node_modules
+    depends_on:
+      content-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["shadow"]
+    networks:
+      - dmz
+      - private
+
   # Concept: Eval — the only service that may publish a question.
   content-quality:
     build:

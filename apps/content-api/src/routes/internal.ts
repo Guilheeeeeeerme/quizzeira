@@ -11,6 +11,8 @@ import { registerInternalEvidenceRoutes } from "./internal/evidence";
 import { registerInternalGenerationRoutes } from "./internal/generation";
 import { registerInternalQualityRoutes } from "./internal/quality";
 import { registerInternalProvenanceRoutes } from "./internal/provenance";
+import { registerInternalCanonicalRoutes } from "./internal/canonical";
+import { registerInternalJobRoutes } from "./internal/jobs";
 
 export async function registerInternalRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", async (request) => {
@@ -24,4 +26,6 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
   await registerInternalGenerationRoutes(app);
   await registerInternalQualityRoutes(app);
   await registerInternalProvenanceRoutes(app);
+  await registerInternalCanonicalRoutes(app);
+  await registerInternalJobRoutes(app);
 }

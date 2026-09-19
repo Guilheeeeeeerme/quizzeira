@@ -8,6 +8,8 @@ export interface StageMetricEvent {
   tokensIn?: number;
   tokensOut?: number;
   count?: number;
+  /** Emitting SERVICE_NAME (§12 Next item 4: shadow-profile comparison). */
+  service?: string | null;
 }
 
 function hourBucket(now = new Date()): Date {
@@ -34,6 +36,7 @@ export async function recordStageMetric(
   if (!stage || !decision) return;
 
   const reason = String(event.reason ?? "").slice(0, 120);
+  const service = String(event.service ?? "").slice(0, 120);
   const count = Math.max(1, Number(event.count ?? 1));
   const tokensIn = Math.max(0, Number(event.tokensIn ?? 0));
   const tokensOut = Math.max(0, Number(event.tokensOut ?? 0));
@@ -42,11 +45,12 @@ export async function recordStageMetric(
 
   await prisma.stageMetric.upsert({
     where: {
-      hourBucket_stage_decision_reason: {
+      hourBucket_stage_decision_reason_service: {
         hourBucket: bucket,
         stage,
         decision,
         reason,
+        service,
       },
     },
     create: {
@@ -54,6 +58,7 @@ export async function recordStageMetric(
       stage,
       decision,
       reason,
+      service,
       count,
       tokensIn,
       tokensOut,

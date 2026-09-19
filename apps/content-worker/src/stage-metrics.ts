@@ -11,7 +11,13 @@ export async function emitStageMetric(input: {
   tokensOut?: number;
 }): Promise<void> {
   try {
-    await content.post("/internal/stage-metrics", input);
+    // §12 Next item 4: tag with this instance's own SERVICE_NAME so a
+    // shadow-profile split (documents/embeddings/generation) can be told
+    // apart from the monolith in the same StageMetric rows.
+    await content.post("/internal/stage-metrics", {
+      ...input,
+      service: process.env.SERVICE_NAME || "",
+    });
   } catch {
     // Metrics must never fail the pipeline.
   }

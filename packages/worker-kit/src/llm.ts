@@ -11,6 +11,7 @@ import {
 } from "./guardrails";
 import { rankFor, rankForTier } from "./model-rank";
 import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
+import { circuitGuard, circuitRecordFailure, circuitRecordSuccess } from "./circuit";
 
 const PROVIDERS: Record<string, LlmProvider> = {
   gemini: geminiProvider,
@@ -89,6 +90,7 @@ function consumeBudgetMemory(now: number, opts: { tokens?: number; calls?: numbe
     minuteWindow.key = minuteKey;
     minuteWindow.count = 0;
   }
+  // Pre-check so rejected attempts never increment the counters (§9).
   if (calls > 0 && minuteWindow.count + calls > workerEnv.llmRateLimitPerMinute) {
     throw llmError("llm_budget_exceeded", "llm_budget_exceeded: per-minute LLM rate limit hit");
   }
@@ -109,6 +111,64 @@ function consumeBudgetMemory(now: number, opts: { tokens?: number; calls?: numbe
   dailyWindow.tokens += tokens;
 }
 
+const BUDGET_RESERVE_LUA = `
+local cur = tonumber(redis.call('GET', KEYS[1]) or '0') or 0
+local cap = tonumber(ARGV[1])
+local n = tonumber(ARGV[2])
+if n <= 0 then return cur end
+if cap > 0 and cur + n > cap then return -1 end
+return redis.call('INCRBY', KEYS[1], n)
+`;
+
+/**
+ * Atomic reservation: check-then-increment under a cap in one Redis step.
+ * A cap-rejected reservation returns -1 without incrementing, so failed
+ * attempts stop consuming the budget instead of burning the counter (§9).
+ */
+async function reserveBudgetKeyspace(
+  keys: Array<{ key: string; cap: number; amount: number; ttl: number }>,
+): Promise<void> {
+  const redis = getWorkerRedis();
+  if (!redis) {
+    consumeBudgetMemory(Date.now(), { calls: keys.find((k) => k.cap > 0 && k.amount > 0) ? 1 : 0 });
+    return;
+  }
+  try {
+    for (const slot of keys) {
+      if (slot.amount <= 0) continue;
+      const result = (await redis.eval(
+        BUDGET_RESERVE_LUA,
+        1,
+        slot.key,
+        String(slot.cap),
+        String(slot.amount),
+      )) as number;
+      if (result === -1) {
+        const name =
+          slot.key.startsWith("llm:rate")
+            ? "per-minute rate limit"
+            : slot.key.startsWith("llm:tokens")
+              ? "daily token budget"
+              : "daily LLM budget";
+        // Reservation rejected: no counter was incremented.
+        throw llmError(
+          "llm_budget_exceeded",
+          `llm_budget_exceeded: ${name} hit (non-incrementing)`,
+        );
+      }
+      if (result === slot.amount) {
+        await redis.expire(slot.key, slot.ttl);
+      }
+    }
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err) throw err;
+    throw llmError(
+      "llm_budget_exceeded",
+      "llm_budget_exceeded: redis budget check failed",
+    );
+  }
+}
+
 async function consumeBudgetRedis(
   now: number,
   opts: { tokens?: number; calls?: number } = {},
@@ -120,50 +180,13 @@ async function consumeBudgetRedis(
     consumeBudgetMemory(now, opts);
     return;
   }
-  try {
-    if (redis.status !== "ready") {
-      await redis.connect();
-    }
-    const dayKey = new Date(now).toISOString().slice(0, 10).replace(/-/g, "");
-
-    if (calls > 0) {
-      const minuteBucket = Math.floor(now / MINUTE_MS);
-      const rateKey = `llm:rate:${minuteBucket}`;
-      const rateCount = await redis.incrby(rateKey, calls);
-      if (rateCount === calls) {
-        await redis.expire(rateKey, RATE_TTL_SECONDS);
-      }
-      if (rateCount > workerEnv.llmRateLimitPerMinute) {
-        throw llmError("llm_budget_exceeded", "llm_budget_exceeded: per-minute LLM rate limit hit");
-      }
-
-      const budgetKey = `llm:budget:${dayKey}`;
-      const budgetCount = await redis.incrby(budgetKey, calls);
-      if (budgetCount === calls) {
-        await redis.expire(budgetKey, BUDGET_TTL_SECONDS);
-      }
-      if (budgetCount > workerEnv.llmDailyBudget) {
-        throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM budget hit");
-      }
-    }
-
-    if (tokens > 0) {
-      const tokenKey = `llm:tokens:${dayKey}`;
-      const tokenCount = await redis.incrby(tokenKey, tokens);
-      if (tokenCount === tokens) {
-        await redis.expire(tokenKey, BUDGET_TTL_SECONDS);
-      }
-      if (tokenCount > workerEnv.llmDailyTokenBudget) {
-        throw llmError("llm_budget_exceeded", "llm_budget_exceeded: daily LLM token budget hit");
-      }
-    }
-  } catch (err) {
-    if (err && typeof err === "object" && "code" in err) throw err;
-    throw llmError(
-      "llm_budget_exceeded",
-      "llm_budget_exceeded: redis budget check failed",
-    );
-  }
+  const dayKey = new Date(now).toISOString().slice(0, 10).replace(/-/g, "");
+  const minuteBucket = Math.floor(now / MINUTE_MS);
+  await reserveBudgetKeyspace([
+    { key: `llm:rate:${minuteBucket}`, cap: workerEnv.llmRateLimitPerMinute, amount: calls, ttl: RATE_TTL_SECONDS },
+    { key: `llm:budget:${dayKey}`, cap: workerEnv.llmDailyBudget, amount: calls, ttl: BUDGET_TTL_SECONDS },
+    { key: `llm:tokens:${dayKey}`, cap: workerEnv.llmDailyTokenBudget, amount: tokens, ttl: BUDGET_TTL_SECONDS },
+  ]);
 }
 
 /** Call-count and/or token accounting. Redis required outside tests. */
@@ -185,11 +208,83 @@ export function resetBudgetForTests(): void {
   dailyWindow.key = "";
   dailyWindow.count = 0;
   dailyWindow.tokens = 0;
+  resetStageRateLimitsForTests();
   void resetWorkerRedisForTests();
 }
 
 export function hasLlmProvider(): boolean {
   return providerOrder().length > 0;
+}
+
+/** Configured + available provider names, in attempt order (§9 readiness). */
+export function configuredProviderNames(): string[] {
+  return providerOrder().map((provider) => provider.name);
+}
+
+/** Per-stage per-minute call ceiling (§9). 0 = no independent stage ceiling. */
+function stageRateLimitCap(stage: GenerateJsonOptions["stage"]): number {
+  switch (stage) {
+    case "generation":
+      return workerEnv.llmRateLimitGenerationPerMinute;
+    case "judge":
+      return workerEnv.llmRateLimitJudgePerMinute;
+    default:
+      return 0;
+  }
+}
+
+const stageMinuteWindows = new Map<string, { key: number; count: number }>();
+
+function consumeStageRateLimitMemory(stage: string, minuteBucket: number, cap: number): void {
+  const window = stageMinuteWindows.get(stage) ?? { key: minuteBucket, count: 0 };
+  if (window.key !== minuteBucket) {
+    window.key = minuteBucket;
+    window.count = 0;
+  }
+  if (window.count + 1 > cap) {
+    throw llmError("llm_budget_exceeded", `llm_budget_exceeded: per-minute ${stage} rate limit hit`);
+  }
+  window.count += 1;
+  stageMinuteWindows.set(stage, window);
+}
+
+/**
+ * Independent per-stage per-minute throttle (§9): "at most one generation
+ * batch and one judge item per minute". This is on top of, not instead of,
+ * the global `llm:rate:*` limiter above — a burst of cheaper-stage calls
+ * (ku/classify/residue/mapping) must never crowd out that minute's
+ * generation/judge slot by exhausting the shared counter first.
+ */
+async function consumeStageRateLimit(
+  stage: GenerateJsonOptions["stage"],
+  now: number = Date.now(),
+): Promise<void> {
+  const cap = stageRateLimitCap(stage);
+  if (!cap || !stage) return;
+  assertRedisOrTestMode();
+  const minuteBucket = Math.floor(now / MINUTE_MS);
+  if (!workerEnv.redisUrl) {
+    consumeStageRateLimitMemory(stage, minuteBucket, cap);
+    return;
+  }
+  const redis = getWorkerRedis();
+  if (!redis) {
+    consumeStageRateLimitMemory(stage, minuteBucket, cap);
+    return;
+  }
+  const key = `llm:staterate:${stage}:${minuteBucket}`;
+  const result = (await redis.eval(BUDGET_RESERVE_LUA, 1, key, String(cap), "1")) as number;
+  if (result === -1) {
+    throw llmError(
+      "llm_budget_exceeded",
+      `llm_budget_exceeded: per-minute ${stage} rate limit hit (non-incrementing)`,
+    );
+  }
+  if (result === 1) await redis.expire(key, RATE_TTL_SECONDS);
+}
+
+export function resetStageRateLimitsForTests(): void {
+  stageMinuteWindows.clear();
 }
 
 function stageBudgetCap(stage: GenerateJsonOptions["stage"]): number {
@@ -243,13 +338,21 @@ async function consumeStageBudget(stage: GenerateJsonOptions["stage"], tokens: n
   if (!redis) return;
   const day = new Date().toISOString().slice(0, 10);
   const key = `llm:stage:${stage}:${day}`;
-  const used = Number((await redis.incrby(key, tokens)) || 0);
-  await redis.expire(key, BUDGET_TTL_SECONDS);
-  if (used > cap) {
+  const result = (await redis.eval(
+    BUDGET_RESERVE_LUA,
+    1,
+    key,
+    String(cap),
+    String(tokens),
+  )) as number;
+  if (result === -1) {
     throw llmError(
       "llm_budget_exceeded",
-      `llm_budget_exceeded: stage ${stage} daily token budget hit`,
+      `llm_budget_exceeded: stage ${stage} daily token budget hit (non-incrementing)`,
     );
+  }
+  if (result === tokens) {
+    await redis.expire(key, BUDGET_TTL_SECONDS);
   }
 }
 
@@ -285,11 +388,25 @@ export async function generateJson<T>(
     }
   }
 
+  // One reservation per generateJson call, not per model-failover attempt
+  // below: "one generation batch / one judge item per minute" (§9) is about
+  // how often this stage runs, not how many providers it tries for one run.
+  await consumeStageRateLimit(opts.stage);
+
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
   const fencedUser = fenceUntrusted(cleanUser);
   const index = Math.max(0, opts.attempt ?? 0);
   let lastError: unknown;
+  let circuitTripped: string | null = null;
   for (const provider of providers) {
+    // Circuit guard (§9): an open provider is skipped instead of retried into
+    // a wall of rejected attempts; one probe per cooldown when half-open.
+    try {
+      await circuitGuard(provider.name);
+    } catch (guardErr) {
+      circuitTripped = circuitTripped ?? String((guardErr as Error).message ?? "circuit open");
+      continue;
+    }
     const rank = opts.tier
       ? rankForTier(provider.name, opts.tier)
       : rankFor(provider.name);
@@ -312,14 +429,21 @@ export async function generateJson<T>(
         const tokens = Math.max(1, completion.usage.totalTokens);
         await consumeBudget(Date.now(), { tokens, calls: 0 });
         await consumeStageBudget(opts.stage, tokens);
+        await circuitRecordSuccess(provider.name);
         const shaped = requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
         if (opts.cacheKey) await writeCache(opts.cacheKey, shaped);
         return shaped;
       } catch (err) {
         lastError = err;
+        // Hard provider failures (auth/billing) must open the circuit instead
+        // of being retried; success closes it.
+        await circuitRecordFailure(provider.name, err);
         if (!isTransientProviderError(err)) break;
       }
     }
+  }
+  if (lastError == null && circuitTripped) {
+    throw llmError("llm_unavailable", circuitTripped);
   }
   throw lastError ?? llmError("llm_unavailable", "llm_unavailable: no provider attempt ran");
 }

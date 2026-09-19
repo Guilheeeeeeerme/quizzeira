@@ -26,6 +26,8 @@ export async function openaiComplete(input: ProviderCompleteInput): Promise<LlmC
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${workerEnv.openaiApiKey}`,
+      // AI Gateway metadata-only logging (§9.1): never collect payloads.
+      "cf-aig-collect-log-payload": "false",
     },
     body: JSON.stringify({
       model: input.model,

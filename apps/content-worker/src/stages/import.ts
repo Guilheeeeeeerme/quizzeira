@@ -7,6 +7,10 @@ import { content, discovery } from "../clients.js";
 import { contentEnv } from "../env.js";
 
 const NAME = "content-worker/import";
+// String contract shared with discovery-api's
+// src/routes/internal/artifacts.ts (IMPORT_ARTIFACT_JOB_KIND) — keep in sync.
+const JOB_KIND = "import_artifact";
+const LEASE_OWNER = `content-worker:${process.pid}`;
 
 interface DiscoveryArtifact {
   id: string;
@@ -21,6 +25,11 @@ interface DiscoveryArtifact {
   contentType: string | null;
 }
 
+interface ImportJob {
+  id: string;
+  entityId: string;
+}
+
 function mapRoleHint(roleHint?: RoleHint, kindHint?: ArtifactKindHint): DocumentRole {
   if (roleHint && roleHint !== "unknown") return roleHint;
   if (kindHint && kindHint !== "unknown") return roleHintFromKindHint(kindHint);
@@ -32,20 +41,32 @@ export interface ImportPassResult {
 }
 
 /**
- * Copies unpublished Discovery artifacts into Content as Documents, carrying
- * role/kind hints when present. Marks artifacts published upstream after import.
+ * Copies Discovery artifacts into Content as Documents, carrying role/kind
+ * hints when present. Claims from the durable job lease layer (§5, item 1b)
+ * instead of polling `published=false` directly: discovery-api enqueues one
+ * `import_artifact` job per artifact at creation time, so a crashed worker's
+ * lease simply expires and the next claim retries it — no separate recovery
+ * path. `published` is still set for back-compat with other readers.
  */
 export async function runImportPass(): Promise<ImportPassResult> {
   if (!contentEnv.stageImportEnabled) return { imported: 0 };
 
-  const { items } = await discovery.get<{ items: DiscoveryArtifact[] }>(
-    "/internal/artifacts?published=false&limit=25",
-  );
+  const { jobs } = await discovery.post<{ jobs: ImportJob[] }>("/internal/jobs/claim", {
+    kind: JOB_KIND,
+    leaseOwner: LEASE_OWNER,
+    batchSize: 25,
+  });
   let imported = 0;
 
-  for (const artifact of items) {
-    if (!artifact.examSlug) continue;
+  for (const job of jobs) {
     try {
+      const { artifact } = await discovery.get<{ artifact: DiscoveryArtifact }>(
+        `/internal/artifacts/${job.entityId}`,
+      );
+      if (!artifact.examSlug) {
+        await discovery.post(`/internal/jobs/${job.id}/complete`);
+        continue;
+      }
       const roleHint = artifact.roleHint ?? "unknown";
       const kindHint = artifact.kindHint ?? "unknown";
       await content.post("/internal/documents", {
@@ -62,13 +83,14 @@ export async function runImportPass(): Promise<ImportPassResult> {
         contentType: artifact.contentType,
       });
       await discovery.patch(`/internal/artifacts/${artifact.id}`, { published: true });
+      await discovery.post(`/internal/jobs/${job.id}/complete`);
       imported += 1;
     } catch (err) {
-      logWarn("artifact import failed", {
-        worker: NAME,
-        artifactId: artifact.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      logWarn("artifact import failed", { worker: NAME, jobId: job.id, artifactId: job.entityId, error: message });
+      await discovery
+        .post(`/internal/jobs/${job.id}/fail`, { errorCode: "import_failed", error: message })
+        .catch(() => undefined);
     }
   }
 
