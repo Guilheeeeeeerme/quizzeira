@@ -243,16 +243,22 @@ export function classifyDocument(
   // "Edital de resultado / relação de candidatos / isenção / convocação" are
   // editais by name but administrative by content: no programme, no vagas.
   // The `edital` provenance hint must not turn candidate lists into syllabi.
+  // Only admin-notice PHRASES count: a real edital's index mentions "isenção",
+  // "recursos" and "resultado" too, and a law text says "resultado" freely.
   const adminTitle = [
     doc.metadata.title ?? "",
     ...doc.sections.slice(0, 3).map((s) => `${s.heading ?? ""}\n${s.text.slice(0, 600)}`),
   ].join("\n");
-  const fullText = doc.sections.map((s) => s.text).join("\n");
+  // Headings included: the programme often IS a heading ("Conteúdo Programático").
+  const fullText = doc.sections.map((s) => `${s.heading ?? ""}\n${s.text}`).join("\n");
   const administrativeEdital =
-    /resultado|rela[çc][ãa]o\s+de\s+candidatos|candidatos\s+inscritos|isen[çc][ãa]o|convoca[çc][ãa]o|homologa[çc][ãa]o|recursos?\s+(interpostos|deferidos|indeferidos)|foram\s+(in)?deferidos|gabarito/i.test(adminTitle) &&
-    !/conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?|\bdas\s+vagas\b/i.test(fullText);
+    /edital\s+de\s+(resultado|convoca[çc][ãa]o|homologa[çc][ãa]o)|resultado\s+(final|preliminar|provis[óo]rio|definitivo)|rela[çc][ãa]o\s+(de|dos)\s+candidatos|candidatos\s+inscritos|(pedidos?\s+de\s+)?isen[çc][ãa]o\s+(da\s+taxa\s+)?(deferid|indeferid)|convoca[çc][ãa]o\s+(para|dos)|homologa[çc][ãa]o\s+d[oa]|recursos?\s+(interpostos|deferidos|indeferidos)|foram\s+(in)?deferidos|gabarito\s+(oficial|preliminar|definitivo)/i.test(
+      adminTitle,
+    ) && !/conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?|\bdas\s+vagas\b/i.test(fullText);
 
-  if (administrativeEdital && tier0?.role !== "evidence") {
+  // Knowledge/evidence provenance is never a candidate list.
+  const overridable = tier0?.role !== "evidence" && tier0?.role !== "knowledge";
+  if (administrativeEdital && overridable) {
     role = "administrative";
     roleConfidence = 0.85;
     roleMethod = "tier1_admin_override";
