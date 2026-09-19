@@ -105,6 +105,14 @@ enum CrawlRunStatus {
   failed
 }
 
+enum JobStatus {
+  queued
+  leased
+  deferred
+  done
+  dead
+}
+
 model Source {
   id            String       @id
   domain        String
@@ -304,4 +312,33 @@ model CrawlRun {
   openDiscovered   Int            @default(0)
   proposedSources  Int            @default(0)
   errors           Json
+}
+
+/// Generic durable job lease table (§5), discovery-api's own copy — content-api
+/// has an identical model in its own database. Every async boundary here
+/// enqueues instead of a worker polling an entity table directly. Workers
+/// claim rows atomically with `FOR UPDATE SKIP LOCKED`; a crashed lease
+/// simply expires and the next claim picks the row back up.
+model Job {
+  id             String    @id @default(cuid())
+  kind           String
+  entityId       String
+  dedupeKey      String    @unique
+  status         JobStatus @default(queued)
+  priority       Int       @default(0)
+  availableAt    DateTime  @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  lastErrorCode  String?
+  lastError      String?
+  correlationId  String?
+  causationId    String?
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  @@index([kind, status, availableAt])
+  @@index([status, leaseExpiresAt])
 }
