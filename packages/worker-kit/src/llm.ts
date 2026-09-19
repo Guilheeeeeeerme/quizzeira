@@ -208,6 +208,7 @@ export function resetBudgetForTests(): void {
   dailyWindow.key = "";
   dailyWindow.count = 0;
   dailyWindow.tokens = 0;
+  resetStageRateLimitsForTests();
   void resetWorkerRedisForTests();
 }
 
@@ -218,6 +219,72 @@ export function hasLlmProvider(): boolean {
 /** Configured + available provider names, in attempt order (§9 readiness). */
 export function configuredProviderNames(): string[] {
   return providerOrder().map((provider) => provider.name);
+}
+
+/** Per-stage per-minute call ceiling (§9). 0 = no independent stage ceiling. */
+function stageRateLimitCap(stage: GenerateJsonOptions["stage"]): number {
+  switch (stage) {
+    case "generation":
+      return workerEnv.llmRateLimitGenerationPerMinute;
+    case "judge":
+      return workerEnv.llmRateLimitJudgePerMinute;
+    default:
+      return 0;
+  }
+}
+
+const stageMinuteWindows = new Map<string, { key: number; count: number }>();
+
+function consumeStageRateLimitMemory(stage: string, minuteBucket: number, cap: number): void {
+  const window = stageMinuteWindows.get(stage) ?? { key: minuteBucket, count: 0 };
+  if (window.key !== minuteBucket) {
+    window.key = minuteBucket;
+    window.count = 0;
+  }
+  if (window.count + 1 > cap) {
+    throw llmError("llm_budget_exceeded", `llm_budget_exceeded: per-minute ${stage} rate limit hit`);
+  }
+  window.count += 1;
+  stageMinuteWindows.set(stage, window);
+}
+
+/**
+ * Independent per-stage per-minute throttle (§9): "at most one generation
+ * batch and one judge item per minute". This is on top of, not instead of,
+ * the global `llm:rate:*` limiter above — a burst of cheaper-stage calls
+ * (ku/classify/residue/mapping) must never crowd out that minute's
+ * generation/judge slot by exhausting the shared counter first.
+ */
+async function consumeStageRateLimit(
+  stage: GenerateJsonOptions["stage"],
+  now: number = Date.now(),
+): Promise<void> {
+  const cap = stageRateLimitCap(stage);
+  if (!cap || !stage) return;
+  assertRedisOrTestMode();
+  const minuteBucket = Math.floor(now / MINUTE_MS);
+  if (!workerEnv.redisUrl) {
+    consumeStageRateLimitMemory(stage, minuteBucket, cap);
+    return;
+  }
+  const redis = getWorkerRedis();
+  if (!redis) {
+    consumeStageRateLimitMemory(stage, minuteBucket, cap);
+    return;
+  }
+  const key = `llm:staterate:${stage}:${minuteBucket}`;
+  const result = (await redis.eval(BUDGET_RESERVE_LUA, 1, key, String(cap), "1")) as number;
+  if (result === -1) {
+    throw llmError(
+      "llm_budget_exceeded",
+      `llm_budget_exceeded: per-minute ${stage} rate limit hit (non-incrementing)`,
+    );
+  }
+  if (result === 1) await redis.expire(key, RATE_TTL_SECONDS);
+}
+
+export function resetStageRateLimitsForTests(): void {
+  stageMinuteWindows.clear();
 }
 
 function stageBudgetCap(stage: GenerateJsonOptions["stage"]): number {
@@ -320,6 +387,11 @@ export async function generateJson<T>(
       return requireJsonShape<T>(cached, opts.requiredKeys ?? []);
     }
   }
+
+  // One reservation per generateJson call, not per model-failover attempt
+  // below: "one generation batch / one judge item per minute" (§9) is about
+  // how often this stage runs, not how many providers it tries for one run.
+  await consumeStageRateLimit(opts.stage);
 
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
   const fencedUser = fenceUntrusted(cleanUser);

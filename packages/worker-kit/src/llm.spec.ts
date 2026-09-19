@@ -207,6 +207,31 @@ describe("screening and budgets gate before fetch", () => {
     workerEnv.allowMemoryBudget = false;
     await expect(consumeBudget(Date.now(), { calls: 1 })).rejects.toThrow(/REDIS_URL/);
   });
+
+  it("per-stage per-minute ceiling (§9): one generation batch per minute, independent of the global rate limit", async () => {
+    workerEnv.llmRateLimitPerMinute = 100; // global limit stays wide open
+    workerEnv.llmRateLimitGenerationPerMinute = 1;
+    await generateJson("system", "user", { stage: "generation", requiredKeys: [] });
+    expect(calls).toHaveLength(1);
+    await expect(
+      generateJson("system", "user", { stage: "generation", requiredKeys: [] }),
+    ).rejects.toMatchObject({ code: "llm_budget_exceeded" });
+    expect(calls).toHaveLength(1);
+    // A different stage is unaffected — its own ceiling, not the shared one.
+    await generateJson("system", "user", { stage: "ku", requiredKeys: [] });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("per-stage ceiling for judge is independent of generation's", async () => {
+    workerEnv.llmRateLimitGenerationPerMinute = 1;
+    workerEnv.llmRateLimitJudgePerMinute = 1;
+    await generateJson("system", "user", { stage: "generation", requiredKeys: [] });
+    await generateJson("system", "user", { stage: "judge", requiredKeys: [] });
+    expect(calls).toHaveLength(2);
+    await expect(
+      generateJson("system", "user", { stage: "judge", requiredKeys: [] }),
+    ).rejects.toMatchObject({ code: "llm_budget_exceeded" });
+  });
 });
 
 describe("model per attempt", () => {

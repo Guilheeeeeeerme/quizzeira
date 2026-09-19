@@ -55,6 +55,14 @@ export const workerEnv = {
   modelRankRefreshMs: num("MODEL_RANK_REFRESH_MS", 43_200_000),
   modelRankTopN: num("MODEL_RANK_TOP_N", 3),
   llmRateLimitPerMinute: num("LLM_RATE_LIMIT_PER_MINUTE", 20),
+  /**
+   * Per-stage per-minute call ceilings (§9): "at most one generation batch
+   * and one judge item per minute" independent of the global per-minute
+   * rate limit above, so a burst of cheaper-stage calls (ku/classify/...)
+   * can never crowd out that minute's generation/judge slot.
+   */
+  llmRateLimitGenerationPerMinute: num("LLM_RATE_GENERATION_PER_MINUTE", 1),
+  llmRateLimitJudgePerMinute: num("LLM_RATE_JUDGE_PER_MINUTE", 1),
   llmDailyBudget: num("LLM_DAILY_BUDGET", 500),
   /** Hard daily token halt (OWASP LLM06). Default ~2M tokens/day. */
   llmDailyTokenBudget: num("LLM_DAILY_TOKEN_BUDGET", 2_000_000),
