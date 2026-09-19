@@ -7,7 +7,7 @@ compatibility_date = "2025-09-01"
 # never payload bodies. State lives in Workers KV (limit: 1,000 writes/day;
 # one state record per 5 min is ~288/day, far under the cap).
 [triggers]
-cron = ["*/5 * * * *"]
+crons = ["*/5 * * * *"]
 
 # Secrets (set with `wrangler secret put`):
 #   WATCH_TARGETS   JSON array of { name, url } public health endpoints
@@ -17,7 +17,7 @@ cron = ["*/5 * * * *"]
 
 [[kv_namespaces]]
 binding = "WATCH_STATE"
-id = "replace-me-with-your-kv-namespace-id"
+id = "927b499590944a0abf28592f32417109"
 
 [observability]
 enabled = true
