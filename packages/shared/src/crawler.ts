@@ -508,11 +508,6 @@ export function looksLikelyOpen(text: string): boolean {
   return OPEN_RE.test(text);
 }
 
-/** @deprecated Use looksLikelyOpen — kept for backward compatibility. */
-export function looksOpen(text: string): boolean {
-  return looksLikelyOpen(text);
-}
-
 /** Banca detail pages like /concurso/transpetro-2026/ or /concursos/pms2026. */
 export function looksOpenExamUrl(href: string): boolean {
   const current = new Date().getUTCFullYear();

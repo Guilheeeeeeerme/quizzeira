@@ -11,7 +11,6 @@ import {
   isNavigationSlug,
   isJunkExamTitle,
   titleFromPathSegment,
-  looksOpen,
   normalizeOpenExam,
   openExamFingerprint,
   parseRegistrationWindow,
@@ -121,7 +120,6 @@ describe("exam kind", () => {
 describe("crawler helpers", () => {
   it("detects open copy and domains", () => {
     assert.equal(looksLikelyOpen("Inscrições abertas até 30/09"), true);
-    assert.equal(looksOpen("Inscrições abertas até 30/09"), true);
     assert.equal(looksLikelyOpen("Concurso Público para a Prefeitura"), false);
     assert.equal(looksLikelyOpen("01- Edital de Abertura"), true);
     assert.equal(looksLikelyOpen("Resultado final homologado"), false);
