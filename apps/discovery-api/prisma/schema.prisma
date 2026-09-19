@@ -241,6 +241,9 @@ model Artifact {
   byteSize     Int?
   fetchedAt    DateTime         @default(now())
   published    Boolean          @default(false)
+  /// Set when Content's retention pass deleted the stored bytes (storageKey
+  /// is kept for audit; the object is gone).
+  bytesPurgedAt DateTime?
 
   @@index([examId])
   @@index([kind, published])

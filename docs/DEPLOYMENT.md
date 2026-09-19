@@ -12,12 +12,22 @@ the private **infra** repo; this page explains what happens when you push.
 | GitHub Actions (`infra` repo) | `Deploy app`, `Migrate app`, `Quizzeira edge` workflows |
 | GHCR | `ghcr.io/guilheeeeeeerme/quizzeira/{api,discoveryapi,contentapi,discoverycrawler,contentworker,contentquality,quizcorrector,docprocessor,app}:<appSha>.<infraSha>` |
 | VPS — Compose project `quizzeira` | `api` (Study, loopback `13200`), `discoveryapi` (`13201`, private), `contentapi` (`13202`, private), `discoverycrawler` (Playwright), `contentworker`, `contentquality`, `quizcorrector`, `docprocessor` (`3030` internal), `app` (nginx fallback, `18280`) |
-| VPS — shared `infra_data` | Redis DB `/2`, MinIO bucket `quizzeira` |
+| VPS — shared `infra_data` | Redis DB `/2`, MinIO bucket `quizzeira` (`artifacts/` raw bytes, `normalized/` extracted text, `briefs/`; lifecycle backstop 30d/never/365d set by infra `shared_ensure.py`) |
 | Supabase Free (`zgoscslzyizwnzqoyqul`, eu-west-1) | Postgres schemas `quizzeira_study`, `quizzeira_discovery`, `quizzeira_content` (pgvector), role `quizzeira`, reached over the IPv6 direct host |
 | Cloudflare Pages `quizzeira-web` | `apps/web` static build → `app.quizzeira.ferredemo.dev` |
 | Cloudflare DNS (proxied) | `api.quizzeira.ferredemo.dev` → VPS nginx (Let's Encrypt origin) |
 | Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) |
 | LLM | Workers call Gemini/OpenAI directly (`LLM_USE_HEADROOM=false`); Headroom is not used |
+
+**File triage & retention.** `contentworker` runs a `triage` pass every
+`CONTENT_TRIAGE_INTERVAL_SEC` (default 6h): re-tries the LLM classifier on files
+still `unknown`/low-confidence (max 3, then they wait for a human in
+`/admin/exams` → *Files* → *Needs label*), prunes clearly useless files
+(administrative, terminal failures, knowledge with no usable chunks — bytes and
+sections deleted, stub row kept as `pruned:<reason>`), and deletes raw bytes of
+any terminal document after `CONTENT_RETENTION_GRACE_DAYS` (default 7). A
+reprocess after purge re-fetches `sourceUrl`. `CONTENT_WORKER_PROFILE=maintenance`
+runs only this pass if it should live in its own container.
 
 Secrets: `/opt/infra/secrets/quizzeira.env` on the VPS, sourced from `infra/secrets/production.enc.yaml` (SOPS).
 Worker secrets (`WATCH_TARGETS`, `ALERT_WEBHOOK`) are set with `wrangler secret put`.

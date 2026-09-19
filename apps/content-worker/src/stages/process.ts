@@ -64,6 +64,31 @@ interface QueuedDocument {
   contentType: string | null;
   attempts: number;
   discoveryArtifactId?: string | null;
+  roleMethod?: string | null;
+  bytesPurgedAt?: string | null;
+}
+
+/** Written by content-api PATCH /admin/documents/:id when a human re-labels a
+ * file; the classifier ladder must not overturn it. Keep in sync with
+ * ADMIN_ROLE_METHOD in apps/content-api/src/routes/admin-exams.ts. */
+const ADMIN_ROLE_METHOD = "admin_override";
+
+/**
+ * Per-stage outcome persisted on Document.outcome so the admin files panel can
+ * say WHY an extracted file yielded no syllabus / evidence / knowledge. Every
+ * stage records either what it produced or the reason it was skipped.
+ */
+export interface DocumentOutcome {
+  v: 1;
+  role: string;
+  roleMethod: string;
+  roleConfidence: number;
+  syllabus: { nodes: number; status: string } | { skipped: string };
+  evidence: { previousQuestions: number; gabaritoPaired?: boolean } | { skipped: string };
+  knowledge:
+    | { chunks: number; eligible: number; parked: number; ineligible: number; units: number; leaves: number }
+    | { skipped: string };
+  at: string;
 }
 
 /** Leaves considered for tier-2/3 mapping per document (embedding calls are per leaf). */
@@ -199,7 +224,15 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
         roleHint: (document.role as never) ?? null,
         kindHint: null,
       });
-      if (!contentEnv.stageClassifyEnabled) {
+      if (document.roleMethod === ADMIN_ROLE_METHOD && document.role) {
+        // A human labelled this file; keep their role, only section roles are recomputed.
+        classification = {
+          ...classification,
+          role: document.role,
+          roleConfidence: 1,
+          roleMethod: ADMIN_ROLE_METHOD,
+        };
+      } else if (!contentEnv.stageClassifyEnabled) {
         classification = {
           ...classification,
           role: (document.role as DocumentRole) || classification.role,
@@ -214,6 +247,16 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
         const llmClassified = await classifyRoleLlmResidue(normalized, classification);
         if (llmClassified) classification = llmClassified;
       }
+      const outcome: DocumentOutcome = {
+        v: 1,
+        role: classification.role,
+        roleMethod: classification.roleMethod,
+        roleConfidence: classification.roleConfidence,
+        syllabus: { skipped: "not_run" },
+        evidence: { skipped: "not_run" },
+        knowledge: { skipped: "not_run" },
+        at: new Date().toISOString(),
+      };
       const sectionsPayload = classification.sections.map(({ section, role, scores }) => ({
         ordinal: section.ordinal,
         path: section.path,
@@ -522,11 +565,14 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
       const hasProgrammeSignal = /conte[úu]dos?\s+program[áa]ticos?|programas?\s+das?\s+provas?/i.test(
         normalized.sections.map((s) => `${s.heading ?? ""}\n${s.text}`).join("\n"),
       );
-      if (
-        contentEnv.stageSyllabusEnabled &&
-        isSyllabusSourceRole(classification.role) &&
-        hasProgrammeSignal
-      ) {
+      if (!contentEnv.stageSyllabusEnabled) {
+        outcome.syllabus = { skipped: "stage_disabled" };
+      } else if (!isSyllabusSourceRole(classification.role)) {
+        outcome.syllabus = { skipped: `role_${classification.role}` };
+      } else if (!hasProgrammeSignal) {
+        // An edital without "conteúdo programático" is a retificação/anexo/aviso.
+        outcome.syllabus = { skipped: "no_programme_signal" };
+      } else {
         const positions = discoverPositions(normalized, classification.sections);
         const parsed = parseSyllabusFromDocument(normalized, classification.sections, positions);
 
@@ -645,15 +691,25 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
             parsed: toPost,
           });
           result.syllabi += 1;
+          outcome.syllabus = { nodes: toPost.nodes.length, status: toPost.status };
+        } else {
+          outcome.syllabus = { skipped: "no_nodes_parsed" };
         }
       }
 
       // Distill KUs from eligible mapped chunks (requires LLM provider).
-      if (
-        contentEnv.stageKnowledgeEnabled &&
-        isGenerationEligibleRole(classification.role) &&
-        leaves.length > 0
-      ) {
+      const eligibilityTally = { eligible: 0, parked: 0, ineligible: 0 };
+      for (const c of chunksWithEligibility) {
+        eligibilityTally[c.eligibility as keyof typeof eligibilityTally] += 1;
+      }
+      if (!contentEnv.stageKnowledgeEnabled) {
+        outcome.knowledge = { skipped: "stage_disabled" };
+      } else if (!isGenerationEligibleRole(classification.role)) {
+        outcome.knowledge = { skipped: `role_${classification.role}` };
+      } else if (leaves.length === 0) {
+        // No active syllabus for this exam yet: nothing to map chunks onto.
+        outcome.knowledge = { skipped: "no_syllabus_leaves" };
+      } else {
         const eligibleOrdinals = new Set(
           chunksWithEligibility
             .filter((c) => c.eligibility === "eligible")
@@ -711,16 +767,31 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
             })
             .catch(() => undefined);
         }
+        outcome.knowledge = {
+          chunks: chunksWithEligibility.length,
+          ...eligibilityTally,
+          units: allUnits.length,
+          leaves: leaves.length,
+        };
       }
 
-      if (
-        contentEnv.stageEvidenceEnabled &&
-        (classification.role === "evidence" || PAST_EXAM_KINDS.has(document.kind))
-      ) {
+      if (!contentEnv.stageEvidenceEnabled) {
+        outcome.evidence = { skipped: "stage_disabled" };
+      } else if (classification.role === "evidence" || PAST_EXAM_KINDS.has(document.kind)) {
         const text = normalized.sections.map((s) => s.text).join("\n\n");
         const ev = await processEvidenceDocument(document, text, classification.sections);
         result.evidence += ev.previousQuestions;
+        outcome.evidence =
+          ev.previousQuestions > 0
+            ? { previousQuestions: ev.previousQuestions, gabaritoPaired: ev.gabaritoPaired }
+            : { skipped: ev.gabaritoPaired === false && document.kind === "prova" ? "no_gabarito_no_mcq" : "no_mcq_parsed" };
+      } else {
+        outcome.evidence = { skipped: `role_${classification.role}` };
       }
+
+      await content
+        .patch(`/internal/documents/${document.id}`, { outcome })
+        .catch(() => undefined);
 
       if (
         (classification.role === "knowledge" || classification.role === "mixed") &&
@@ -784,14 +855,21 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
 async function documentBytes(
   document: QueuedDocument,
 ): Promise<{ buffer: Buffer; contentType: string }> {
-  if (document.storageKey) {
-    const bytes = await content.get<{ base64: string; contentType: string }>(
-      `/internal/documents/${document.id}/bytes`,
-    );
-    return {
-      buffer: Buffer.from(bytes.base64, "base64"),
-      contentType: bytes.contentType || document.contentType || "",
-    };
+  if (document.storageKey && !document.bytesPurgedAt) {
+    try {
+      const bytes = await content.get<{ base64: string; contentType: string }>(
+        `/internal/documents/${document.id}/bytes`,
+      );
+      return {
+        buffer: Buffer.from(bytes.base64, "base64"),
+        contentType: bytes.contentType || document.contentType || "",
+      };
+    } catch (err) {
+      // 410: retention purged the object. Fall through to a live re-fetch.
+      if (!/\b410\b/.test(err instanceof Error ? err.message : String(err)) || !document.sourceUrl) {
+        throw err;
+      }
+    }
   }
   if (document.sourceUrl) {
     const res = await fetch(document.sourceUrl, {

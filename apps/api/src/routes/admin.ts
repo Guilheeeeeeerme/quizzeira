@@ -146,6 +146,12 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   );
 
+  /**
+   * Discovery's exam list joined with Content's per-exam funnel (documents,
+   * syllabus, previous questions, items, last generation error) so the card
+   * explains "400 files, 0 questions" without a click. Content being down
+   * degrades to `pipeline: null` rather than hiding the exams.
+   */
   app.get("/admin/exams", async (request, reply) => {
     const q = request.query as { status?: string; limit?: string };
     const params = new URLSearchParams();
@@ -153,7 +159,60 @@ export async function adminRoutes(app: FastifyInstance) {
     if (q.limit) params.set("limit", q.limit);
     const suffix = params.size ? `?${params}` : "";
     try {
-      return await discoveryFetch(`/admin/exams${suffix}`);
+      const [exams, summary] = await Promise.all([
+        discoveryFetch<{ items: Array<Record<string, unknown> & { examSlug: string }> }>(
+          `/admin/exams${suffix}`,
+        ),
+        contentFetch<{ items: Record<string, unknown> }>("/admin/exams/summary").catch(
+          () => ({ items: {} as Record<string, unknown> }),
+        ),
+      ]);
+      return {
+        items: exams.items.map((e) => ({ ...e, pipeline: summary.items[e.examSlug] ?? null })),
+      };
+    } catch (err) {
+      return httpError(err, reply);
+    }
+  });
+
+  /**
+   * Every file of one exam: crawler artifact ⨝ content document (by artifact
+   * id, falling back to URL). Rows with no document never left Discovery;
+   * documents with no artifact were imported by hand or predate the join key.
+   */
+  app.get<{ Params: { id: string } }>("/admin/exams/:id/files", async (request, reply) => {
+    try {
+      const artifacts = await discoveryFetch<{
+        exam: { id: string; examSlug: string; title: string };
+        items: Array<Record<string, unknown> & { id: string; url: string | null }>;
+      }>(`/admin/exams/${encodeURIComponent(request.params.id)}/artifacts`);
+      const documents = await contentFetch<{
+        items: Array<
+          Record<string, unknown> & {
+            id: string;
+            discoveryArtifactId: string | null;
+            sourceUrl: string | null;
+          }
+        >;
+      }>(`/admin/exams/${encodeURIComponent(artifacts.exam.examSlug)}/documents`).catch(() => ({
+        items: [],
+      }));
+      const byArtifact = new Map(
+        documents.items.filter((d) => d.discoveryArtifactId).map((d) => [d.discoveryArtifactId!, d]),
+      );
+      const byUrl = new Map(
+        documents.items.filter((d) => d.sourceUrl).map((d) => [d.sourceUrl!, d]),
+      );
+      const used = new Set<string>();
+      const files = artifacts.items.map((a) => {
+        const doc = byArtifact.get(a.id) ?? (a.url ? byUrl.get(a.url) : undefined) ?? null;
+        if (doc) used.add(doc.id);
+        return { artifact: a, document: doc };
+      });
+      for (const doc of documents.items) {
+        if (!used.has(doc.id)) files.push({ artifact: null as never, document: doc });
+      }
+      return { exam: artifacts.exam, files };
     } catch (err) {
       return httpError(err, reply);
     }
@@ -282,6 +341,21 @@ export async function adminRoutes(app: FastifyInstance) {
       return httpError(err, reply);
     }
   });
+
+  /** Human label for a file: closed role/kind enums, validated by content-api. */
+  app.patch<{ Params: { id: string }; Body: { role?: string; kind?: string; reprocess?: boolean } }>(
+    "/admin/content/documents/:id",
+    async (request, reply) => {
+      try {
+        return await contentFetch(`/admin/documents/${encodeURIComponent(request.params.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify(request.body ?? {}),
+        });
+      } catch (err) {
+        return httpError(err, reply);
+      }
+    },
+  );
 
   app.get<{ Params: { id: string } }>(
     "/admin/content/documents/:id",

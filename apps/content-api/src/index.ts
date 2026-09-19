@@ -2,6 +2,7 @@
 import Fastify from "fastify";
 import { env } from "./lib/env";
 import { registerAdminRoutes } from "./routes/admin";
+import { registerAdminExamRoutes } from "./routes/admin-exams";
 import { registerInternalRoutes } from "./routes/internal";
 import { registerPublishedRoutes } from "./routes/published";
 
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
   await registerInternalRoutes(app);
   await registerPublishedRoutes(app);
   await registerAdminRoutes(app);
+  await registerAdminExamRoutes(app);
 
   await app.listen({ port: env.port, host: "0.0.0.0" });
 }

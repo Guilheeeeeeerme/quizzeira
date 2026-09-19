@@ -210,4 +210,18 @@ export async function registerInternalArtifactRoutes(app: FastifyInstance): Prom
       return { artifact };
     },
   );
+
+  /** Content's retention/prune passes report which artifact objects are gone. */
+  app.post<{ Body: { artifactIds?: string[] } }>(
+    "/internal/artifacts/mark-purged",
+    async (request) => {
+      const ids = (request.body?.artifactIds ?? []).filter((id) => typeof id === "string");
+      if (ids.length === 0) return { updated: 0 };
+      const { count } = await prisma.artifact.updateMany({
+        where: { id: { in: ids.slice(0, 1000) }, bytesPurgedAt: null },
+        data: { bytesPurgedAt: new Date() },
+      });
+      return { updated: count };
+    },
+  );
 }
