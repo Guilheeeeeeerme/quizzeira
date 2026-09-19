@@ -13,6 +13,9 @@ import {
  * Facebook Graph API — public Page feed posts the token is allowed to read.
  * Docs: https://developers.facebook.com/docs/graph-api/reference/page/feed
  * No private groups / auth-wall bypass.
+ *
+ * pt-BR shaping: none at API level — operator configures BR concurso Pages via
+ * `FACEBOOK_PAGE_IDS`. Detection uses pt-BR exam vocabulary in `detect.ts`.
  */
 export function createFacebookGraphAdapter(opts?: {
   tokenEnv?: string;

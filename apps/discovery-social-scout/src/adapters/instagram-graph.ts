@@ -16,6 +16,9 @@ import {
  *
  * There is no official arbitrary public hashtag crawl without a Business account
  * and Graph permissions. We only fetch media for configured IG user IDs.
+ *
+ * pt-BR shaping: none at API level — operator picks BR concurso IG Business
+ * accounts. Captions are scored with pt-BR exam vocabulary in `detect.ts`.
  */
 export function createInstagramGraphAdapter(opts?: {
   tokenEnv?: string;

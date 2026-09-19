@@ -14,6 +14,10 @@ import {
  * Uses documented `*.reddit.com/.../*.json` endpoints with a descriptive User-Agent.
  * Optional OAuth client credentials are accepted but not required for public reads.
  * Docs: https://www.reddit.com/dev/api/#GET_search
+ *
+ * pt-BR shaping: default subreddits `concursos,brasil` + pt-BR keywords.
+ * Reddit search has **no** official language / region query param — gap documented
+ * in README.
  */
 export function createRedditPublicAdapter(opts?: {
   clientIdEnv?: string;

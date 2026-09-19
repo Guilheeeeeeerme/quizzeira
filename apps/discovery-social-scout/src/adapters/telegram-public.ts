@@ -13,6 +13,9 @@ import {
  * Telegram Bot API — messages the operator-owned bot can already see
  * (channels/groups the bot was added to). Official Bot API only.
  * Docs: https://core.telegram.org/bots/api#getupdates
+ *
+ * pt-BR shaping: none at API level — add the bot to BR concurso channels.
+ * Detection uses pt-BR exam vocabulary in `detect.ts`.
  */
 export function createTelegramPublicAdapter(opts?: {
   botTokenEnv?: string;

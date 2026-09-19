@@ -1,6 +1,7 @@
 import { logWarn } from "@quizzeira/worker-kit";
 import { fetchJson } from "../http.js";
 import { resolveKeywords } from "../keywords.js";
+import { providerLocaleParams, resolveSocialLocale } from "../locale.js";
 import {
   disabledResult,
   errorResult,
@@ -13,6 +14,9 @@ import {
 /**
  * X (Twitter) API v2 recent search — official Bearer token auth only.
  * Docs: https://developer.x.com/en/docs/twitter-api/tweets/search/api-reference/get-tweets-search-recent
+ *
+ * pt-BR shaping: `lang:pt` on the query (default). No country filter on recent
+ * search without elevated geo operators.
  */
 export function createXPublicAdapter(opts?: {
   bearerEnv?: string;
@@ -36,7 +40,9 @@ export function createXPublicAdapter(opts?: {
       }
 
       const keywords = opts?.keywords ?? resolveKeywords();
-      const query = `(${keywords.slice(0, 4).map((k) => `"${k}"`).join(" OR ")}) has:links -is:retweet lang:pt`;
+      const langOp = providerLocaleParams(resolveSocialLocale()).xLangOperator;
+      const langClause = langOp ? ` ${langOp}` : "";
+      const query = `(${keywords.slice(0, 4).map((k) => `"${k}"`).join(" OR ")}) has:links -is:retweet${langClause}`;
       const maxResults = Math.min(Math.max(opts?.maxResults ?? 20, 10), 100);
       const url = new URL("https://api.twitter.com/2/tweets/search/recent");
       url.searchParams.set("query", query);

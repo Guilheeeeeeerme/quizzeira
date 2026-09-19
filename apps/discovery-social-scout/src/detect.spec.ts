@@ -6,6 +6,8 @@ import type { SocialPost } from "./types.js";
 describe("detect", () => {
   it("flags concurso language", () => {
     assert.equal(looksExamTalk("Saiu o edital do concurso público"), true);
+    assert.equal(looksExamTalk("Inscrição aberta na FCC"), true);
+    assert.equal(looksExamTalk("Gabarito preliminar FGV"), true);
     assert.equal(looksExamTalk("bom dia galera"), false);
   });
 

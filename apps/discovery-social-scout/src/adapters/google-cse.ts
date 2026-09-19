@@ -2,6 +2,11 @@ import { logWarn } from "@quizzeira/worker-kit";
 import { fetchJson } from "../http.js";
 import { resolveKeywords } from "../keywords.js";
 import {
+  googleQuerySuffix,
+  providerLocaleParams,
+  resolveSocialLocale,
+} from "../locale.js";
+import {
   disabledResult,
   errorResult,
   okResult,
@@ -14,6 +19,9 @@ import {
  * Google Custom Search JSON API — documented public search results.
  * Docs: https://developers.google.com/custom-search/v1/overview
  * Requires API key + Programmable Search Engine (cx).
+ *
+ * pt-BR shaping: `lr=lang_pt`, `gl=br`, `hl=pt-BR`, plus edital/gabarito/prova
+ * query suffix.
  */
 export function createGoogleCseAdapter(opts?: {
   apiKeyEnv?: string;
@@ -38,6 +46,8 @@ export function createGoogleCseAdapter(opts?: {
         return disabledResult(`missing credentials: ${keyEnv} and/or ${cxEnv}`);
       }
 
+      const locale = resolveSocialLocale();
+      const loc = providerLocaleParams(locale);
       const keywords = opts?.keywords ?? resolveKeywords();
       const per = Math.min(Math.max(opts?.resultsPerKeyword ?? 5, 1), 10);
       const posts: SocialPost[] = [];
@@ -46,9 +56,11 @@ export function createGoogleCseAdapter(opts?: {
         const url = new URL("https://www.googleapis.com/customsearch/v1");
         url.searchParams.set("key", apiKey);
         url.searchParams.set("cx", cx);
-        url.searchParams.set("q", `${kw} (filetype:pdf OR edital OR gabarito OR prova)`);
+        url.searchParams.set("q", `${kw} ${googleQuerySuffix(locale)}`);
         url.searchParams.set("num", String(per));
-        url.searchParams.set("lr", "lang_pt");
+        if (loc.googleLr) url.searchParams.set("lr", loc.googleLr);
+        if (loc.googleGl) url.searchParams.set("gl", loc.googleGl);
+        if (loc.googleHl) url.searchParams.set("hl", loc.googleHl);
 
         const res = await fetchJson<GoogleCseResponse>(url.toString(), {
           fetchFn: opts?.fetchFn,

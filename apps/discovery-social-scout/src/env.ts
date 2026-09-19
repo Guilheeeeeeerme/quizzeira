@@ -26,6 +26,8 @@ export const socialEnv = {
   fixtureMode: (process.env.DISCOVERY_SOCIAL_FIXTURE_MODE ?? "true") !== "false",
   /** Also POST URL-only artifacts with social provenance. Default observe-only. */
   storeUrlArtifacts: (process.env.DISCOVERY_SOCIAL_STORE_URL_ARTIFACTS ?? "false") === "true",
+  /** Scout locale — pt-BR by default (concurso-BR). */
+  locale: process.env.DISCOVERY_SOCIAL_LOCALE?.trim() || "pt-BR",
   /** Optional live HTTP smoke behind operator flag (not run in CI). */
   smokeEnabled: (process.env.DISCOVERY_SOCIAL_SMOKE ?? "false") === "true",
   adapters: list("DISCOVERY_SOCIAL_ADAPTERS", ["fixture"]),

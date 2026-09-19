@@ -14,6 +14,25 @@ then hands outbound file hosts into the existing Discovery ingestion path.
 
 It talks to **discovery-api only** (same DMZ contract as `discovery-crawler`). It does not call Content or Study.
 
+## Locale (pt-BR default)
+
+Default locale is **`pt-BR`** (`DISCOVERY_SOCIAL_LOCALE=pt-BR`). Search defaults use
+Brazilian concurso vocabulary (edital, inscrição, gabarito, prova, CESPE/Cebraspe,
+FCC, FGV, VUNESP, CESGRANRIO, OAB). English terms are **not** default — append via
+`DISCOVERY_SOCIAL_KEYWORDS_EXTRA` if needed.
+
+| Adapter | pt-BR query shaping | Gap |
+| --- | --- | --- |
+| `x-public` | query includes `lang:pt` | no country filter on recent search |
+| `google-cse` | `lr=lang_pt`, `gl=br`, `hl=pt-BR` + edital/gabarito/prova suffix | — |
+| `youtube-data` | `relevanceLanguage=pt`, `regionCode=BR` | — |
+| `reddit-public` | default subs `concursos,brasil` + pt-BR keywords | **no** official lang/region param |
+| `instagram-graph` | operator-chosen BR IG Business accounts | **no** search lang filter |
+| `facebook-graph` | operator-chosen BR Pages | **no** feed lang filter |
+| `telegram-public` | bot added to BR concurso channels | **no** lang filter on `getUpdates` |
+
+Optional `DISCOVERY_SOCIAL_LOCALE=en` flips X/Google/YouTube params for experiments.
+
 ## Adapters
 
 | Adapter id | Platform | API | Required env |
@@ -68,7 +87,9 @@ Compose service: `discovery-social-scout` (disabled by default via
 | `DISCOVERY_SOCIAL_FIXTURE_MODE` | `true` | Use fixture adapter only |
 | `DISCOVERY_SOCIAL_STORE_URL_ARTIFACTS` | `false` | Also POST URL-only artifacts |
 | `DISCOVERY_SOCIAL_ADAPTERS` | `fixture` | Comma list of adapter ids (see table) |
-| `DISCOVERY_SOCIAL_KEYWORDS` | built-in concurso queries | Comma-separated search queries |
+| `DISCOVERY_SOCIAL_LOCALE` | `pt-BR` | Scout locale (`pt-BR` or `en`) |
+| `DISCOVERY_SOCIAL_KEYWORDS` | built-in pt-BR concurso queries | Comma-separated search queries (replaces defaults) |
+| `DISCOVERY_SOCIAL_KEYWORDS_EXTRA` | _(empty)_ | Optional extra keywords (e.g. English) appended to defaults |
 | `DISCOVERY_SOCIAL_SMOKE` | `false` | Enable optional live API smoke tests |
 | `DISCOVERY_SOCIAL_MAX_POSTS` / `MAX_FILES` | `40` / `12` | Pass caps |
 | `WORKER_INTERVAL_MS` | from worker-kit | Poll interval |

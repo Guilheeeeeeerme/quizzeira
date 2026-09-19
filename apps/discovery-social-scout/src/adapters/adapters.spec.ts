@@ -92,8 +92,10 @@ describe("social adapters", () => {
 
   it("x-public maps recent search tweets", async () => {
     process.env.X_BEARER_TOKEN = "test-bearer";
-    const fetchFn = mockFetch(() =>
-      jsonResponse({
+    let seenQuery = "";
+    const fetchFn = mockFetch((url) => {
+      seenQuery = new URL(url).searchParams.get("query") ?? "";
+      return jsonResponse({
         data: [
           {
             id: "99",
@@ -104,8 +106,8 @@ describe("social adapters", () => {
             },
           },
         ],
-      }),
-    );
+      });
+    });
     const result = await createXPublicAdapter({
       fetchFn,
       keywords: ["concurso edital"],
@@ -115,6 +117,7 @@ describe("social adapters", () => {
     assert.equal(result.posts[0]?.platform, "x");
     assert.equal(result.posts[0]?.externalId, "99");
     assert.ok(result.posts[0]?.attachmentUrls?.includes("https://www.cebraspe.org.br/x/edital.pdf"));
+    assert.match(seenQuery, /lang:pt/);
   });
 
   it("google-cse disables without key/cx", async () => {
@@ -126,8 +129,10 @@ describe("social adapters", () => {
   it("google-cse maps CSE items", async () => {
     process.env.GOOGLE_CSE_API_KEY = "k";
     process.env.GOOGLE_CSE_CX = "cx";
-    const fetchFn = mockFetch(() =>
-      jsonResponse({
+    let seenUrl = "";
+    const fetchFn = mockFetch((url) => {
+      seenUrl = url;
+      return jsonResponse({
         items: [
           {
             title: "Edital PDF",
@@ -136,8 +141,8 @@ describe("social adapters", () => {
             cacheId: "c1",
           },
         ],
-      }),
-    );
+      });
+    });
     const result = await createGoogleCseAdapter({
       fetchFn,
       keywords: ["concurso"],
@@ -146,6 +151,11 @@ describe("social adapters", () => {
     assert.equal(result.posts.length, 1);
     assert.equal(result.posts[0]?.platform, "google");
     assert.match(result.posts[0]?.text ?? "", /Edital PDF/);
+    const seen = new URL(seenUrl);
+    assert.equal(seen.searchParams.get("lr"), "lang_pt");
+    assert.equal(seen.searchParams.get("gl"), "br");
+    assert.equal(seen.searchParams.get("hl"), "pt-BR");
+    assert.match(seen.searchParams.get("q") ?? "", /edital/);
   });
 
   it("instagram-graph disables without token/ids", async () => {
@@ -246,8 +256,10 @@ describe("social adapters", () => {
 
   it("youtube-data maps search snippets", async () => {
     process.env.YOUTUBE_API_KEY = "yt";
-    const fetchFn = mockFetch(() =>
-      jsonResponse({
+    let seenUrl = "";
+    const fetchFn = mockFetch((url) => {
+      seenUrl = url;
+      return jsonResponse({
         items: [
           {
             id: { videoId: "vid1" },
@@ -258,8 +270,8 @@ describe("social adapters", () => {
             },
           },
         ],
-      }),
-    );
+      });
+    });
     const result = await createYoutubeDataAdapter({
       fetchFn,
       keywords: ["concurso edital"],
@@ -268,6 +280,9 @@ describe("social adapters", () => {
     assert.equal(result.posts.length, 1);
     assert.equal(result.posts[0]?.platform, "youtube");
     assert.match(result.posts[0]?.permalink ?? "", /vid1/);
+    const seen = new URL(seenUrl);
+    assert.equal(seen.searchParams.get("relevanceLanguage"), "pt");
+    assert.equal(seen.searchParams.get("regionCode"), "BR");
   });
 
   it("telegram-public disables without bot token", async () => {

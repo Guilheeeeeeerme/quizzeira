@@ -28,7 +28,7 @@ const SOCIAL_HOSTS = new Set([
 ]);
 
 const EXAM_TALK_RE =
-  /\b(concursos?|editais?|edital|oab|provas?|gabarito|inscri[cç][oõ]es|banca|cespe|cebraspe|vunesp|fgv|cesgranrio|conte[uú]do\s+program)/i;
+  /\b(concursos?|editais?|edital|oab|provas?|gabarito|inscri[cç]([aã]o|[oõ]es)|banca|cespe|cebraspe|fcc|fgv|vunesp|cesgranrio|conte[uú]do\s+program)/i;
 
 const URL_RE = /https?:\/\/[^\s<>"'）)\]]+/gi;
 

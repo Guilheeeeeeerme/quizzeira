@@ -1,6 +1,7 @@
 import { logWarn } from "@quizzeira/worker-kit";
 import { fetchJson } from "../http.js";
 import { resolveKeywords } from "../keywords.js";
+import { providerLocaleParams, resolveSocialLocale } from "../locale.js";
 import {
   disabledResult,
   errorResult,
@@ -13,6 +14,8 @@ import {
 /**
  * YouTube Data API v3 search — public video metadata + descriptions.
  * Docs: https://developers.google.com/youtube/v3/docs/search/list
+ *
+ * pt-BR shaping: `relevanceLanguage=pt`, `regionCode=BR`.
  */
 export function createYoutubeDataAdapter(opts?: {
   apiKeyEnv?: string;
@@ -34,6 +37,7 @@ export function createYoutubeDataAdapter(opts?: {
         return disabledResult(`missing credentials: ${keyEnv}`);
       }
 
+      const loc = providerLocaleParams(resolveSocialLocale());
       const keywords = opts?.keywords ?? resolveKeywords();
       const maxResults = Math.min(Math.max(opts?.maxResults ?? 8, 1), 25);
       const posts: SocialPost[] = [];
@@ -44,7 +48,12 @@ export function createYoutubeDataAdapter(opts?: {
         url.searchParams.set("q", kw);
         url.searchParams.set("type", "video");
         url.searchParams.set("maxResults", String(maxResults));
-        url.searchParams.set("relevanceLanguage", "pt");
+        if (loc.youtubeRelevanceLanguage) {
+          url.searchParams.set("relevanceLanguage", loc.youtubeRelevanceLanguage);
+        }
+        if (loc.youtubeRegionCode) {
+          url.searchParams.set("regionCode", loc.youtubeRegionCode);
+        }
         url.searchParams.set("key", apiKey);
 
         const res = await fetchJson<YtSearchResponse>(url.toString(), {
