@@ -15,6 +15,16 @@ export {
   isDeferrableLlmError, llmError, llmErrorCode, type LlmErrorCode } from "./errors";
 export { logInfo, logWarn, logError, type LogFields } from "./log";
 export {
+  circuitGuard,
+  circuitRecordSuccess,
+  circuitRecordFailure,
+  circuitHealth,
+  classifyProviderError,
+  resetCircuitsForTests,
+  type CircuitState,
+  type ProviderErrorClass,
+} from "./circuit";
+export {
   renderPrompt,
   screenUntrusted,
   screenModelOutput,

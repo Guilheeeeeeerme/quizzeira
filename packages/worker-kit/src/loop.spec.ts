@@ -115,4 +115,23 @@ describe("runLoop window gating", () => {
     await sleep(60);
     stop();
   });
+
+  it("never starts a pass while the previous one is active", async () => {
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const stop = await runLoop(
+      "test-single-flight",
+      5,
+      async () => {
+        concurrent += 1;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        await sleep(20);
+        concurrent -= 1;
+      },
+      { now: () => new Date(), timeZone: "UTC" },
+    );
+    await sleep(60);
+    stop();
+    expect(maxConcurrent).toBeLessThanOrEqual(1);
+  });
 });
