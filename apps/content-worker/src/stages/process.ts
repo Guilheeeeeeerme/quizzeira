@@ -319,6 +319,13 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
             /* ignore bad URLs */
           }
         }
+        // Every stage is skipped by role; say so on the file itself.
+        const skipped = { skipped: `role_${classification.role}` };
+        await content
+          .patch(`/internal/documents/${document.id}`, {
+            outcome: { ...outcome, syllabus: skipped, evidence: skipped, knowledge: skipped },
+          })
+          .catch(() => undefined);
         result.processed += 1;
         continue;
       }
