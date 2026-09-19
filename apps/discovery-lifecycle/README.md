@@ -10,11 +10,25 @@ Does **not** touch Study (`quizzeira_study`) or Content (`quizzeira_content`) qu
 
 ## Domain language
 
-| Term | Meaning | Storage |
+| Term | Meaning (pt-BR) | Storage |
 | --- | --- | --- |
 | OPEN | Inscrições abertas | `Exam.status = open` ↔ `lifecyclePhase = registration_open` |
 | CLOSED | Inscrições encerradas | `Exam.status = closed` ↔ `registration_closed` and later |
-| PAST DUE | Prova date passed; cleanup pipeline | `lifecyclePhase = past_due` → `archived` |
+| PAST DUE | Prazo encerrado (pós-prova); limpeza Discovery | `lifecyclePhase = past_due` → `archived` |
+
+Display labels (operator logs / docs) live in `src/lifecycle/labels.ts` — machine
+enum values stay English; default operator-facing copy is **pt-BR**.
+
+| Phase (enum) | Rótulo pt-BR |
+| --- | --- |
+| `announced` | Anunciado |
+| `registration_open` | Inscrições abertas |
+| `registration_closed` | Inscrições encerradas |
+| `exam_scheduled` | Prova agendada |
+| `exam_done` | Prova realizada |
+| `past_due` | Prazo encerrado (pós-prova) |
+| `cancelled` | Cancelado |
+| `archived` | Arquivado |
 
 ## State machine
 
@@ -23,6 +37,9 @@ announced → registration_open → registration_closed → exam_scheduled → e
                                                               ↘         ↓
                                                          cancelled → past_due → archived
 ```
+
+Exemplo (pt-BR): *Anunciado* → *Inscrições abertas* → *Inscrições encerradas* →
+*Prova agendada* → *Prova realizada* → *Prazo encerrado* → *Arquivado*.
 
 Transitions are idempotent (same phase = noop). Illegal edges are rejected.
 

@@ -13,6 +13,7 @@ import {
   type ExamLifecyclePhase,
   type RegistrationStatus,
 } from "./lifecycle/phases.js";
+import { phaseLabel, reasonLabel } from "./lifecycle/labels.js";
 import {
   computePurgeEligibleAt,
   decidePurge,
@@ -94,6 +95,9 @@ async function processExam(exam: LifecycleExamDto, now: Date): Promise<void> {
       from: derived.from,
       to: derived.to,
       reason: derived.reason,
+      fromLabel: phaseLabel(derived.from, "pt"),
+      toLabel: phaseLabel(derived.to, "pt"),
+      reasonLabel: reasonLabel(derived.reason, "pt"),
     });
     exam.lifecyclePhase = derived.to;
     if (nextPurgeEligibleAt) exam.purgeEligibleAt = nextPurgeEligibleAt;

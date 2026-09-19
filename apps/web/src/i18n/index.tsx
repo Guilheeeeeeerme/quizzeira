@@ -160,7 +160,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "No open exams yet.": "Nenhum concurso aberto ainda.",
     "The catalog fills when the crawler discovers published exams. Nothing is invented here.":
       "O catálogo preenche quando o crawler descobre exames publicados. Nada é inventado aqui.",
-    Open: "Aberto",
+    Open: "Inscrições abertas",
     Unknown: "Desconhecido",
     "Bank ready ({n})": "Banco pronto ({n})",
     "Bank warming ({n})": "Banco aquecendo ({n})",
@@ -385,7 +385,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     Broken: "Com falha",
     Proposed: "Proposta",
     Disabled: "Desativada",
-    Closed: "Encerrado",
+    Closed: "Inscrições encerradas",
     Failed: "Reprovada",
     "Needs review": "Requer revisão",
     "Discovered exams": "Concursos descobertos",
