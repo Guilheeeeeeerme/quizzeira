@@ -13,29 +13,56 @@ import { runProcessPass } from "./stages/process.js";
 process.env.SERVICE_NAME ||= "quizzeira-contentworker";
 const NAME = "content-worker";
 
+/**
+ * Failure-domain profiles (§4 / §12 worker extraction). One image, multiple
+ * entrypoints: the monolith stays the default (`all`) until shadow metrics
+ * prove the split profiles are stable. A profile picks the passes it owns;
+ * per-pass stage flags still gate everything.
+ *   all        — current monolithic behavior (default)
+ *   documents  — import + process + planner (memory-heavy, browser/LLM-free)
+ *   embeddings — eligible chunk embeddings (provider-light)
+ *   generation — canonical/stage generation (LLM provider only)
+ */
+type WorkerProfile = "all" | "documents" | "embeddings" | "generation";
+const PROFILE = (
+  (process.env.CONTENT_WORKER_PROFILE ?? "all").trim().toLowerCase() || "all"
+) as WorkerProfile;
+const VALID: readonly WorkerProfile[] = ["all", "documents", "embeddings", "generation"];
+const profile: WorkerProfile = VALID.includes(PROFILE) ? PROFILE : "all";
+if (profile !== PROFILE) {
+  logWarn("unknown CONTENT_WORKER_PROFILE, falling back to all", {
+    worker: NAME,
+    requested: PROFILE,
+  });
+}
+
+const runsDocumentPasses = profile === "all" || profile === "documents";
+const runsEmbeddingPass = profile === "all" || profile === "embeddings";
+const runsGenerationPass = profile === "all" || profile === "generation";
+
 async function tick(): Promise<void> {
   await withRunIdAsync(newRunId(), async () => {
-  if (contentEnv.stageImportEnabled) {
+  if (runsDocumentPasses && contentEnv.stageImportEnabled) {
     await runImportPass().catch((err) =>
       logWarn("import pass errored", { worker: NAME, error: String(err) }),
     );
   }
-  if (contentEnv.extractionEnabled) {
+  if (runsDocumentPasses && contentEnv.extractionEnabled) {
     await runProcessPass().catch((err) =>
       logWarn("process pass errored", { worker: NAME, error: String(err) }),
     );
   }
-  if (contentEnv.stagePlannerEnabled) {
+  if (runsDocumentPasses && contentEnv.stagePlannerEnabled) {
     await runPlannerPass().catch((err) =>
       logWarn("planner pass errored", { worker: NAME, error: String(err) }),
     );
   }
-  if (contentEnv.embeddingsEnabled) {
+  if (runsEmbeddingPass && contentEnv.embeddingsEnabled) {
     await runEmbeddingPass().catch((err) =>
       logWarn("embedding pass errored", { worker: NAME, error: String(err) }),
     );
   }
-  if (contentEnv.generationEnabled) {
+  if (runsGenerationPass && contentEnv.generationEnabled) {
     await runGenerationPass().catch((err) =>
       logWarn("generation pass errored", { worker: NAME, error: String(err) }),
     );
@@ -46,6 +73,7 @@ async function tick(): Promise<void> {
 logInfo("interval mode", {
   worker: NAME,
   intervalMs: workerEnv.intervalMs,
+  profile,
   extraction: contentEnv.extractionEnabled,
   embeddings: contentEnv.embeddingsEnabled,
   generation: contentEnv.generationEnabled,
