@@ -49,6 +49,14 @@ Date-driven rules (pure `deriveNextPhase`):
 2. `examDate < now` → `exam_done` then `past_due`
 3. `purgeEligibleAt ≤ now` while `past_due` → soft `archived`
 
+## What runs today (known limitation)
+
+The crawler writes `Exam.registrationEnd` and `status`, so `announced →
+registration_open → registration_closed` is live. **Nothing writes
+`Exam.examDate` yet** (no crawler parser, no admin route), so `exam_scheduled /
+exam_done / past_due / archived` and the purge never trigger in production
+until a writer lands. The purge code is tested and safe (see below) but dormant.
+
 ## Purge policy (Discovery only)
 
 | Step | When | Effect |
