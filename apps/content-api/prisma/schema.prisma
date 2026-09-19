@@ -206,7 +206,7 @@ model Position {
 model SyllabusNode {
   id                 String   @id @default(cuid())
   syllabusId         String
-  syllabus           Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+  syllabus            Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
   parentId           String?
   depth              Int
   ordinal            Int
@@ -222,9 +222,44 @@ model SyllabusNode {
   status             String   @default("active")
   extraction         Json
   embedding          Unsupported("vector(768)")?
+  topicMaps          SyllabusTopicMap[]
+  applicabilities    QuestionApplicability[]
 
   @@index([syllabusId, depth])
   @@index([canonicalKey])
+}
+
+/// Exam-independent curriculum identity (§7). SyllabusTopicMap links each
+/// exam's SyllabusNode to exactly one durable topic; questions and knowledge
+/// attach to the topic so multiple compatible exams reuse them.
+model CanonicalTopic {
+  id          String             @id @default(cuid())
+  key         String             @unique
+  subject     String
+  subjectSlug String
+  title       String
+  status      String   @default("active")
+  createdAt   DateTime           @default(now())
+  nodeMaps    SyllabusTopicMap[]
+  questionItems QuestionItem[]
+  knowledgeUnits KnowledgeUnit[]
+  applicabilities QuestionApplicability[]
+
+  @@index([subjectSlug, status])
+}
+
+/// Many-to-many syllabus-node ↔ canonical-topic mapping with provenance.
+model SyllabusTopicMap {
+  syllabusNodeId  String
+  syllabusNode    SyllabusNode  @relation(fields: [syllabusNodeId], references: [id], onDelete: Cascade)
+  canonicalTopicId String
+  canonicalTopic  CanonicalTopic @relation(fields: [canonicalTopicId], references: [id], onDelete: Cascade)
+  method          String        @default("canonicalKey")
+  confidence      Float         @default(1)
+  createdAt       DateTime      @default(now())
+
+  @@id([syllabusNodeId, canonicalTopicId])
+  @@index([canonicalTopicId])
 }
 
 model ChunkSyllabusMap {
@@ -254,10 +289,35 @@ model KnowledgeUnit {
   mergedIntoId   String?
   extraction     Json
   embedding      Unsupported("vector(768)")?
+  canonicalTopicId String?
+  canonicalTopic   CanonicalTopic? @relation(fields: [canonicalTopicId], references: [id])
   createdAt      DateTime                     @default(now())
 
   @@index([syllabusNodeId, status])
   @@index([canonicalKey, status])
+}
+
+/// Exam-independent applicability: one published question may serve any
+/// compatible syllabus node through its canonical topic (§7).
+model QuestionApplicability {
+  id              String          @id @default(cuid())
+  questionItemId  String
+  questionItem    QuestionItem    @relation(fields: [questionItemId], references: [id], onDelete: Cascade)
+  syllabusNodeId  String
+  syllabusNode    SyllabusNode    @relation(fields: [syllabusNodeId], references: [id], onDelete: Cascade)
+  canonicalTopicId String?
+  canonicalTopic  CanonicalTopic? @relation(fields: [canonicalTopicId], references: [id])
+  matchConfidence Float           @default(1)
+  mappingMethod   String          @default("canonicalKey")
+  constraints     Json            @default("{}")
+  state           String          @default("active")
+  validThrough    DateTime?
+  lastValidatedAt DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([questionItemId, syllabusNodeId])
+  @@index([syllabusNodeId, state])
 }
 
 model PreviousQuestion {
@@ -340,6 +400,9 @@ model QuestionItem {
   updatedAt           DateTime           @updatedAt
   publishedAt         DateTime?
   reviews             QualityReview[]
+  canonicalTopicId    String?
+  canonicalTopic      CanonicalTopic?    @relation(fields: [canonicalTopicId], references: [id])
+  applicabilities     QuestionApplicability[]
 
   @@index([status, examSlug])
   @@index([examSlug, subjectSlug, status])
