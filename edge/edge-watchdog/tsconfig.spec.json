@@ -3,13 +3,12 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ESNext", "WebWorker"],
-    "types": [],
+    "lib": ["ESNext"],
+    "types": ["node"],
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.spec.ts"]
+  "include": ["src"]
 }
