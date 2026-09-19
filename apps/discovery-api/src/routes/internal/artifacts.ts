@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
 import { putArtifactObject } from "../../lib/storage";
+import { enqueueJob } from "../../lib/jobs";
+
+/** Job kind content-worker's import pass claims (§5, item 1b). String contract
+ * shared with apps/content-worker/src/stages/import.ts — keep both in sync. */
+export const IMPORT_ARTIFACT_JOB_KIND = "import_artifact";
 
 export async function registerInternalArtifactRoutes(app: FastifyInstance): Promise<void> {
   // ── Document store ────────────────────────────────────────────────────────
@@ -64,7 +69,36 @@ export async function registerInternalArtifactRoutes(app: FastifyInstance): Prom
         published: Boolean(body.published),
       },
     });
+    // One import job per artifact (§5, item 1b): content-worker's import pass
+    // claims from this instead of polling published=false. dedupeKey makes
+    // this safe even if the same artifact is somehow enqueued twice.
+    await enqueueJob({
+      kind: IMPORT_ARTIFACT_JOB_KIND,
+      entityId: artifact.id,
+      dedupeKey: `${IMPORT_ARTIFACT_JOB_KIND}:${artifact.id}`,
+    });
     return { artifact, created: true };
+  });
+
+  /**
+   * Idempotent backfill (§5, item 1b): enqueue import jobs for artifacts
+   * created before this migration. Safe to re-run — `enqueueJob` is a no-op
+   * per dedupeKey, so an artifact already imported (or already queued) is
+   * never re-enqueued.
+   */
+  app.post("/internal/artifacts/backfill-import-jobs", async () => {
+    const artifacts = await prisma.artifact.findMany({
+      where: { published: false },
+      select: { id: true },
+    });
+    for (const a of artifacts) {
+      await enqueueJob({
+        kind: IMPORT_ARTIFACT_JOB_KIND,
+        entityId: a.id,
+        dedupeKey: `${IMPORT_ARTIFACT_JOB_KIND}:${a.id}`,
+      });
+    }
+    return { ok: true, scanned: artifacts.length };
   });
 
   /** Content's extraction stage pulls unprocessed artifacts from here. */
