@@ -6,6 +6,12 @@ import {
 } from "@quizzeira/shared";
 import { prisma } from "../../lib/prisma";
 import { putObject } from "../../lib/storage";
+import { isLeafPoisoned, type GenerationRunOutcome } from "../../lib/generation-fairness";
+
+/** Consecutive recent failures before a leaf is skipped (§9). */
+const POISON_THRESHOLD = 3;
+/** Recent-run window per syllabus used to detect poisoned leaves. */
+const POISON_LOOKBACK_RUNS = 300;
 
 export async function registerInternalGenerationRoutes(app: FastifyInstance): Promise<void> {
   /** @deprecated Worker enqueues on discovery-api; kept for older callers. */
@@ -25,7 +31,9 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
    * round-robin in the order of `examSlugs` (caller passes open exams sorted
    * by registration deadline) so the soonest exam is always served first.
    * Stale `running` runs are reclaimed here so a worker restart never blocks
-   * a leaf forever.
+   * a leaf forever. Leaves whose last `POISON_THRESHOLD` runs all failed are
+   * skipped (§9): a bad leaf's deficit never closes on its own, so without
+   * this it would claim a slot on every single pass forever.
    */
   app.get("/internal/generation/planner-queue", async (request) => {
     const q = request.query as {
@@ -97,11 +105,26 @@ export async function registerInternalGenerationRoutes(app: FastifyInstance): Pr
         subjectTotals.set(subject, (subjectTotals.get(subject) ?? 0) + Number(leaf.previousQuestionCount));
       }
 
+      const recentRuns = await prisma.generationRun.findMany({
+        where: { syllabusNodeId: { in: rows.map((r) => r.id) } },
+        orderBy: { startedAt: "desc" },
+        take: POISON_LOOKBACK_RUNS,
+        select: { syllabusNodeId: true, status: true },
+      });
+      const statusesByLeaf = new Map<string, GenerationRunOutcome[]>();
+      for (const run of recentRuns) {
+        if (!run.syllabusNodeId) continue;
+        const list = statusesByLeaf.get(run.syllabusNodeId) ?? [];
+        list.push(run.status);
+        statusesByLeaf.set(run.syllabusNodeId, list);
+      }
+
       const items: Array<Record<string, unknown>> = [];
       for (const leaf of rows) {
         const pathParts = leaf.pathSlug.split("/").map((x) => x.trim()).filter(Boolean);
         const subject = pathParts[0] || leaf.title;
         if (!subject.trim() || subject.trim().toLowerCase() === "geral") continue;
+        if (isLeafPoisoned(statusesByLeaf.get(leaf.id) ?? [], POISON_THRESHOLD)) continue;
         const previousQuestionCount = Number(leaf.previousQuestionCount);
         const subjectTotal = Math.max(subjectTotals.get(subject) ?? 0, 1);
         const share = previousQuestionCount / subjectTotal;
