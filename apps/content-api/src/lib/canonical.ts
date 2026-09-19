@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { subjectSlug } from "@quizzeira/shared";
+import { findParityGaps } from "./parity";
 
 /**
  * Canonical bank backfill (§7 legacy migration): infer CanonicalTopic rows
@@ -105,6 +106,51 @@ export async function backfillCanonicalBank(): Promise<BackfillResult> {
   }
 
   return result;
+}
+
+export interface ParityCheckResult {
+  examSlug: string;
+  legacyCount: number;
+  canonicalCount: number;
+  missingFromCanonical: string[];
+}
+
+/**
+ * Dual-read parity check (§7, Next item 3): compares the legacy sampling
+ * path (`QuestionItem.examSlug` + `syllabusNodeId` directly) against the
+ * canonical path (active `QuestionApplicability` through the exam's active
+ * syllabus) for one exam. `/published/sample` already reads through both
+ * (dual-read); this is what tells an operator whether it is safe to drop
+ * the legacy path for that exam without losing coverage.
+ */
+export async function checkCanonicalDualReadParity(examSlug: string): Promise<ParityCheckResult> {
+  const [legacy, canonical] = await Promise.all([
+    prisma.questionItem.findMany({
+      where: { examSlug, status: "published", syllabusNodeId: { not: null } },
+      select: { id: true },
+    }),
+    prisma.questionItem.findMany({
+      where: {
+        status: "published",
+        applicabilities: {
+          some: {
+            state: "active",
+            OR: [{ validThrough: null }, { validThrough: { gt: new Date() } }],
+            syllabusNode: { syllabus: { examSlug, status: "active" } },
+          },
+        },
+      },
+      select: { id: true },
+    }),
+  ]);
+  const legacyIds = legacy.map((r) => r.id);
+  const canonicalIds = canonical.map((r) => r.id);
+  return {
+    examSlug,
+    legacyCount: legacyIds.length,
+    canonicalCount: canonicalIds.length,
+    missingFromCanonical: findParityGaps(legacyIds, canonicalIds),
+  };
 }
 
 function subjectLabel(key: string): string {
