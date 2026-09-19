@@ -11,7 +11,7 @@ Agent behavioral rules: see [AGENTS.md](./AGENTS.md). Concept map: [docs/ai-swe-
 | Web | https://app.quizzeira.ferredemo.dev |
 | API | https://api.quizzeira.ferredemo.dev |
 
-Production deploys are owned by the **infra** repo (Jenkins job `quizzeira`). Study/Discovery/Content Postgres are Supabase schemas; workers skip Headroom (`LLM_USE_HEADROOM=false`) — see infra `docs/quizzeira-headroom.md` and `docs/supabase.md`.
+Production deploys are owned by the **infra** repo (GitHub Actions `Deploy app` → GHCR → VPS; `Quizzeira edge` → Cloudflare Pages/Workers). Study/Discovery/Content Postgres are Supabase schemas; workers skip Headroom (`LLM_USE_HEADROOM=false`) — see infra `docs/quizzeira-headroom.md`, `docs/supabase.md`, and step-by-step [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 ## Layout
 
@@ -69,7 +69,7 @@ npm run db:migrate:discovery
 npm run db:migrate:content
 ```
 
-Jenkins (via infra): `npm run test:shared && npm run test:i18n`.
+Pre-deploy gate (infra `app_test.sh`): `npm run test:shared && npm run test:i18n`.
 
 ## Conventions
 
