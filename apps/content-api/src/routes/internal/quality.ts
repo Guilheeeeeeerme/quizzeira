@@ -120,18 +120,23 @@ export async function registerInternalQualityRoutes(app: FastifyInstance): Promi
       tokensIn: body.tokensIn != null ? Number(body.tokensIn) : 0,
       tokensOut: body.tokensOut != null ? Number(body.tokensOut) : 0,
       count: body.count != null ? Number(body.count) : 1,
+      service: body.service != null ? String(body.service) : "",
     });
     return { ok: true };
   });
 
+  /** `service` filters to one emitter — e.g. compare a shadow-profile
+   * instance against the monolith (§12 Next item 4) by calling this twice
+   * with each SERVICE_NAME over the same window. */
   app.get("/internal/stage-metrics", async (request) => {
-    const q = request.query as { hours?: string; stage?: string };
+    const q = request.query as { hours?: string; stage?: string; service?: string };
     const hours = Math.min(168, Math.max(1, Number(q.hours || 24)));
     const since = new Date(Date.now() - hours * 3600_000);
     const rows = await prisma.stageMetric.findMany({
       where: {
         hourBucket: { gte: since },
         ...(q.stage ? { stage: String(q.stage) } : {}),
+        ...(q.service != null ? { service: String(q.service) } : {}),
       },
       orderBy: [{ hourBucket: "desc" }, { stage: "asc" }],
       take: 500,
