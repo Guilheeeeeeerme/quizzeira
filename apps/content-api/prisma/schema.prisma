@@ -125,6 +125,12 @@ model Document {
   status              ExtractionStatus @default(pending)
   failReason          String?
   attempts            Int              @default(0)
+  /// Per-stage outcome of the last process pass (syllabus / evidence /
+  /// knowledge) so admins can see WHY an extracted file yielded nothing.
+  outcome             Json?
+  /// Raw bytes were deleted from object storage by the retention pass; the
+  /// worker re-fetches `sourceUrl` if the document is ever reprocessed.
+  bytesPurgedAt       DateTime?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   sections            Section[]
@@ -135,6 +141,7 @@ model Document {
   @@index([status])
   @@index([examSlug])
   @@index([role])
+  @@index([storageKey])
 }
 
 model Section {

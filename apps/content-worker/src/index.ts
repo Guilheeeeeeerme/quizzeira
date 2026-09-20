@@ -17,6 +17,7 @@ import { runGenerationPass } from "./generation/index.js";
 import { runImportPass } from "./stages/import.js";
 import { runPlannerPass } from "./stages/planner.js";
 import { runProcessPass } from "./stages/process.js";
+import { runTriagePass, triageDue } from "./stages/triage.js";
 
 process.env.SERVICE_NAME ||= "quizzeira-contentworker";
 const NAME = "content-worker";
@@ -30,12 +31,19 @@ const NAME = "content-worker";
  *   documents  — import + process + planner (memory-heavy, browser/LLM-free)
  *   embeddings — eligible chunk embeddings (provider-light)
  *   generation — canonical/stage generation (LLM provider only)
+ *   maintenance — triage: reclassify uncertain docs, prune useless, retention
  */
-type WorkerProfile = "all" | "documents" | "embeddings" | "generation";
+type WorkerProfile = "all" | "documents" | "embeddings" | "generation" | "maintenance";
 const PROFILE = (
   (process.env.CONTENT_WORKER_PROFILE ?? "all").trim().toLowerCase() || "all"
 ) as WorkerProfile;
-const VALID: readonly WorkerProfile[] = ["all", "documents", "embeddings", "generation"];
+const VALID: readonly WorkerProfile[] = [
+  "all",
+  "documents",
+  "embeddings",
+  "generation",
+  "maintenance",
+];
 const profile: WorkerProfile = VALID.includes(PROFILE) ? PROFILE : "all";
 if (profile !== PROFILE) {
   logWarn("unknown CONTENT_WORKER_PROFILE, falling back to all", {
@@ -47,6 +55,7 @@ if (profile !== PROFILE) {
 const runsDocumentPasses = profile === "all" || profile === "documents";
 const runsEmbeddingPass = profile === "all" || profile === "embeddings";
 const runsGenerationPass = profile === "all" || profile === "generation";
+const runsMaintenancePass = profile === "all" || profile === "maintenance";
 
 async function tick(): Promise<void> {
   await withRunIdAsync(newRunId(), async () => {
@@ -75,6 +84,11 @@ async function tick(): Promise<void> {
       logWarn("generation pass errored", { worker: NAME, error: String(err) }),
     );
   }
+  if (runsMaintenancePass && contentEnv.triageEnabled && triageDue()) {
+    await runTriagePass().catch((err) =>
+      logWarn("triage pass errored", { worker: NAME, error: String(err) }),
+    );
+  }
   });
 }
 
@@ -85,6 +99,7 @@ logInfo("interval mode", {
   extraction: contentEnv.extractionEnabled,
   embeddings: contentEnv.embeddingsEnabled,
   generation: contentEnv.generationEnabled,
+  triage: contentEnv.triageEnabled,
   windows: workerEnv.windows || "(any)",
   timeZone: workerEnv.timeZone,
 });

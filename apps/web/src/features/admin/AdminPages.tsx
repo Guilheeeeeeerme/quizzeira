@@ -21,6 +21,7 @@ import {
   Textarea,
 } from "../../ui";
 import styles from "./Admin.module.css";
+import { ExamFilesPanel } from "./ExamFilesPanel";
 
 // ── Shared types (mirror the admin JSON the proxies return) ─────────────────
 
@@ -69,6 +70,20 @@ interface AdminExam {
   sourceDomain: string;
   artifactCount: number;
   lastSeenAt: string;
+  /** Content-plane funnel merged by the study API; null when content is down. */
+  pipeline: {
+    documents: number;
+    extracted: number;
+    failed: number;
+    pending: number;
+    unknownRole: number;
+    lowConfidence: number;
+    syllabus: { status: string; nodes: number } | null;
+    previousQuestions: number;
+    knowledgeUnits: number;
+    items: { published: number; needsReview: number; draft: number; failed: number };
+    lastGeneration: { status: string; error: string | null; at: string } | null;
+  } | null;
 }
 
 interface QualityItem {
@@ -683,6 +698,7 @@ export function AdminExamsPage() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "closed">("all");
+  const [filesOpenId, setFilesOpenId] = useState<string | null>(null);
   const [coverageBySlug, setCoverageBySlug] = useState<
     Record<
       string,
@@ -829,6 +845,40 @@ export function AdminExamsPage() {
                   {t("{n} artifact(s)", { n: exam.artifactCount })} ·{" "}
                   {t("Last seen")}: {formatAt(exam.lastSeenAt)}
                 </Text>
+                {exam.pipeline ? (
+                  <>
+                    <Text size="caption" tone={exam.pipeline.unknownRole + exam.pipeline.lowConfidence > 0 ? "secondary" : "tertiary"}>
+                      {t(
+                        "{docs} imported · {extracted} extracted · {failed} failed · {label} need a label · syllabus: {syllabus} · {prev} previous questions · {kus} KUs · {pub} published",
+                        {
+                          docs: exam.pipeline.documents,
+                          extracted: exam.pipeline.extracted,
+                          failed: exam.pipeline.failed,
+                          label: exam.pipeline.unknownRole + exam.pipeline.lowConfidence,
+                          syllabus: exam.pipeline.syllabus
+                            ? `${exam.pipeline.syllabus.nodes} ${exam.pipeline.syllabus.status}`
+                            : t("none"),
+                          prev: exam.pipeline.previousQuestions,
+                          kus: exam.pipeline.knowledgeUnits,
+                          pub: exam.pipeline.items.published,
+                        },
+                      )}
+                    </Text>
+                    {exam.pipeline.lastGeneration?.error ? (
+                      <Text size="caption" tone="danger">
+                        {t("Last generation ({at}): {error}", {
+                          at: formatAt(exam.pipeline.lastGeneration.at),
+                          error: exam.pipeline.lastGeneration.error.slice(0, 160),
+                        })}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <Text size="caption" tone="tertiary">
+                    {t("Content pipeline unavailable.")}
+                  </Text>
+                )}
+                {filesOpenId === exam.id ? <ExamFilesPanel examId={exam.id} /> : null}
                 <a className={styles.link} href={exam.listingUrl} target="_blank" rel="noreferrer">
                   {t("Open listing")}
                 </a>
@@ -882,6 +932,13 @@ export function AdminExamsPage() {
                 ) : null}
               </div>
               <div className={styles.cardActions}>
+                <Button
+                  size="sm"
+                  variant={filesOpenId === exam.id ? "secondary" : "ghost"}
+                  onClick={() => setFilesOpenId(filesOpenId === exam.id ? null : exam.id)}
+                >
+                  {filesOpenId === exam.id ? t("Hide files") : t("Files")}
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"

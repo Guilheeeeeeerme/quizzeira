@@ -1,6 +1,11 @@
 // Concept: Document store — artifact read + normalized/brief write (§35).
 
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { env } from "./env";
 
 const client = new S3Client({
@@ -45,4 +50,16 @@ export async function putObject(
 export async function getJsonObject<T = unknown>(key: string): Promise<T> {
   const buf = await getArtifactObject(key);
   return JSON.parse(buf.toString("utf8")) as T;
+}
+
+/** Retention: drop raw artifact bytes once every document that shares the key
+ * is terminal. Idempotent — S3 DeleteObject on a missing key is a no-op. */
+export async function deleteObject(key: string): Promise<void> {
+  await client.send(new DeleteObjectCommand({ Bucket: env.s3Bucket, Key: key }));
+}
+
+/** True when the object is gone (NoSuchKey / 404) rather than another error. */
+export function isMissingObjectError(err: unknown): boolean {
+  const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return e?.name === "NoSuchKey" || e?.$metadata?.httpStatusCode === 404;
 }

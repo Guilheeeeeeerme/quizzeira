@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
-import { getArtifactObject, getJsonObject, putObject } from "../../lib/storage";
+import {
+  getArtifactObject,
+  getJsonObject,
+  isMissingObjectError,
+  putObject,
+} from "../../lib/storage";
 
 const STALE_EXTRACTING_MS = 15 * 60 * 1000;
 
@@ -69,6 +74,8 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
         contentType: d.contentType,
         attempts: d.attempts,
         discoveryArtifactId: d.discoveryArtifactId,
+        roleMethod: d.roleMethod,
+        bytesPurgedAt: d.bytesPurgedAt?.toISOString() ?? null,
       })),
     };
   });
@@ -111,7 +118,22 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
     if (!document?.storageKey) {
       throw Object.assign(new Error("document has no stored bytes"), { statusCode: 404 });
     }
-    const buf = await getArtifactObject(document.storageKey);
+    if (document.bytesPurgedAt) {
+      throw Object.assign(new Error("bytes purged by retention"), { statusCode: 410 });
+    }
+    let buf: Buffer;
+    try {
+      buf = await getArtifactObject(document.storageKey);
+    } catch (err) {
+      if (!isMissingObjectError(err)) throw err;
+      // Object gone without our marker (manual delete / MinIO lifecycle rule):
+      // record it so the worker falls back to sourceUrl next time.
+      await prisma.document.updateMany({
+        where: { storageKey: document.storageKey, bytesPurgedAt: null },
+        data: { bytesPurgedAt: new Date() },
+      });
+      throw Object.assign(new Error("bytes purged by retention"), { statusCode: 410 });
+    }
     return {
       contentType: document.contentType ?? "application/pdf",
       byteSize: buf.byteLength,
@@ -168,6 +190,7 @@ export async function registerInternalDocumentRoutes(app: FastifyInstance): Prom
         stats: body.stats ?? undefined,
         rank: body.rank != null ? Number(body.rank) : undefined,
         normalizedKey: body.normalizedKey ? String(body.normalizedKey) : undefined,
+        outcome: body.outcome !== undefined ? (body.outcome as never) : undefined,
       },
     });
     return { document };

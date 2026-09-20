@@ -29,6 +29,17 @@ export const contentEnv = {
   stageKnowledgeEnabled: flag("CONTENT_STAGE_KNOWLEDGE", true),
   stagePlannerEnabled: flag("CONTENT_STAGE_PLANNER", true),
 
+  // Triage / retention (maintenance pass; see stages/triage.ts).
+  triageEnabled: flag("CONTENT_TRIAGE_ENABLED", true),
+  triageIntervalMs: num("CONTENT_TRIAGE_INTERVAL_SEC", 6 * 60 * 60) * 1000,
+  triageReclassifyEnabled: flag("CONTENT_TRIAGE_RECLASSIFY", true),
+  triageDocsPerPass: num("CONTENT_TRIAGE_DOCS_PER_PASS", 20),
+  triagePruneEnabled: flag("CONTENT_TRIAGE_PRUNE", true),
+  triagePrunePerPass: num("CONTENT_TRIAGE_PRUNE_PER_PASS", 100),
+  retentionEnabled: flag("CONTENT_RETENTION_ENABLED", true),
+  retentionGraceDays: num("CONTENT_RETENTION_GRACE_DAYS", 7),
+  retentionPerPass: num("CONTENT_RETENTION_PER_PASS", 200),
+
   docProcessorUrl: (process.env.DOC_PROCESSOR_URL ?? "http://doc-processor:3030").replace(
     /\/$/,
     "",

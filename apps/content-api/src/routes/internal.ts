@@ -13,6 +13,8 @@ import { registerInternalQualityRoutes } from "./internal/quality";
 import { registerInternalProvenanceRoutes } from "./internal/provenance";
 import { registerInternalCanonicalRoutes } from "./internal/canonical";
 import { registerInternalJobRoutes } from "./internal/jobs";
+import { registerInternalRetentionRoutes } from "./internal/retention";
+import { registerInternalTriageRoutes } from "./internal/triage";
 
 export async function registerInternalRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", async (request) => {
@@ -28,4 +30,6 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
   await registerInternalProvenanceRoutes(app);
   await registerInternalCanonicalRoutes(app);
   await registerInternalJobRoutes(app);
+  await registerInternalRetentionRoutes(app);
+  await registerInternalTriageRoutes(app);
 }

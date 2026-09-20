@@ -283,6 +283,43 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  /**
+   * Every file the crawler attached to one exam, with the lexical labels it
+   * inferred at fetch time. The study API joins these with Content's documents
+   * by artifact id so the admin sees crawler label vs. classifier verdict.
+   */
+  app.get<{ Params: { id: string } }>("/admin/exams/:id/artifacts", async (request) => {
+    const q = request.query as { limit?: string };
+    const exam = await prisma.exam.findUnique({
+      where: { id: request.params.id },
+      select: { id: true, examSlug: true, title: true },
+    });
+    if (!exam) throw Object.assign(new Error("not found"), { statusCode: 404 });
+    const items = await prisma.artifact.findMany({
+      where: { examId: exam.id },
+      orderBy: [{ kind: "asc" }, { fetchedAt: "asc" }],
+      take: Math.min(2000, Number(q.limit || 1000)),
+    });
+    return {
+      exam,
+      items: items.map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        kindHint: a.kindHint,
+        roleHint: a.roleHint,
+        anchorLabel: a.anchorLabel,
+        url: a.url,
+        contentType: a.contentType,
+        byteSize: a.byteSize,
+        stored: Boolean(a.storageKey),
+        bytesPurgedAt: a.bytesPurgedAt?.toISOString() ?? null,
+        imported: a.published,
+        topicQueryId: a.topicQueryId,
+        fetchedAt: a.fetchedAt.toISOString(),
+      })),
+    };
+  });
+
   /** Admins close exams the crawler cannot tell are over (site left the page up). */
   app.patch<{ Params: { id: string }; Body: { status?: string } }>(
     "/admin/exams/:id",

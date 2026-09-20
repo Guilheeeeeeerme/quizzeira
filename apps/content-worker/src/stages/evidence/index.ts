@@ -11,6 +11,8 @@ import { buildStyleProfile } from "./style-profile.js";
 export interface EvidenceProcessResult {
   previousQuestions: number;
   styleProfiles: number;
+  /** prova only: whether an answer key was found for it (undefined for gabaritos). */
+  gabaritoPaired?: boolean;
 }
 
 interface QueuedDocument {
@@ -38,11 +40,13 @@ export async function processEvidenceDocument(
   sections: ClassifiedSection[],
 ): Promise<EvidenceProcessResult> {
   let extraKeyText = "";
+  let gabaritoPaired: boolean | undefined;
   if (document.kind === "prova") {
     const { items } = await content.get<{ items: EvidenceDocumentRef[] }>(
       `/internal/documents?examSlug=${encodeURIComponent(document.examSlug)}&kind=gabarito`,
     );
     const gabarito = findMatchingGabarito(document, items, text);
+    gabaritoPaired = Boolean(gabarito);
     if (gabarito) {
       const bytes = await content.get<{ base64: string }>(
         `/internal/documents/${gabarito.id}/bytes`,
@@ -54,7 +58,7 @@ export async function processEvidenceDocument(
   }
 
   const questions = extractMcqs(text, extraKeyText);
-  if (questions.length === 0) return { previousQuestions: 0, styleProfiles: 0 };
+  if (questions.length === 0) return { previousQuestions: 0, styleProfiles: 0, gabaritoPaired };
 
   let leaves: SyllabusLeafRef[] = [];
   try {
@@ -138,5 +142,5 @@ export async function processEvidenceDocument(
     styleProfiles = 1;
   }
 
-  return { previousQuestions: posted.created, styleProfiles };
+  return { previousQuestions: posted.created, styleProfiles, gabaritoPaired };
 }
