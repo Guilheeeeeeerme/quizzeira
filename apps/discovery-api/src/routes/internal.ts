@@ -12,6 +12,7 @@ import { registerInternalDomainStatsRoutes } from "./internal/domain-stats";
 import { registerInternalRunRoutes } from "./internal/runs";
 import { registerInternalScoutRoutes } from "./internal/scout";
 import { registerInternalJobRoutes } from "./internal/jobs";
+import { registerInternalLifecycleRoutes } from "./internal/lifecycle";
 
 export async function registerInternalRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", async (request) => {
@@ -26,4 +27,5 @@ export async function registerInternalRoutes(app: FastifyInstance): Promise<void
   await registerInternalRunRoutes(app);
   await registerInternalScoutRoutes(app);
   await registerInternalJobRoutes(app);
+  await registerInternalLifecycleRoutes(app);
 }
