@@ -328,6 +328,44 @@ services:
     networks:
       - private
 
+  # Social → Discovery scout (fixture/stubs; off by default). Never registers
+  # social hosts as Sources — proposes outbound file domains via scout API.
+  discovery-social-scout:
+    build:
+      context: .
+      dockerfile: apps/discovery-social-scout/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    profiles:
+      - social-scout
+    env_file:
+      - .env
+    environment:
+      PORT: 3013
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      WORKER_INTERVAL_MS: ${DISCOVERY_SOCIAL_INTERVAL_MS:-3600000}
+      WORKER_WINDOWS: ${DISCOVERY_SOCIAL_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_SOCIAL_ENABLED: ${DISCOVERY_SOCIAL_ENABLED:-false}
+      DISCOVERY_SOCIAL_FIXTURE_MODE: ${DISCOVERY_SOCIAL_FIXTURE_MODE:-true}
+      DISCOVERY_SOCIAL_STORE_URL_ARTIFACTS: ${DISCOVERY_SOCIAL_STORE_URL_ARTIFACTS:-false}
+      DISCOVERY_SOCIAL_ADAPTERS: ${DISCOVERY_SOCIAL_ADAPTERS:-fixture}
+      DISCOVERY_SOCIAL_MAX_POSTS: ${DISCOVERY_SOCIAL_MAX_POSTS:-40}
+      DISCOVERY_SOCIAL_MAX_FILES: ${DISCOVERY_SOCIAL_MAX_FILES:-12}
+    volumes:
+      - ./apps/discovery-social-scout:/app/apps/discovery-social-scout
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/discovery-social-scout/node_modules
+    depends_on:
+      discovery-api:
+        condition: service_healthy
+    networks:
+      - dmz
+      - private
+
   # ── Content plane (Extraction, Generation, Eval) ──────────────────────────
 
   doc-processor:

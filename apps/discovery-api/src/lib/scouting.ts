@@ -73,9 +73,9 @@ const UNRELATED_WORDS = /\b(marketplace|hotel|market|flea|wedding)\b/i;
 
 const OFFICIAL_HOSTS = /\.(gov|jus|leg|edu|mil)\.br$/i;
 const BANCA_NAMES =
-  /(vunesp|fundação\s+carlos\s+chagas|fundacao\s+carlos\s+chagas|fgv|cebraspe|cespe|cesgranrio|consulplan|ibfc|quadrix|idecan|fundetec)/i;
+  /(vunesp|fundação\s+carlos\s+chagas|fundacao\s+carlos\s+chagas|\bfcc\b|fgv|cebraspe|cespe|cesgranrio|consulplan|ibfc|quadrix|idecan|fundetec)/i;
 const EXAM_LANGUAGE =
-  /\b(concursos?|editais?|oab|provas?|gabarito|inscriç[õo]es|inscricoes|banca|cargos?|vestibular)\b/i;
+  /\b(concursos?|editais?|edital|oab|provas?|gabarito|inscri[cç]([aã]o|[oõ]es)|inscricoes|banca|cargos?|vestibular)\b/i;
 
 function hostsOf(urls: string[]): string[] {
   return urls.map((u) => {
