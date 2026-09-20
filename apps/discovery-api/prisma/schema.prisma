@@ -98,6 +98,19 @@ enum ExamStatus {
   unknown
 }
 
+/// Concurso lifecycle beyond registration OPEN/CLOSED (ExamStatus).
+/// OPEN ↔ registration_open; CLOSED ↔ registration_closed+.
+enum ExamLifecyclePhase {
+  announced
+  registration_open
+  registration_closed
+  exam_scheduled
+  exam_done
+  past_due
+  cancelled
+  archived
+}
+
 enum CrawlRunStatus {
   running
   ok
@@ -190,30 +203,37 @@ model SourceCandidate {
 }
 
 model Exam {
-  id              String     @id
-  examSlug        String
-  title           String
-  org             String?
-  banca           String?
-  emphasis        Json
-  editalUrl       String?
-  listingUrl      String
-  kind            ExamKind   @default(concurso)
-  editionKey      String?
-  detailUrl       String?
-  registrationEnd DateTime?
-  statusSource    String?
-  positions       Json?
-  status          ExamStatus @default(open)
-  sourceId        String
-  source          Source     @relation(fields: [sourceId], references: [id])
-  sourceDomain    String
-  discoveredAt    DateTime   @default(now())
-  lastSeenAt      DateTime   @default(now())
-  artifacts       Artifact[]
+  id                String             @id
+  examSlug          String
+  title             String
+  org               String?
+  banca             String?
+  emphasis          Json
+  editalUrl         String?
+  listingUrl        String
+  kind              ExamKind           @default(concurso)
+  editionKey        String?
+  detailUrl         String?
+  registrationStart DateTime?
+  registrationEnd   DateTime?
+  examDate          DateTime?
+  statusSource      String?
+  positions         Json?
+  status            ExamStatus         @default(open)
+  lifecyclePhase    ExamLifecyclePhase @default(announced)
+  archivedAt        DateTime?
+  purgeEligibleAt   DateTime?
+  sourceId          String
+  source            Source             @relation(fields: [sourceId], references: [id])
+  sourceDomain      String
+  discoveredAt      DateTime           @default(now())
+  lastSeenAt        DateTime           @default(now())
+  artifacts         Artifact[]
 
   @@unique([examSlug, listingUrl])
   @@index([status])
+  @@index([lifecyclePhase])
+  @@index([examDate])
   @@index([examSlug])
   @@index([kind])
 }

@@ -1,6 +1,11 @@
 // Concept: Document store (S3-compatible put for PDFs/editais).
 // Buckets are pre-provisioned on Supabase Storage — never CreateBucket here.
-import { HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { createHash } from "node:crypto";
 import { env } from "./env";
 
@@ -51,4 +56,15 @@ export async function putArtifactObject(
     }),
   );
   return { storageKey, checksum, byteSize: body.byteLength };
+}
+
+/** Discovery lifecycle hard-delete — MinIO object only; never Study/Content. */
+export async function deleteArtifactObject(storageKey: string): Promise<void> {
+  await assertBucket();
+  await client.send(
+    new DeleteObjectCommand({
+      Bucket: env.s3Bucket,
+      Key: storageKey,
+    }),
+  );
 }

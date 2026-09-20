@@ -1,0 +1,21 @@
+# Playwright not needed — Node worker + thin HTTP.
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+COPY apps/discovery-lifecycle/package.json ./apps/discovery-lifecycle/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/worker-kit/package.json ./packages/worker-kit/
+
+RUN npm install
+
+COPY packages/shared ./packages/shared
+COPY packages/worker-kit ./packages/worker-kit
+COPY apps/discovery-lifecycle ./apps/discovery-lifecycle
+
+RUN npm run build -w @quizzeira/shared
+
+WORKDIR /app/apps/discovery-lifecycle
+
+CMD ["npm", "run", "dev"]
