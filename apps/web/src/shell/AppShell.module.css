@@ -83,7 +83,8 @@
 .header {
   position: sticky;
   top: 0;
-  z-index: 40;
+  /* Above scrim so the menu toggle stays tappable while the drawer is open. */
+  z-index: 60;
   height: var(--header-height);
   border-bottom: var(--border-width) solid var(--border-default);
   background: var(--surface-base);
@@ -110,6 +111,9 @@
 
 .menuButton {
   display: inline-flex;
+  color: var(--text-primary);
+  border-color: var(--border-default);
+  background: var(--surface-raised);
 }
 
 .mobileBrand {
@@ -224,7 +228,8 @@
 
 .drawer {
   position: fixed;
-  inset-block: 0;
+  top: calc(var(--header-height) + env(safe-area-inset-top, 0px));
+  bottom: 0;
   inset-inline-start: 0;
   z-index: 50;
   display: flex;
@@ -234,7 +239,6 @@
   background: var(--surface-raised);
   transform: translateX(-105%);
   transition: transform 200ms ease-out;
-  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .drawerOpen {
