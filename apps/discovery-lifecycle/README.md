@@ -59,13 +59,34 @@ until a writer lands. The purge code is tested and safe (see below) but dormant.
 
 ## Purge policy (Discovery only)
 
+### Calendar-year GC (product inventory)
+
+Product surfaces only care about exams for **the current UTC calendar year and the future**. Past-year Discovery blobs are garbage unless knowledge still awaits Content import.
+
+| Decision | When | Effect |
+| --- | --- | --- |
+| Retain | `year >= currentYear` | No Discovery hard-delete (inventory). |
+| Fail-closed | Missing or conflicting year signals (`examDate` / `editionKey` / slug / title / listing URL) | Log + skip purge. |
+| Hold | Past year + knowledge-useful artifact (`roleHint` specification\|evidence\|knowledge, or edital/prova/… kinds) still unpublished with bytes | Keep until Content import sets `published=true` (or Content retention marks `bytesPurgedAt`). |
+| Soft archive | Past year + no pending knowledge | `lifecyclePhase=archived` |
+| Hard delete | Archived + past year + no pending knowledge | Drop Artifact rows + TopicQuery + eligible MinIO keys |
+
+Year resolution is pure (`src/lifecycle/calendar-year.ts`); GC decision is pure (`src/lifecycle/gc.ts`).
+
+**Safety default:** `DISCOVERY_LIFECYCLE_DRY_RUN=true` — hard deletes (and calendar soft-archive) only log `wouldDelete*`. Set `DISCOVERY_LIFECYCLE_DRY_RUN=false` to mutate. Disable the path with `DISCOVERY_LIFECYCLE_CALENDAR_GC=false`.
+
+### examDate grace path (phase machine)
+
 | Step | When | Effect |
 | --- | --- | --- |
 | Soft archive | `examDate + softArchiveGraceDays` (default 30) | `lifecyclePhase=archived`, `archivedAt=now`; stop catalog refresh |
-| Hard delete | `archivedAt + hardDeleteGraceDays` (default 90) | Delete Artifact rows + TopicQuery for that exam. MinIO objects are content-addressed and shared: an object is deleted **only** if no artifact of another exam holds the key **and** the artifact was never imported into Content (`published=false`). Imported bytes belong to Content's retention pass (`Document.bytesPurgedAt`). A failed object delete keeps its Artifact row for retry. |
-| Tombstone | optional `DISCOVERY_LIFECYCLE_DROP_TOMBSTONE` | Delete Exam row; default **keep** tombstone. Content/Study reference exams by `examSlug` without FK, so dropping it orphans their rows for that slug; refused (409) while artifacts remain. |
+| Hard delete | `archivedAt + hardDeleteGraceDays` (default 90) | Only when calendar GC is **disabled**. With calendar GC on, hard deletes go through the calendar path (knowledge + year gates). MinIO: delete key only if no other exam holds it **and** `published=false`. Imported bytes belong to Content retention (`Document.bytesPurgedAt`). Failed object delete keeps Artifact row for retry. |
+| Tombstone | optional `DISCOVERY_LIFECYCLE_DROP_TOMBSTONE` | Delete Exam row; default **keep** tombstone. Content/Study reference exams by `examSlug` without FK; refused (409) while artifacts remain. |
 
-Never Study/Content.
+**Purged:** Discovery Artifact rows, TopicQuery rows, unshared unpublished MinIO objects.  
+**Retained for knowledge:** Content Documents / KUs / syllabus / previous questions; MinIO keys already imported (`published=true`); current+future year Discovery inventory; past-year knowledge bytes still awaiting import.
+
+Never Study/Content question banks.
 
 ## Contract with discovery-api
 
@@ -106,6 +127,8 @@ npm run db:migrate:discovery
 ```bash
 # with compose stub (see docker-compose.yml service discovery-lifecycle)
 DISCOVERY_LIFECYCLE_ENABLED=true \
+DISCOVERY_LIFECYCLE_DRY_RUN=true \
+DISCOVERY_LIFECYCLE_CALENDAR_GC=true \
 INTERNAL_API_URL=http://discovery-api:3010 \
 INTERNAL_API_KEY=$INTERNAL_API_KEY_DISCOVERY \
 WORKER_INTERVAL_MS=900000 \

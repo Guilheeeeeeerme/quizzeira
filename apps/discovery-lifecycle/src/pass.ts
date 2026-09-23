@@ -8,6 +8,11 @@ import {
 import { lifecycleEnv } from "./env.js";
 import { DEFAULT_CHECKERS, runCheckers } from "./lifecycle/checkers.js";
 import {
+  allowExamDateHardDelete,
+  decideCalendarGc,
+  type CalendarGcDecision,
+} from "./lifecycle/gc.js";
+import {
   deriveNextPhase,
   isExamLifecyclePhase,
   type ExamLifecyclePhase,
@@ -39,6 +44,128 @@ function purgeConfig(): PurgePolicyConfig {
   };
 }
 
+function yearSignals(exam: LifecycleExamDto) {
+  return {
+    examDate: parseDate(exam.examDate),
+    registrationEnd: parseDate(exam.registrationEnd),
+    editionKey: exam.editionKey,
+    examSlug: exam.examSlug,
+    title: exam.title,
+    listingUrl: exam.listingUrl,
+  };
+}
+
+async function runHardDelete(
+  exam: LifecycleExamDto,
+  decision: {
+    deleteArtifacts: boolean;
+    deleteTopicQueries: boolean;
+    deleteMinioObjects: boolean;
+    deleteExamTombstone: boolean;
+    reason: string;
+  },
+  meta: Record<string, unknown>,
+): Promise<void> {
+  const dryRun = lifecycleEnv.dryRun;
+  const result = await applyLifecyclePurge({
+    examId: exam.id,
+    deleteArtifacts: decision.deleteArtifacts,
+    deleteTopicQueries: decision.deleteTopicQueries,
+    deleteMinioObjects: decision.deleteMinioObjects,
+    deleteExamTombstone: decision.deleteExamTombstone,
+    dryRun,
+  });
+  logInfo(dryRun ? "lifecycle hard_delete dry_run" : "lifecycle hard_delete", {
+    examId: exam.id,
+    reason: decision.reason,
+    dryRun,
+    deletedArtifacts: result.deletedArtifacts ?? 0,
+    deletedObjects: result.deletedObjects ?? 0,
+    wouldDeleteArtifacts: result.wouldDeleteArtifacts ?? 0,
+    wouldDeleteObjects: result.wouldDeleteObjects ?? 0,
+    ...meta,
+  });
+}
+
+async function applyCalendarGc(
+  exam: LifecycleExamDto,
+  now: Date,
+  signals: ReturnType<typeof yearSignals>,
+): Promise<"done" | "continue"> {
+  if (!lifecycleEnv.calendarGcEnabled) return "continue";
+
+  let gc: CalendarGcDecision = decideCalendarGc({
+    phase: exam.lifecyclePhase,
+    signals,
+    artifacts: exam.artifacts ?? [],
+    now,
+    dryRun: lifecycleEnv.dryRun,
+    dropTombstone: lifecycleEnv.dropTombstone,
+  });
+
+  if (gc.reason === "gc_year_missing" || gc.reason === "gc_year_conflict") {
+    logWarn("lifecycle gc fail-closed", {
+      examId: exam.id,
+      reason: gc.reason,
+      yearSources: gc.yearSources,
+    });
+    return "continue";
+  }
+
+  if (gc.reason === "gc_hold_pending_knowledge") {
+    logInfo("lifecycle gc hold", {
+      examId: exam.id,
+      year: gc.year,
+      pendingKnowledge: gc.pendingKnowledge,
+    });
+    // Do not fall through to examDate hard-delete while knowledge awaits import.
+    return "done";
+  }
+
+  if (gc.action === "soft_archive") {
+    if (!lifecycleEnv.dryRun) {
+      await applyLifecycleTransition({
+        examId: exam.id,
+        to: "archived",
+        reason: "archive_grace_elapsed",
+        registrationStatus: "closed",
+        archivedAt: now.toISOString(),
+      });
+    }
+    logInfo(
+      lifecycleEnv.dryRun ? "lifecycle gc soft_archive dry_run" : "lifecycle gc soft_archive",
+      {
+        examId: exam.id,
+        year: gc.year,
+        reason: gc.reason,
+        dryRun: lifecycleEnv.dryRun,
+      },
+    );
+    exam.lifecyclePhase = "archived";
+    exam.archivedAt = now.toISOString();
+    // Same pass: re-evaluate for hard delete once soft-archived.
+    gc = decideCalendarGc({
+      phase: exam.lifecyclePhase,
+      signals,
+      artifacts: exam.artifacts ?? [],
+      now,
+      dryRun: lifecycleEnv.dryRun,
+      dropTombstone: lifecycleEnv.dropTombstone,
+    });
+  }
+
+  if (gc.action === "hard_delete_discovery") {
+    await runHardDelete(exam, gc, {
+      year: gc.year,
+      pendingKnowledge: gc.pendingKnowledge,
+      path: "calendar_gc",
+    });
+    return "done";
+  }
+
+  return "continue";
+}
+
 async function processExam(exam: LifecycleExamDto, now: Date): Promise<void> {
   if (!isExamLifecyclePhase(exam.lifecyclePhase)) {
     logWarn("unknown lifecycle phase", { examId: exam.id, phase: exam.lifecyclePhase });
@@ -50,6 +177,7 @@ async function processExam(exam: LifecycleExamDto, now: Date): Promise<void> {
   const examDate = parseDate(exam.examDate);
   const archivedAt = parseDate(exam.archivedAt);
   const purgeEligibleAt = parseDate(exam.purgeEligibleAt);
+  const signals = yearSignals(exam);
 
   const signal = runCheckers(DEFAULT_CHECKERS, {
     now,
@@ -104,6 +232,9 @@ async function processExam(exam: LifecycleExamDto, now: Date): Promise<void> {
     if (nextArchivedAt) exam.archivedAt = nextArchivedAt;
   }
 
+  const calendarResult = await applyCalendarGc(exam, now, signals);
+  if (calendarResult === "done") return;
+
   const decision = decidePurge({
     phase: exam.lifecyclePhase as ExamLifecyclePhase,
     examDate,
@@ -141,23 +272,38 @@ async function processExam(exam: LifecycleExamDto, now: Date): Promise<void> {
   }
 
   if (decision.action === "hard_delete_discovery") {
-    const result = await applyLifecyclePurge({
-      examId: exam.id,
-      deleteArtifacts: decision.deleteArtifacts,
-      deleteTopicQueries: decision.deleteTopicQueries,
-      deleteMinioObjects: decision.deleteMinioObjects,
-      deleteExamTombstone: decision.deleteExamTombstone,
-    });
-    logInfo("lifecycle hard_delete", {
-      examId: exam.id,
-      deletedArtifacts: result.deletedArtifacts ?? 0,
+    // When calendar GC is on, hard deletes belong to that path only (knowledge
+    // gate + product-year retain). ExamDate path may still hard-delete if
+    // calendar GC is disabled, but always behind the year fail-closed gate.
+    if (lifecycleEnv.calendarGcEnabled) {
+      logInfo("lifecycle examDate hard_delete deferred to calendar_gc", {
+        examId: exam.id,
+      });
+      return;
+    }
+    const gate = allowExamDateHardDelete(signals, now);
+    if (!gate.allowed) {
+      logWarn("lifecycle hard_delete blocked by calendar gate", {
+        examId: exam.id,
+        reason: gate.reason,
+        year: gate.year,
+      });
+      return;
+    }
+    await runHardDelete(exam, decision, {
+      year: gate.year,
+      path: "exam_date_purge",
     });
   }
 }
 
 /** One lifecycle pass over a Discovery exam batch. */
 export async function runLifecyclePass(now = new Date()): Promise<{ scanned: number }> {
-  const items = await listLifecycleExams(lifecycleEnv.batchSize, lifecycleEnv.hardDeleteGraceDays);
+  const items = await listLifecycleExams(
+    lifecycleEnv.batchSize,
+    lifecycleEnv.hardDeleteGraceDays,
+    lifecycleEnv.calendarGcEnabled,
+  );
   for (const exam of items) {
     try {
       await processExam(exam, now);

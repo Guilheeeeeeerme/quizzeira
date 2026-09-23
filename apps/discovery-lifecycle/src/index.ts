@@ -42,6 +42,8 @@ async function bootstrap(): Promise<void> {
     port: lifecycleEnv.port,
     windows: workerEnv.windows || "(any)",
     timeZone: workerEnv.timeZone,
+    dryRun: lifecycleEnv.dryRun,
+    calendarGc: lifecycleEnv.calendarGcEnabled,
   });
   void runLoop(NAME, workerEnv.intervalMs, tick);
 }
