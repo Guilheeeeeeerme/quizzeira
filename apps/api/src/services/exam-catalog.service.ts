@@ -1,5 +1,5 @@
 import type { ExamCatalogItemDto, ExamPrepareResponse, LocaleCode } from "@quizzeira/shared";
-import { getTopicPreset } from "@quizzeira/shared";
+import { getTopicPreset, isInventoryExam } from "@quizzeira/shared";
 import { fetchOpenExams, publishedExamCounts } from "../lib/pipeline-clients";
 import { createTopic, listTopics } from "./topic.service";
 import { prisma } from "../lib/prisma";
@@ -11,12 +11,23 @@ const ID_MARKER = "openExamId:";
 /**
  * Catalog = open exams from discovery-api, annotated with published counts from
  * content-api. The study API owns neither side, so both degrade to empty.
+ * Defense-in-depth: past calendar years stay out of product search.
  */
 export async function listExamCatalog(): Promise<ExamCatalogItemDto[]> {
   const [open, stats] = await Promise.all([fetchOpenExams(100), publishedExamCounts()]);
 
   const items: ExamCatalogItemDto[] = open
     .filter((o) => (o.kind ?? "concurso") === "concurso" || o.kind === "oab")
+    .filter((o) =>
+      isInventoryExam({
+        editionKey: o.editionKey,
+        examSlug: o.examSlug,
+        title: o.title,
+        listingUrl: o.listingUrl,
+        detailUrl: o.detailUrl,
+        registrationEnd: o.registrationEnd,
+      }),
+    )
     .map((o) => {
       const published = stats.get(o.examSlug);
       return {

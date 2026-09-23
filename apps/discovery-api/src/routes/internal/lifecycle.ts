@@ -25,6 +25,9 @@ function phaseToStatus(phase: string): "open" | "closed" | "unknown" {
 function examLifecycleWire(row: {
   id: string;
   examSlug: string;
+  title: string;
+  editionKey: string | null;
+  listingUrl: string;
   status: string;
   lifecyclePhase: string;
   registrationStart: Date | null;
@@ -33,10 +36,22 @@ function examLifecycleWire(row: {
   archivedAt: Date | null;
   purgeEligibleAt: Date | null;
   statusSource: string | null;
+  artifacts: Array<{
+    roleHint: string;
+    kind: string;
+    kindHint: string;
+    published: boolean;
+    bytesPurgedAt: Date | null;
+    storageKey: string | null;
+    byteSize: number | null;
+  }>;
 }) {
   return {
     id: row.id,
     examSlug: row.examSlug,
+    title: row.title,
+    editionKey: row.editionKey,
+    listingUrl: row.listingUrl,
     status: row.status,
     lifecyclePhase: row.lifecyclePhase,
     registrationStart: row.registrationStart?.toISOString() ?? null,
@@ -45,6 +60,15 @@ function examLifecycleWire(row: {
     archivedAt: row.archivedAt?.toISOString() ?? null,
     purgeEligibleAt: row.purgeEligibleAt?.toISOString() ?? null,
     statusSource: row.statusSource,
+    artifacts: row.artifacts.map((a) => ({
+      roleHint: a.roleHint,
+      kind: a.kind,
+      kindHint: a.kindHint,
+      published: a.published,
+      bytesPurgedAt: a.bytesPurgedAt?.toISOString() ?? null,
+      storageKey: a.storageKey,
+      byteSize: a.byteSize,
+    })),
   };
 }
 
@@ -57,26 +81,52 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
    * Exams the worker still has something to decide about. Archived exams only
    * come back once their hard-delete date has passed; otherwise a few hundred
    * idle archives would fill every batch and starve the live ones.
+   *
+   * Calendar-year GC also needs archived past-year rows even before the
+   * examDate hard-delete grace: include them when `includeCalendarGc=1`.
    */
-  app.get<{ Querystring: { limit?: string; hardDeleteGraceDays?: string } }>(
-    "/internal/lifecycle/exams",
-    async (request) => {
-      const limit = Math.min(Number(request.query.limit || 50) || 50, 200);
-      const graceDays = Math.max(1, Number(request.query.hardDeleteGraceDays || 90) || 90);
-      const hardDeleteBefore = new Date(Date.now() - graceDays * 86_400_000);
-      const items = await prisma.exam.findMany({
-        where: {
-          OR: [
-            { lifecyclePhase: { not: "archived" } },
-            { lifecyclePhase: "archived", archivedAt: { lte: hardDeleteBefore } },
-          ],
+  app.get<{
+    Querystring: {
+      limit?: string;
+      hardDeleteGraceDays?: string;
+      includeCalendarGc?: string;
+    };
+  }>("/internal/lifecycle/exams", async (request) => {
+    const limit = Math.min(Number(request.query.limit || 50) || 50, 200);
+    const graceDays = Math.max(1, Number(request.query.hardDeleteGraceDays || 90) || 90);
+    const hardDeleteBefore = new Date(Date.now() - graceDays * 86_400_000);
+    const includeCalendarGc =
+      request.query.includeCalendarGc === "1" ||
+      request.query.includeCalendarGc === "true";
+
+    const items = await prisma.exam.findMany({
+      where: {
+        OR: [
+          { lifecyclePhase: { not: "archived" } },
+          { lifecyclePhase: "archived", archivedAt: { lte: hardDeleteBefore } },
+          ...(includeCalendarGc
+            ? [{ lifecyclePhase: "archived" as const }]
+            : []),
+        ],
+      },
+      include: {
+        artifacts: {
+          select: {
+            roleHint: true,
+            kind: true,
+            kindHint: true,
+            published: true,
+            bytesPurgedAt: true,
+            storageKey: true,
+            byteSize: true,
+          },
         },
-        orderBy: [{ purgeEligibleAt: "asc" }, { lastSeenAt: "asc" }],
-        take: limit,
-      });
-      return { items: items.map(examLifecycleWire) };
-    },
-  );
+      },
+      orderBy: [{ purgeEligibleAt: "asc" }, { lastSeenAt: "asc" }],
+      take: limit,
+    });
+    return { items: items.map(examLifecycleWire) };
+  });
 
   app.post<{ Body: Record<string, unknown> }>("/internal/lifecycle/transition", async (request) => {
     const body = request.body ?? {};
@@ -132,10 +182,14 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
     if (!examId) {
       throw Object.assign(new Error("examId required"), { statusCode: 400 });
     }
+    const dryRun = Boolean(body.dryRun);
 
     let deletedArtifacts = 0;
     let deletedObjects = 0;
     let keptObjects = 0;
+    let wouldDeleteArtifacts = 0;
+    let wouldDeleteObjects = 0;
+
     if (body.deleteArtifacts || body.deleteMinioObjects) {
       const artifacts = await prisma.artifact.findMany({ where: { examId } });
       const failedKeys = new Set<string>();
@@ -164,6 +218,10 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
             keptObjects += 1;
             continue;
           }
+          if (dryRun) {
+            wouldDeleteObjects += 1;
+            continue;
+          }
           try {
             await deleteArtifactObject(key);
             deletedObjects += 1;
@@ -175,25 +233,31 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
         }
       }
       if (body.deleteArtifacts) {
-        const result = await prisma.artifact.deleteMany({
-          where: {
-            examId,
-            ...(failedKeys.size
-              ? { OR: [{ storageKey: null }, { storageKey: { notIn: Array.from(failedKeys) } }] }
-              : {}),
-          },
-        });
-        deletedArtifacts = result.count;
+        if (dryRun) {
+          wouldDeleteArtifacts = artifacts.filter(
+            (a) => !a.storageKey || !failedKeys.has(a.storageKey),
+          ).length;
+        } else {
+          const result = await prisma.artifact.deleteMany({
+            where: {
+              examId,
+              ...(failedKeys.size
+                ? { OR: [{ storageKey: null }, { storageKey: { notIn: Array.from(failedKeys) } }] }
+                : {}),
+            },
+          });
+          deletedArtifacts = result.count;
+        }
       }
     }
 
-    if (body.deleteTopicQueries) {
+    if (body.deleteTopicQueries && !dryRun) {
       await prisma.topicQuery.deleteMany({ where: { examId } });
     }
 
     // Content/Study reference the exam by examSlug (no FK), so dropping the
     // tombstone orphans their rows for that slug. Off by default in the worker.
-    if (body.deleteExamTombstone) {
+    if (body.deleteExamTombstone && !dryRun) {
       const remaining = await prisma.artifact.count({ where: { examId } });
       if (remaining > 0) {
         throw Object.assign(new Error("exam still has artifacts; purge them first"), {
@@ -203,6 +267,14 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
       await prisma.exam.delete({ where: { id: examId } });
     }
 
-    return { ok: true, deletedArtifacts, deletedObjects, keptObjects };
+    return {
+      ok: true,
+      dryRun,
+      deletedArtifacts,
+      deletedObjects,
+      keptObjects,
+      wouldDeleteArtifacts,
+      wouldDeleteObjects,
+    };
   });
 }

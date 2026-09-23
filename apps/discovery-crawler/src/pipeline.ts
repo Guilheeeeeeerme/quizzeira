@@ -2,6 +2,7 @@
 import { randomUUID } from "node:crypto";
 import type { CrawlerRunSummary, CrawlerSource, OpenExamRecord } from "@quizzeira/shared";
 import { concursoPathSlug,
+  isInventoryExam,
   isNavigationSlug,
   oabEditionStatus, listingsFingerprint, oabEditionPageUrl, slugifyKey } from "@quizzeira/shared";
 import {
@@ -260,6 +261,26 @@ async function crawlListingMode(
       continue;
     }
 
+    if (
+      !isInventoryExam({
+        editionKey: detail.editionKey,
+        examSlug,
+        title: detail.title || listing.title,
+        listingUrl: listing.href,
+        detailUrl: detail.detailUrl,
+        registrationEnd: detail.registrationEnd,
+      })
+    ) {
+      logInfo("listing skipped: past inventory year", {
+        worker: NAME,
+        sourceId: source.id,
+        href: listing.href.slice(0, 160),
+        examSlug,
+        editionKey: detail.editionKey,
+      });
+      continue;
+    }
+
     const openPayload = {
       ...baseOpen,
       examSlug,
@@ -397,6 +418,24 @@ async function upsertExamWithDocuments(
   budget: number,
 ): Promise<number> {
   const examSlug = detail.examSlug || slugifyKey(detail.title);
+  if (
+    !isInventoryExam({
+      editionKey: detail.editionKey,
+      examSlug,
+      title: detail.title,
+      listingUrl: pageUrl,
+      detailUrl: pageUrl,
+      registrationEnd: detail.registrationEnd,
+    })
+  ) {
+    logInfo("exam skipped: past inventory year", {
+      worker: NAME,
+      sourceId: source.id,
+      examSlug,
+      editionKey: detail.editionKey,
+    });
+    return budget;
+  }
   const upserted = await dmzPost<{ record: OpenExamRecord; created: boolean; changed: boolean }>(
     "/internal/open-exams",
     {
