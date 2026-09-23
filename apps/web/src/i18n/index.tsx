@@ -81,7 +81,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
       "Manage ingestion sources, discovered exams, study users, and the question quality queue.",
   },
   pt: {
-    "AI Dev Quiz": "Quizzeira Concursos",
+    "AI Dev Quiz": "Concurseria Concursos",
     Dashboard: "Painel",
     Progress: "Progresso",
     Language: "Idioma",
@@ -159,7 +159,8 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Invalid credentials": "Credenciais inválidas",
     Unauthorized: "Não autorizado",
     "Request failed": "Falha na requisição",
-    Quizzeira: "Quizzeira",
+    Concurseria: "Concurseria",
+    Gourmet: "Gourmet",
     Topics: "Tópicos",
     "Open exams": "Concursos abertos",
     "Exam study": "Estudo para exames",
@@ -384,8 +385,8 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Source added. The crawler will pick it up on its next pass.":
       "Fonte adicionada. O crawler vai usá-la na próxima passagem.",
     "Add at least one start URL.": "Informe pelo menos uma URL inicial.",
-    "Add the first portal to crawl. Quizzeira ships with an empty registry on purpose — no seeded sources.":
-      "Cadastre o primeiro portal a coletar. O Quizzeira começa com registro vazio de propósito — sem fontes semeadas.",
+    "Add the first portal to crawl. Concurseria ships with an empty registry on purpose — no seeded sources.":
+      "Cadastre o primeiro portal a coletar. O Concurseria começa com registro vazio de propósito — sem fontes semeadas.",
     "e.g. Cesgranrio concursos": "ex.: Cesgranrio concursos",
     "Start URLs (one per line)": "URLs iniciais (uma por linha)",
     "The listing pages to crawl. The domain is derived from the first URL.":

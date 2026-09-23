@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
-  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? t("Quizzeira");
+  const displayName = user?.displayName ?? user?.email?.split("@")[0] ?? t("Concurseria");
 
   return (
     <div className={styles.shell}>
@@ -88,9 +88,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className={styles.sidebarBrand}>
           <p className={styles.sidebarBrandName}>
             <img src="/brand.svg" alt="" width={18} height={18} className={styles.brandMark} />
-            {t("Quizzeira")}
+            {t("Concurseria")}
           </p>
-          <h1 className={styles.sidebarSubtitle}>{t("Exam study")}</h1>
+          <h1 className={styles.sidebarSubtitle}>{t("Gourmet")}</h1>
         </div>
         <nav className={styles.sidebarNav}>
           <NavLink
@@ -144,7 +144,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </IconButton>
               <Text size="body" className={styles.mobileBrand}>
                 <img src="/brand.svg" alt="" width={18} height={18} className={styles.brandMark} />
-                {t("Quizzeira")}
+                {t("Concurseria")}
               </Text>
             </div>
 

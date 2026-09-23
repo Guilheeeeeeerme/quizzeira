@@ -1,4 +1,4 @@
-# CLAUDE.md — Quizzeira
+# CLAUDE.md — Quizzeira (product: Concurseria)
 
 Concurso-only study platform: continuous **Ingestion** of public exams → **Extraction/Generation** into a draft Question bank → **Eval** publish gate → **Sampling** into study pills. Grading via `quiz-corrector`.
 
@@ -8,10 +8,12 @@ Agent behavioral rules: see [AGENTS.md](./AGENTS.md). Concept map: [docs/ai-swe-
 
 | App | URL |
 | --- | --- |
-| Web | https://app.quizzeira.ferredemo.dev |
-| API | https://api.quizzeira.ferredemo.dev |
+| Web | https://app.concurseria.ferredemo.dev |
+| API | https://api.concurseria.ferredemo.dev |
 
 Production deploys are owned by the **infra** repo (GitHub Actions `Deploy app` → GHCR → VPS; `Quizzeira edge` → Cloudflare Pages/Workers). Study/Discovery/Content Postgres are Supabase schemas; workers skip Headroom (`LLM_USE_HEADROOM=false`) — see infra `docs/quizzeira-headroom.md`, `docs/supabase.md`, and step-by-step [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+
+User-facing brand is **Concurseria** (subtitle **Gourmet**). Engineering names (`quizzeira` schemas, packages, GHCR paths) stay as-is.
 
 ## Layout
 

@@ -556,7 +556,7 @@ export function AdminSourcesPage() {
         <EmptyState
           title={t("No sources yet.")}
           description={t(
-            "Add the first portal to crawl. Quizzeira ships with an empty registry on purpose — no seeded sources.",
+            "Add the first portal to crawl. Concurseria ships with an empty registry on purpose — no seeded sources.",
           )}
           action={
             showForm ? undefined : (

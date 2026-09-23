@@ -51,7 +51,7 @@ function stubFetch(
 
 describe("edge-watchdog: one state-change alert (§14 acceptance)", () => {
   it("alerts exactly once on failure, once more on recovery, never while stable", async () => {
-    const target = "https://api.quizzeira.ferredemo.dev/health";
+    const target = "https://api.concurseria.ferredemo.dev/health";
     const webhook = "https://hooks.example/alert";
     const kv = new FakeKV();
     const alerts: Array<{ url: string; body: unknown }> = [];
@@ -81,7 +81,7 @@ describe("edge-watchdog: one state-change alert (§14 acceptance)", () => {
   });
 
   it("never alerts twice for the same ongoing failure before the reminder threshold", async () => {
-    const target = "https://api.quizzeira.ferredemo.dev/health";
+    const target = "https://api.concurseria.ferredemo.dev/health";
     const kv = new FakeKV();
     const alerts: Array<{ url: string; body: unknown }> = [];
     const env = {
@@ -105,7 +105,7 @@ describe("edge-watchdog: one state-change alert (§14 acceptance)", () => {
   });
 
   it("fires exactly one reminder once consecutiveFailures passes a full threshold window", async () => {
-    const target = "https://api.quizzeira.ferredemo.dev/health";
+    const target = "https://api.concurseria.ferredemo.dev/health";
     const kv = new FakeKV();
     const alerts: Array<{ url: string; body: unknown }> = [];
     const env = {
@@ -129,7 +129,7 @@ describe("edge-watchdog: one state-change alert (§14 acceptance)", () => {
   });
 
   it("a stable healthy target across many ticks never alerts", async () => {
-    const target = "https://api.quizzeira.ferredemo.dev/health";
+    const target = "https://api.concurseria.ferredemo.dev/health";
     const kv = new FakeKV();
     const alerts: Array<{ url: string; body: unknown }> = [];
     const env = {
