@@ -76,12 +76,14 @@ the same `sha` (Pages/Worker). On the VPS only:
 ## Local
 
 ```bash
-cp .env.sample .env.local.docker && docker compose --env-file .env.local.docker up
+cp .env.sample .env
+bash ../infra/scripts/supabase_dev_tunnel.sh -f
+python3 ../infra/scripts/write_local_supabase_env.py   # .env DATABASE_* → tunnel
+docker compose up --build
 ```
 
-Optional prod-like data: `bash ../infra/scripts/supabase_dev_tunnel.sh -f` then
-`python3 ../infra/scripts/write_local_supabase_env.py` writes `.env` pointing at
-Supabase through `127.0.0.1:15432`.
+Single `.env`: change hosts there (staging Supabase via `host.docker.internal:15432`,
+or Compose `postgres` for rare fully-local DBs). Redis/MinIO default to Compose.
 
 Full infra view: `infra/docs/DEPLOYMENT.md`; Cloudflare setup: `infra/docs/quizzeira-cloudflare.md`;
 Supabase topology: `infra/docs/supabase.md`.

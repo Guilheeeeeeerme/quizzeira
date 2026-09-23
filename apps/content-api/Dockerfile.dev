@@ -5,10 +5,12 @@ WORKDIR /app
 COPY package.json ./
 COPY apps/content-api/package.json ./apps/content-api/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/worker-kit/package.json ./packages/worker-kit/
 
 RUN npm install
 
 COPY packages/shared ./packages/shared
+COPY packages/worker-kit ./packages/worker-kit
 COPY apps/content-api ./apps/content-api
 
 RUN npm run build -w @quizzeira/shared && npm run db:generate -w @quizzeira/content-api

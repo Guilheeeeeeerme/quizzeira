@@ -36,13 +36,13 @@ Specs / agent tooling: `docs/`, `specs/`, `.specify/`, `.agents/skills/` (e.g. R
 ## Local
 
 ```bash
-cp .env.sample .env.local.docker    # Compose Postgres (study/discovery/content)
+cp .env.sample .env
 bash ../infra/scripts/supabase_dev_tunnel.sh -f
-python3 ../infra/scripts/write_local_supabase_env.py   # .env → remote via tunnel
+python3 ../infra/scripts/write_local_supabase_env.py   # .env → staging via tunnel
 docker compose up --build
 ```
 
-**DB switch:** `.env` = remote Supabase schemas; `.env.local.docker` = internal Compose Postgres (Study is Postgres, not MySQL).
+**DB switch:** one `.env` — change `DATABASE_*` hosts (staging tunnel vs Compose `postgres`). Redis/MinIO hosts likewise. Study is Postgres (not MySQL).
 
 User seed only (no question-bank seed):
 
