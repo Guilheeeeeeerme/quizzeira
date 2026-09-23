@@ -11,6 +11,10 @@ import {
 } from "@quizzeira/shared";
 import { env } from "../lib/env";
 import { prisma } from "../lib/prisma";
+import {
+  buildStudyFocusOptions,
+  nodeIdsForPosition,
+} from "../lib/study-focus";
 
 function assertReader(request: FastifyRequest): void {
   const key = request.headers["x-internal-key"];
@@ -61,9 +65,12 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
    * Random sample of published questions. Ordering is done in Postgres so the
    * API never loads a whole exam into memory to pick five rows.
    */
-  app.post<{ Body: PublishedSampleRequest & { syllabusNodeIds?: string[] } }>(
-    "/published/sample",
-    async (request) => {
+  app.post<{
+    Body: PublishedSampleRequest & {
+      syllabusNodeIds?: string[];
+      positionId?: string | null;
+    };
+  }>("/published/sample", async (request) => {
     const body = request.body;
     const examSlug = String(body?.examSlug || "").trim();
     if (!examSlug) {
@@ -74,7 +81,29 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
     const subjectSlugs = (body.subjects ?? [])
       .map((s) => toSubjectSlug(s))
       .filter((s) => s && s !== "geral");
-    const leafIds = (body.syllabusNodeIds ?? []).filter(Boolean);
+    let leafIds = (body.syllabusNodeIds ?? []).filter(Boolean);
+    const positionId = body.positionId?.trim() || null;
+    let matchedRealPosition = false;
+
+    // Expand edital area → syllabus nodes when positionId is a real Position id.
+    // Cargo-as-area fallbacks use a subject slug as positionId — treat as subject filter.
+    if (positionId && leafIds.length === 0) {
+      const syllabus = await prisma.syllabus.findFirst({
+        where: { examSlug, status: "active" },
+        orderBy: { version: "desc" },
+        include: {
+          positions: { select: { id: true } },
+          nodes: { select: { id: true, positionIds: true } },
+        },
+      });
+      matchedRealPosition = Boolean(syllabus?.positions.some((p) => p.id === positionId));
+      if (matchedRealPosition && syllabus) {
+        leafIds = nodeIdsForPosition(syllabus.nodes, positionId);
+      } else if (subjectSlugs.length === 0) {
+        // Cargo-as-area: bank rows are tagged with that cargo as subjectSlug.
+        subjectSlugs.push(toSubjectSlug(positionId));
+      }
+    }
 
     const base = {
       status: "published" as const,
@@ -82,6 +111,7 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
       ...(body.locale ? { locale: body.locale } : {}),
       ...(exclude.length > 0 ? { id: { notIn: exclude } } : {}),
       ...(leafIds.length > 0 ? { syllabusNodeId: { in: leafIds } } : {}),
+      ...(matchedRealPosition && leafIds.length === 0 ? { positionId } : {}),
     };
 
     // Cap transcriptions at 30% of the sample (§18.6) except pure-OAB consumers.
@@ -133,7 +163,7 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
     };
   });
 
-  /** Active syllabus tree for study focus picker (§47). */
+  /** Active syllabus + bank-backed focus options for study (§47). */
   app.get<{ Params: { slug: string } }>("/published/exams/:slug/syllabus", async (request) => {
     const examSlug = request.params.slug.trim();
     const syllabus = await prisma.syllabus.findFirst({
@@ -145,8 +175,54 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
       },
     });
     if (!syllabus) {
-      return { examSlug, syllabus: null, nodes: [], positions: [] };
+      return {
+        examSlug,
+        syllabus: null,
+        nodes: [],
+        positions: [],
+        focusAreas: [],
+        focusSubjects: [],
+      };
     }
+
+    const [byNode, bySubject, byPosition] = await Promise.all([
+      prisma.questionItem.groupBy({
+        by: ["syllabusNodeId"],
+        where: { examSlug, status: "published", syllabusNodeId: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.questionItem.groupBy({
+        by: ["subjectSlug", "subject"],
+        where: { examSlug, status: "published", NOT: { subjectSlug: "geral" } },
+        _count: { _all: true },
+      }),
+      prisma.questionItem.groupBy({
+        by: ["positionId"],
+        where: { examSlug, status: "published", positionId: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const { focusAreas, focusSubjects } = buildStudyFocusOptions({
+      positions: syllabus.positions,
+      nodes: syllabus.nodes,
+      publishedByNodeId: new Map(
+        byNode
+          .filter((r) => r.syllabusNodeId)
+          .map((r) => [r.syllabusNodeId as string, r._count._all]),
+      ),
+      publishedBySubject: bySubject.map((r) => ({
+        subjectSlug: r.subjectSlug,
+        subject: r.subject,
+        count: r._count._all,
+      })),
+      publishedByPositionId: new Map(
+        byPosition
+          .filter((r) => r.positionId)
+          .map((r) => [r.positionId as string, r._count._all]),
+      ),
+    });
+
     return {
       examSlug,
       syllabus: {
@@ -171,7 +247,10 @@ export async function registerPublishedRoutes(app: FastifyInstance): Promise<voi
         canonicalKey: n.canonicalKey,
         scope: n.scope,
         canonicalSubjectId: n.canonicalSubjectId,
+        positionIds: n.positionIds,
       })),
+      focusAreas,
+      focusSubjects,
     };
   });
 

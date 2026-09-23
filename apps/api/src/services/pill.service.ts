@@ -52,11 +52,15 @@ export async function startPill(
           })();
   const budget = questionBudgetForDuration(durationMinutes);
 
+  const subjects = (input.subjects ?? []).map((s) => s.trim()).filter(Boolean);
+  const positionId = input.positionId?.trim() || null;
   const sampled = await samplePublishedForAttempt({
     examSlug,
     locale,
     limit: budget.maxQuestions,
+    subjects,
     syllabusNodeIds: input.syllabusNodeIds?.filter(Boolean) ?? [],
+    positionId,
   });
   if (sampled.length === 0) {
     throw Object.assign(new Error(BANK_EMPTY_MESSAGE), { statusCode: 409 });

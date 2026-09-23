@@ -122,6 +122,8 @@ export interface PublishedSampleRequest {
   locale: LocaleCode;
   limit: number;
   excludeIds?: string[];
+  /** Optional edital area / cargo filter (expanded to syllabus nodes when sampling). */
+  positionId?: string | null;
 }
 
 export interface PublishedSampleResponse {

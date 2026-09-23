@@ -6,7 +6,7 @@ import type {
   SessionDurationMinutes,
   TopicDto,
 } from "@quizzeira/shared";
-import { SESSION_DURATION_MINUTES, TOPIC_PRESETS } from "@quizzeira/shared";
+import { SESSION_DURATION_MINUTES } from "@quizzeira/shared";
 import { api } from "../../lib/api";
 import { localizeApiError, useLocale, useT } from "../../i18n";
 import {
@@ -17,24 +17,30 @@ import {
   Spinner,
   Stack,
   Text,
-  Textarea,
 } from "../../ui";
 import { storeQuizSession } from "../quiz/QuizPage";
+import fieldStyles from "../../ui/Field.module.css";
 import styles from "./Topics.module.css";
 
-interface SyllabusNodeDto {
+interface FocusAreaOption {
   id: string;
-  parentId: string | null;
-  depth: number;
   title: string;
-  pathSlug: string;
-  scope: string | null;
+  slug: string;
+  publishedCount: number;
+}
+
+interface FocusSubjectOption {
+  slug: string;
+  title: string;
+  publishedCount: number;
+  areaIds: string[];
 }
 
 interface SyllabusResponse {
   examSlug: string | null;
   syllabus: { id: string; version: number; status: string } | null;
-  nodes: SyllabusNodeDto[];
+  focusAreas?: FocusAreaOption[];
+  focusSubjects?: FocusSubjectOption[];
 }
 
 export function StudyFocusPage() {
@@ -46,8 +52,8 @@ export function StudyFocusPage() {
   const { locale } = useLocale();
   const [topic, setTopic] = useState<TopicDto | null>(null);
   const [syllabus, setSyllabus] = useState<SyllabusResponse | null>(null);
-  const [selectedLeaves, setSelectedLeaves] = useState<string[]>([]);
-  const [focusText, setFocusText] = useState("");
+  const [areaId, setAreaId] = useState<string>("");
+  const [subjectSlug, setSubjectSlug] = useState<string>("");
   const [durationMinutes, setDurationMinutes] = useState<SessionDurationMinutes | null>(null);
   const [booting, setBooting] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -72,33 +78,23 @@ export function StudyFocusPage() {
     })();
   }, [topicId, t]);
 
-  const examples = useMemo(() => {
-    if (!topic?.presetSlug) return [];
-    return TOPIC_PRESETS.find((p) => p.slug === topic.presetSlug)?.focusExamples[locale] ?? [];
-  }, [topic, locale]);
+  const areas = useMemo(() => syllabus?.focusAreas ?? [], [syllabus]);
 
-  const leaves = useMemo(() => {
-    const nodes = syllabus?.nodes ?? [];
-    const parentIds = new Set(nodes.map((n) => n.parentId).filter(Boolean));
-    return nodes.filter((n) => !parentIds.has(n.id));
-  }, [syllabus]);
+  const subjects = useMemo(() => {
+    const list = syllabus?.focusSubjects ?? [];
+    if (!areaId) return list;
+    return list.filter((s) => s.areaIds.length === 0 || s.areaIds.includes(areaId));
+  }, [syllabus, areaId]);
 
-  function toggleLeaf(id: string) {
-    setSelectedLeaves((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  }
+  // Drop subject if area change makes it unavailable.
+  useEffect(() => {
+    if (!subjectSlug) return;
+    if (!subjects.some((s) => s.slug === subjectSlug)) {
+      setSubjectSlug("");
+    }
+  }, [subjects, subjectSlug]);
 
-  function appendExample(example: string) {
-    setFocusText((prev) => {
-      const trimmed = prev.trim();
-      if (!trimmed) return example;
-      if (trimmed.includes(example)) return trimmed;
-      return `${trimmed}, ${example}`;
-    });
-  }
-
-  async function start(withFocus: boolean) {
+  async function start() {
     if (!topicId) return;
     setStarting(true);
     setError("");
@@ -106,8 +102,8 @@ export function StudyFocusPage() {
       const started = await api<PillStartResponse>(`/topics/${topicId}/pills/start`, {
         method: "POST",
         body: JSON.stringify({
-          focusText: withFocus ? focusText.trim() || null : null,
-          syllabusNodeIds: selectedLeaves,
+          subjects: subjectSlug ? [subjectSlug] : [],
+          positionId: areaId || null,
           durationMinutes,
           // Sample from the exam bank locale, not the UI chrome language.
           locale: topic?.preferredLocale ?? locale,
@@ -154,25 +150,29 @@ export function StudyFocusPage() {
         <Spinner size="lg" label={t("Preparing your study pill")} />
         <Text tone="secondary" size="bodySm">
           {durationMinutes
-            ? t("The AI is inferring subjects and building a timed session.")
-            : t("The AI is choosing question types and length for a short session.")}
+            ? t("Building a timed session from the published bank.")
+            : t("Sampling questions from the published bank.")}
         </Text>
       </Stack>
     );
   }
 
+  const hasFocusControls = areas.length > 0 || subjects.length > 0;
+
   return (
     <Stack gap={6}>
       <header className={styles.header}>
         <Heading level={1} size="page">
-          {t("What do you want to focus on today?")}
+          {t("Start studying")}
         </Heading>
         <Text tone="secondary" size="bodySm">
           {examTitle || topic.title}
         </Text>
-        <Text size="caption" tone="tertiary">
-          {t("Optional — skip to let the AI use your topic guidelines")}
-        </Text>
+        {hasFocusControls ? (
+          <Text size="caption" tone="tertiary">
+            {t("Optional filters — only options with published questions are shown.")}
+          </Text>
+        ) : null}
       </header>
 
       {error ? (
@@ -181,86 +181,75 @@ export function StudyFocusPage() {
         </Text>
       ) : null}
 
-      <Field label={t("Session length")}>
-        <Text size="caption" tone="tertiary">
-          {t("Default is a short pill. Pick a time to scale depth.")}
-        </Text>
-        <div className={styles.chipRow}>
-          <button
-            type="button"
-            className={`${styles.chip} ${durationMinutes === null ? styles.chipActive : ""}`}
-            onClick={() => setDurationMinutes(null)}
+      {areas.length > 0 ? (
+        <Field label={t("Edital area")} htmlFor="study-area">
+          <select
+            id="study-area"
+            className={fieldStyles.control}
+            value={areaId}
+            onChange={(e) => setAreaId(e.target.value)}
           >
-            {t("Pill (default)")}
-          </button>
-          {SESSION_DURATION_MINUTES.map((mins) => (
-            <button
-              key={mins}
-              type="button"
-              className={`${styles.chip} ${durationMinutes === mins ? styles.chipActive : ""}`}
-              onClick={() => setDurationMinutes(mins)}
-            >
-              {t("{n} min", { n: mins })}
-            </button>
-          ))}
-        </div>
-      </Field>
-
-      {leaves.length > 0 ? (
-        <Field label={t("Syllabus focus")}>
-          <Text size="caption" tone="tertiary">
-            {t("Pick syllabus leaves to sample from, or leave empty for the full bank.")}
-          </Text>
-          <div className={styles.chipRow}>
-            {leaves.slice(0, 40).map((leaf) => (
-              <button
-                key={leaf.id}
-                type="button"
-                className={`${styles.chip} ${selectedLeaves.includes(leaf.id) ? styles.chipActive : ""}`}
-                onClick={() => toggleLeaf(leaf.id)}
-              >
-                {leaf.title}
-              </button>
+            <option value="">{t("All areas")}</option>
+            {areas.map((area) => (
+              <option key={area.id} value={area.id}>
+                {area.title}
+              </option>
             ))}
-          </div>
+          </select>
         </Field>
       ) : null}
 
-      <Field label={t("Today's focus")}>
-        <Textarea
-          rows={4}
-          value={focusText}
-          onChange={(e) => setFocusText(e.target.value)}
-          placeholder={t("e.g. emphasize logical reasoning; avoid legislation today")}
-        />
-      </Field>
-
-      {examples.length ? (
-        <Stack gap={2}>
-          <Text size="caption" tone="secondary">
-            {t("Examples")}
-          </Text>
-          <div className={styles.chipRow}>
-            {examples.map((example) => (
-              <button
-                key={example}
-                type="button"
-                className={styles.chip}
-                onClick={() => appendExample(example)}
-              >
-                {example}
-              </button>
+      {subjects.length > 0 ? (
+        <Field label={t("Subject")} htmlFor="study-subject">
+          <select
+            id="study-subject"
+            className={fieldStyles.control}
+            value={subjectSlug}
+            onChange={(e) => setSubjectSlug(e.target.value)}
+          >
+            <option value="">{t("All subjects")}</option>
+            {subjects.map((subject) => (
+              <option key={subject.slug} value={subject.slug}>
+                {subject.title}
+              </option>
             ))}
-          </div>
-        </Stack>
+          </select>
+        </Field>
       ) : null}
 
+      <details className={styles.advanced}>
+        <summary>{t("Advanced options")}</summary>
+        <Stack gap={4} className={styles.advancedBody}>
+          <Field label={t("Session length")}>
+            <Text size="caption" tone="tertiary">
+              {t("Default is a short pill. Pick a time to scale depth.")}
+            </Text>
+            <div className={styles.chipRow}>
+              <button
+                type="button"
+                className={`${styles.chip} ${durationMinutes === null ? styles.chipActive : ""}`}
+                onClick={() => setDurationMinutes(null)}
+              >
+                {t("Pill (default)")}
+              </button>
+              {SESSION_DURATION_MINUTES.map((mins) => (
+                <button
+                  key={mins}
+                  type="button"
+                  className={`${styles.chip} ${durationMinutes === mins ? styles.chipActive : ""}`}
+                  onClick={() => setDurationMinutes(mins)}
+                >
+                  {t("{n} min", { n: mins })}
+                </button>
+              ))}
+            </div>
+          </Field>
+        </Stack>
+      </details>
+
       <div className={styles.actions}>
-        <Button onClick={() => void start(true)} loading={starting}>
+        <Button onClick={() => void start()} loading={starting}>
           {t("Start studying")}
-        </Button>
-        <Button variant="ghost" onClick={() => void start(false)} disabled={starting}>
-          {t("Skip and start")}
         </Button>
         <Button variant="secondary" onClick={() => navigate("/")}>
           {t("Back to open exams")}

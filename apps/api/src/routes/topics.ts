@@ -56,7 +56,14 @@ export async function topicRoutes(app: FastifyInstance) {
         const topic = await getTopic(request.userId, request.params.topicId);
         const examSlug = examSlugFromGuidelines(topic.guidelines);
         if (!examSlug) {
-          return { examSlug: null, syllabus: null, nodes: [], positions: [] };
+          return {
+            examSlug: null,
+            syllabus: null,
+            nodes: [],
+            positions: [],
+            focusAreas: [],
+            focusSubjects: [],
+          };
         }
         return await fetchPublishedSyllabus(examSlug);
       } catch (err) {
@@ -95,6 +102,8 @@ export async function topicRoutes(app: FastifyInstance) {
     Body: {
       focusText?: string;
       syllabusNodeIds?: string[];
+      subjects?: string[];
+      positionId?: string | null;
       durationMinutes?: SessionDurationMinutes | null;
       locale?: LocaleCode;
     };

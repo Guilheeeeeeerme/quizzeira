@@ -187,7 +187,7 @@ export function ExamsPage() {
 
   function bankHint(item: ExamCatalogItemDto): string | null {
     if (item.bankQuestionCount <= 0) {
-      return t("Crawler has not filled this bank yet — study will generate from scratch.");
+      return t("No published questions yet — study unlocks when the bank has items.");
     }
     if (!item.bankReady) {
       return t("A few questions cached; more will arrive as the crawler runs.");
@@ -400,12 +400,18 @@ export function ExamsPage() {
                         size="sm"
                         variant={emptyBank ? "secondary" : "primary"}
                         loading={preparingId === item.id}
+                        disabled={emptyBank}
+                        title={
+                          emptyBank
+                            ? t("No published questions yet — study unlocks when the bank has items.")
+                            : undefined
+                        }
                         onClick={(event) => {
                           event.stopPropagation();
                           void openStudy(item);
                         }}
                       >
-                        {emptyBank ? t("Study anyway") : t("Study this exam")}
+                        {emptyBank ? t("Bank empty") : t("Study this exam")}
                       </Button>
                     </div>
                   </div>

@@ -295,6 +295,10 @@ export interface StartPillInput {
   focusText?: string | null;
   /** Syllabus leaf ids for study focus (§37 / §50.21). */
   syllabusNodeIds?: string[];
+  /** Bank-backed subject slugs (only subjects with published items). */
+  subjects?: string[];
+  /** Edital area / cargo id — only areas with published bank data. */
+  positionId?: string | null;
   /** Optional session length; omit for default short pill. */
   durationMinutes?: SessionDurationMinutes | null;
   locale?: LocaleCode;

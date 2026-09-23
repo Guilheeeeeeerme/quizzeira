@@ -101,6 +101,7 @@ export async function samplePublishedForAttempt(input: {
   limit: number;
   subjects?: string[];
   syllabusNodeIds?: string[];
+  positionId?: string | null;
   excludeIds?: string[];
 }): Promise<GeneratedQuestionInput[]> {
   try {
@@ -112,6 +113,7 @@ export async function samplePublishedForAttempt(input: {
           examSlug: input.examSlug,
           subjects: input.subjects ?? [],
           syllabusNodeIds: input.syllabusNodeIds ?? [],
+          positionId: input.positionId ?? null,
           locale: input.locale,
           limit: input.limit,
           excludeIds: input.excludeIds ?? [],
@@ -131,11 +133,11 @@ export async function samplePublishedForAttempt(input: {
   }
 }
 
-/** Active syllabus tree for study focus picker (§37). */
+/** Active syllabus + bank-backed focus options for study (§37). */
 export async function fetchPublishedSyllabus(examSlug: string): Promise<{
   examSlug: string;
   syllabus: { id: string; version: number; status: string } | null;
-  positions: Array<{ id: string; title: string; slug: string }>;
+  positions: Array<{ id: string; title: string; slug: string; implicit?: boolean }>;
   nodes: Array<{
     id: string;
     parentId: string | null;
@@ -143,6 +145,14 @@ export async function fetchPublishedSyllabus(examSlug: string): Promise<{
     title: string;
     pathSlug: string;
     scope: string | null;
+    positionIds?: unknown;
+  }>;
+  focusAreas: Array<{ id: string; title: string; slug: string; publishedCount: number }>;
+  focusSubjects: Array<{
+    slug: string;
+    title: string;
+    publishedCount: number;
+    areaIds: string[];
   }>;
 }> {
   return contentFetch(`/published/exams/${encodeURIComponent(examSlug)}/syllabus`);
