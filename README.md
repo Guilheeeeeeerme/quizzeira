@@ -1,8 +1,10 @@
 <p align="center">
-  <img src="branding/quizzeira.svg" alt="Quizzeira" width="72" height="72" />
+  <img src="branding/quizzeira.svg" alt="Concurseria" width="72" height="72" />
 </p>
 
-# Quizzeira
+# Concurseria
+
+**Gourmet** exam study for open public contests. Product brand for users; engineering repo and infra project key remain `quizzeira`.
 
 Concurso-only study platform: continuous **Ingestion** of public exams → **Extraction/Generation** into a draft Question bank → **Eval** publish gate → **Sampling** into study pills. Grading via `quiz-corrector`.
 
@@ -10,8 +12,8 @@ Concurso-only study platform: continuous **Ingestion** of public exams → **Ext
 
 | Application | URL |
 | --- | --- |
-| Web | https://app.quizzeira.ferredemo.dev |
-| API | https://api.quizzeira.ferredemo.dev |
+| Web | https://app.concurseria.ferredemo.dev |
+| API | https://api.concurseria.ferredemo.dev |
 
 ## Technical docs (GitHub Pages)
 
@@ -39,7 +41,11 @@ Guardrails: [`docs/guardrails.md`](docs/guardrails.md). Concepts: [`docs/ai-swe-
 | Content | `content-api`, `content-worker`, `content-quality` | Postgres + pgvector |
 | Study | `api`, `web`, `quiz-corrector` | Postgres `quizzeira_study` + Redis |
 
-Brand mark: [`branding/quizzeira.svg`](branding/quizzeira.svg) — exam card + Eval check gate.
+Brand mark: [`branding/quizzeira.svg`](branding/quizzeira.svg) — exam card + Eval check gate (filename kept for engineering continuity).
+
+## What stays `quizzeira`
+
+Package names (`@quizzeira/*`), GHCR images (`ghcr.io/…/quizzeira/…`), Compose project, Supabase schemas (`quizzeira_*`), scoped `INTERNAL_API_KEY_*`, and most operator docs still use the engineering name. User-facing UI, titles, and public hosts use **Concurseria**.
 
 ## Quick start
 

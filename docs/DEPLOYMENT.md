@@ -14,8 +14,8 @@ the private **infra** repo; this page explains what happens when you push.
 | VPS — Compose project `quizzeira` | `api` (Study, loopback `13200`), `discoveryapi` (`13201`, private), `contentapi` (`13202`, private), `discoverycrawler` (Playwright), `contentworker`, `contentquality`, `quizcorrector`, `docprocessor` (`3030` internal), `app` (nginx fallback, `18280`) |
 | VPS — shared `infra_data` | Redis DB `/2`, MinIO bucket `quizzeira` (`artifacts/` raw bytes, `normalized/` extracted text, `briefs/`; lifecycle backstop 30d/never/365d set by infra `shared_ensure.py`) |
 | Supabase Free (`zgoscslzyizwnzqoyqul`, eu-west-1) | Postgres schemas `quizzeira_study`, `quizzeira_discovery`, `quizzeira_content` (pgvector), role `quizzeira`, reached over the IPv6 direct host |
-| Cloudflare Pages `quizzeira-web` | `apps/web` static build → `app.quizzeira.ferredemo.dev` |
-| Cloudflare DNS (proxied) | `api.quizzeira.ferredemo.dev` → VPS nginx (Let's Encrypt origin) |
+| Cloudflare Pages `quizzeira-web` | `apps/web` static build → `app.concurseria.ferredemo.dev` |
+| Cloudflare DNS (proxied) | `api.concurseria.ferredemo.dev` → VPS nginx (Let's Encrypt origin) |
 | Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) |
 | LLM | Workers call Gemini/OpenAI directly (`LLM_USE_HEADROOM=false`); Headroom is not used |
 
@@ -48,7 +48,7 @@ Worker secrets (`WATCH_TARGETS`, `ALERT_WEBHOOK`) are set with `wrangler secret 
       `discovery-api`, `content-api` `/health`), promotes the release. Failure restores
       the previous release automatically.
    4. Dispatches **Quizzeira edge**: builds `apps/web` with
-      `VITE_API_ORIGIN=https://api.quizzeira.ferredemo.dev`, adds SPA `_redirects`,
+      `VITE_API_ORIGIN=https://api.concurseria.ferredemo.dev`, adds SPA `_redirects`,
       `wrangler pages deploy` to project `quizzeira-web`; then `wrangler deploy` in
       `edge/edge-watchdog` (after its `npm test`).
 3. Nothing else restarts: Argus and PromptDesk are separate Compose projects.
