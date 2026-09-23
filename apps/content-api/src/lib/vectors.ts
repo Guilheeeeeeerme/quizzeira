@@ -39,7 +39,9 @@ export async function setChunkEmbedding(chunkId: string, embedding: number[]): P
   const literal = toVectorLiteral(embedding);
   const updated = await prisma.$executeRaw`
     UPDATE "Chunk" AS c
-    SET "embedding" = ${literal}::vector
+    -- Supabase installs pgvector in schema `extensions`; Prisma `?schema=`
+    -- narrows search_path so bare `::vector` fails with 42704.
+    SET "embedding" = ${literal}::extensions.vector
     FROM "Document" AS d, "Section" AS s
     WHERE c."id" = ${chunkId}
       AND d."id" = c."documentId"
@@ -102,7 +104,7 @@ export async function searchChunks(input: {
            c."ordinal",
            c."text",
            d."examSlug",
-           1 - (c."embedding" <=> ${literal}::vector) AS "similarity"
+           1 - (c."embedding" <=> ${literal}::extensions.vector) AS "similarity"
     FROM "Chunk" c
     JOIN "Document" d ON d."id" = c."documentId"
     LEFT JOIN "Section" s ON s."id" = c."sectionId"
@@ -111,7 +113,7 @@ export async function searchChunks(input: {
     ${scope}
     ${eligibility}
     ${mapFilter}
-    ORDER BY c."embedding" <=> ${literal}::vector
+    ORDER BY c."embedding" <=> ${literal}::extensions.vector
     LIMIT ${limit}
   `;
 }
@@ -142,7 +144,7 @@ export async function setSyllabusNodeEmbedding(
   const literal = toVectorLiteral(embedding);
   await prisma.$executeRaw`
     UPDATE "SyllabusNode"
-    SET "embedding" = ${literal}::vector
+    SET "embedding" = ${literal}::extensions.vector
     WHERE "id" = ${nodeId}
   `;
 }

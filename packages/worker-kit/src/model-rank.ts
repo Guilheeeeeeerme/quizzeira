@@ -33,12 +33,15 @@ interface GeminiModelEntry {
 const GEMINI_EXCLUDE =
   /antigravity|image|live|audio|gemma|learnlm|robotics|computer-use|deep-research|nano|thinking|-exp\b|exp-|preview|latest/i;
 const GEMINI_TIER_ALLOW = new Set(["gemini-3.1-pro-preview"]);
+/** Retired for new API keys (404); keep out of live catalog fallback ranks. */
+const GEMINI_RETIRED = /^gemini-2\.5-pro(?:-|$)/;
 
 export function filterTextGenGemini(entries: readonly GeminiModelEntry[]): string[] {
   return entries
     .filter((entry) => entry.supportedGenerationMethods.includes("generateContent"))
     .map((entry) => entry.name.replace(/^models\//, ""))
     .filter((id) => /embedding|aqa|imagen|veo|tts/i.test(id) === false)
+    .filter((id) => GEMINI_RETIRED.test(id) === false)
     // Experimental / multimodal-only / agentic previews reject plain system
     // instructions ("Developer instruction is not enabled"); only explicitly
     // tiered previews may be used.
