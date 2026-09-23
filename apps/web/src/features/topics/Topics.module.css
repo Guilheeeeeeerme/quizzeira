@@ -39,6 +39,38 @@
   color: var(--text-primary);
 }
 
+.advanced {
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+}
+
+.advanced summary {
+  cursor: pointer;
+  font-size: var(--text-13);
+  font-weight: 500;
+  color: var(--text-secondary);
+  list-style: none;
+}
+
+.advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced summary::before {
+  content: "▸ ";
+  color: var(--text-tertiary);
+}
+
+.advanced[open] summary::before {
+  content: "▾ ";
+}
+
+.advancedBody {
+  margin-top: var(--space-4);
+}
+
 .topicCard {
   min-height: 7.5rem;
 }

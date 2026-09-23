@@ -44,10 +44,10 @@ Brand mark: [`branding/quizzeira.svg`](branding/quizzeira.svg) — exam card + E
 ## Quick start
 
 ```bash
-# Standalone local Postgres: cp .env.sample .env.local.docker && cp .env.local.docker .env
-# Remote Supabase (tunnel): bash ../infra/scripts/supabase_dev_tunnel.sh -f
-#                          python3 ../infra/scripts/write_local_supabase_env.py
+# Single .env — hosts are the switch (primary: local apps → staging Supabase).
 cp .env.sample .env
+bash ../infra/scripts/supabase_dev_tunnel.sh -f   # 127.0.0.1:15432 via VPS
+python3 ../infra/scripts/write_local_supabase_env.py  # DATABASE_* → host.docker.internal:15432
 docker compose up --build
 ```
 

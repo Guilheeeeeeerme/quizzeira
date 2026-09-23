@@ -1,23 +1,19 @@
 # Local Quizzeira stack.
 #
-# One Postgres (pgvector) hosts three schemas/DBs:
-#   quizzeira_study     (Study: users, topics, attempts) — was MySQL
-#   quizzeira_discovery (Ingestion)
-#   quizzeira_content   (Extraction/Generation/Eval + pgvector)
-# Redis → LLM budgets and rate limits only (no domain state)
-# MinIO → local object store (prod also keeps MinIO on the VPS; Supabase Free Storage is not used)
+# Single env file: `.env` (hosts are the switch). Primary mode = local apps →
+# staging Supabase via SSH tunnel (host.docker.internal:15432). Redis/MinIO
+# default to Compose services; point REDIS_URL / S3_* at staging when tunneled.
+# Rare fully-local DBs: set DATABASE_* hosts to `postgres` in `.env`.
 #
 # Internal APIs are never LAN-exposed: only web (5173) and the study API
 # (127.0.0.1:3000) publish ports. discovery-api and content-api stay on the
 # private network.
 #
-# Cursor benchmark isolation: export COMPOSE_PROJECT_NAME=quizzeira-cursor
-# and prefer host ports 4340–4349 when running beside other implementations
-# (override published ports via compose override or .env — see .env.sample).
-#
 # Deterministic E2E (§41.3): set LLM_PROVIDER=fixture in .env (see .env.sample).
-# content-worker, content-quality, and quiz-corrector honor it via env_file and
-# the LLM_PROVIDER passthrough below (worker-kit fixture provider).
+x-host-gateway: &host-gateway
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
 services:
   # pgvector image so quizzeira_content can CREATE EXTENSION vector.
   postgres:
@@ -78,6 +74,7 @@ services:
   # ── Study plane ───────────────────────────────────────────────────────────
 
   api:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/api/Dockerfile.dev
@@ -86,9 +83,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-quizzeira}:${POSTGRES_PASSWORD:-quizzeira}@postgres:5432/quizzeira_study?schema=public
-      DATABASE_DIRECT_URL: postgresql://${POSTGRES_USER:-quizzeira}:${POSTGRES_PASSWORD:-quizzeira}@postgres:5432/quizzeira_study?schema=public
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-postgresql://quizzeira:quizzeira@postgres:5432/quizzeira_study?schema=public}
+      DATABASE_DIRECT_URL: ${DATABASE_DIRECT_URL:-postgresql://quizzeira:quizzeira@postgres:5432/quizzeira_study?schema=public}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       INTERNAL_API_KEY_CORRECTOR: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
       INTERNAL_API_KEY_DISCOVERY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
@@ -138,6 +135,7 @@ services:
       - private
 
   web:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/web/Dockerfile.dev
@@ -161,6 +159,7 @@ services:
 
   # Concept: Grading
   quiz-corrector:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/quiz-corrector/Dockerfile.dev
@@ -191,7 +190,7 @@ services:
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
       WORKER_WINDOWS: ${WORKER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     volumes:
       - ./apps/quiz-corrector:/app/apps/quiz-corrector
       - ./packages/shared:/app/packages/shared
@@ -210,6 +209,7 @@ services:
   # ── Discovery plane (Ingestion) ───────────────────────────────────────────
 
   discovery-api:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/discovery-api/Dockerfile.dev
@@ -219,7 +219,7 @@ services:
       - .env
     environment:
       PORT: 3010
-      DISCOVERY_DATABASE_URL: postgresql://${POSTGRES_USER:-quizzeira}:${POSTGRES_PASSWORD:-quizzeira}@postgres:5432/quizzeira_discovery
+      DISCOVERY_DATABASE_URL: ${DISCOVERY_DATABASE_URL:-postgresql://quizzeira:quizzeira@postgres:5432/quizzeira_discovery}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       INTERNAL_API_KEY_DISCOVERY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
@@ -255,6 +255,7 @@ services:
       - dmz
 
   discovery-crawler:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/discovery-crawler/Dockerfile.dev
@@ -270,7 +271,7 @@ services:
       WORKER_INTERVAL_MS: ${DISCOVERY_CRAWLER_INTERVAL_MS:-1800000}
       WORKER_WINDOWS: ${DISCOVERY_CRAWLER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       DISCOVERY_CRAWLER_ENABLED: ${DISCOVERY_CRAWLER_ENABLED:-true}
       DISCOVERY_CRAWLER_FIXTURE_MODE: ${DISCOVERY_CRAWLER_FIXTURE_MODE:-false}
       DISCOVERY_CRAWLER_MAX_SOURCES: ${DISCOVERY_CRAWLER_MAX_SOURCES:-16}
@@ -296,6 +297,7 @@ services:
 
   # Opt-in locally: `docker compose --profile lifecycle up discovery-lifecycle`.
   discovery-lifecycle:
+    <<: *host-gateway
     profiles: ["lifecycle"]
     build:
       context: .
@@ -331,6 +333,7 @@ services:
   # Social → Discovery scout (fixture/stubs; off by default). Never registers
   # social hosts as Sources — proposes outbound file domains via scout API.
   discovery-social-scout:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/discovery-social-scout/Dockerfile.dev
@@ -387,6 +390,7 @@ services:
       - dmz
 
   content-api:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/content-api/Dockerfile.dev
@@ -396,7 +400,7 @@ services:
       - .env
     environment:
       PORT: 3020
-      CONTENT_DATABASE_URL: postgresql://${POSTGRES_USER:-quizzeira}:${POSTGRES_PASSWORD:-quizzeira}@postgres:5432/quizzeira_content
+      CONTENT_DATABASE_URL: ${CONTENT_DATABASE_URL:-postgresql://quizzeira:quizzeira@postgres:5432/quizzeira_content}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
@@ -434,6 +438,7 @@ services:
       - dmz
 
   content-worker:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/content-worker/Dockerfile.dev
@@ -449,7 +454,7 @@ services:
       WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
       WORKER_WINDOWS: ${CONTENT_WORKER_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       # See quiz-corrector: Quizzeira workers skip Headroom.
       LLM_USE_HEADROOM: "false"
@@ -491,6 +496,7 @@ services:
   # enable alongside the monolith (`docker compose up content-worker-embedded
   # content-worker-generation`) to compare metrics before switching.
   content-worker-documents:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/content-worker/Dockerfile.dev
@@ -506,7 +512,7 @@ services:
       INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
       WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       LLM_USE_HEADROOM: "false"
       DOC_PROCESSOR_URL: http://doc-processor:3030
       SERVICE_NAME: quizzeira-contentworker-documents
@@ -529,6 +535,7 @@ services:
       - private
 
   content-worker-embeddings:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/content-worker/Dockerfile.dev
@@ -542,7 +549,7 @@ services:
       INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
       WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       LLM_USE_HEADROOM: "false"
       SERVICE_NAME: quizzeira-contentworker-embeddings
     volumes:
@@ -560,6 +567,7 @@ services:
       - private
 
   content-worker-generation:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/content-worker/Dockerfile.dev
@@ -573,7 +581,7 @@ services:
       INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
       WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       LLM_USE_HEADROOM: "false"
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
@@ -604,6 +612,7 @@ services:
 
   # Concept: Eval — the only service that may publish a question.
   content-quality:
+    <<: *host-gateway
     build:
       context: .
       dockerfile: apps/content-quality/Dockerfile.dev
@@ -617,7 +626,7 @@ services:
       WORKER_INTERVAL_MS: ${CONTENT_QUALITY_INTERVAL_MS:-60000}
       WORKER_WINDOWS: ${CONTENT_QUALITY_WINDOWS:-}
       WORKER_TZ: ${WORKER_TZ:-UTC}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       # See quiz-corrector: Quizzeira workers skip Headroom.
       LLM_USE_HEADROOM: "false"

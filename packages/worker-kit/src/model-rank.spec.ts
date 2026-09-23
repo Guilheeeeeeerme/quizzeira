@@ -76,6 +76,10 @@ describe("text-gen filters", () => {
           name: "models/gemini-2.5-flash-lite",
           supportedGenerationMethods: ["generateContent"],
         },
+        {
+          name: "models/gemini-2.5-pro",
+          supportedGenerationMethods: ["generateContent"],
+        },
       ]),
     ).toEqual(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
   });

@@ -179,11 +179,14 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "Building bank": "Banco em montagem",
     "Crawler has not filled this bank yet — study will generate from scratch.":
       "O crawler ainda não encheu este banco — estudar gera do zero.",
+    "No published questions yet — study unlocks when the bank has items.":
+      "Ainda sem questões publicadas — o estudo libera quando o banco tiver itens.",
     "A few questions cached; more will arrive as the crawler runs.":
       "Poucas questões em cache; mais chegam conforme o crawler roda.",
     "Catalog seed": "Catálogo semente",
     "Study this exam": "Estudar este concurso",
     "Study anyway": "Estudar mesmo assim",
+    "Bank empty": "Banco vazio",
     "Search exams": "Buscar exames",
     "Search by name, org, or board…": "Buscar por nome, órgão ou banca…",
     "Filter by question bank": "Filtrar pelo banco de questões",
@@ -311,6 +314,13 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "What do you want to focus on today?": "No que você quer focar hoje?",
     "Optional — skip to let the AI use your topic guidelines":
       "Opcional — pule para a IA usar as diretrizes do tópico",
+    "Optional filters — only options with published questions are shown.":
+      "Filtros opcionais — só aparecem opções com questões publicadas.",
+    "Edital area": "Área do edital",
+    "All areas": "Todas as áreas",
+    Subject: "Matéria",
+    "All subjects": "Todas as matérias",
+    "Advanced options": "Opções avançadas",
     "Today's focus": "Foco de hoje",
     "e.g. History and Geography mock aligned to the notice":
       "ex.: simulado de História e Geografia alinhado ao edital",
@@ -323,6 +333,10 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "{n} min": "{n} min",
     "The AI is inferring subjects and building a timed session.":
       "A IA está inferindo matérias e montando uma sessão cronometrada.",
+    "Building a timed session from the published bank.":
+      "Montando uma sessão cronometrada a partir do banco publicado.",
+    "Sampling questions from the published bank.":
+      "Selecionando questões do banco publicado.",
     Examples: "Exemplos",
     "Start studying": "Começar a estudar",
     "Skip and start": "Pular e começar",
@@ -538,7 +552,7 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     Concurso: "Concurso",
     OAB: "OAB",
 
-    // Study focus — syllabus leaf picker
+    // Study focus — legacy keys kept for older copy; UI uses bank-backed selectors
     "Syllabus focus": "Foco do programa",
     "Pick syllabus leaves to sample from, or leave empty for the full bank.":
       "Escolha tópicos do programa para focar, ou deixe vazio para usar o banco completo.",

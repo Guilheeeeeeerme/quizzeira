@@ -37,9 +37,13 @@ const KNOWLEDGE_INDEX_GUARD = Prisma.sql`
 
 export async function setChunkEmbedding(chunkId: string, embedding: number[]): Promise<void> {
   const literal = toVectorLiteral(embedding);
+  // Supabase installs pgvector in schema `extensions`; Prisma `?schema=`
+  // narrows search_path so bare `vector` fails with 42704. Use CAST +
+  // Prisma.raw so tsx/esbuild does not parse `::extensions` as a type assert.
+  const vectorType = Prisma.raw("extensions.vector");
   const updated = await prisma.$executeRaw`
     UPDATE "Chunk" AS c
-    SET "embedding" = ${literal}::vector
+    SET "embedding" = CAST(${literal} AS ${vectorType})
     FROM "Document" AS d, "Section" AS s
     WHERE c."id" = ${chunkId}
       AND d."id" = c."documentId"
@@ -79,6 +83,7 @@ export async function searchChunks(input: {
   eligibleOnly?: boolean;
 }): Promise<ChunkMatch[]> {
   const literal = toVectorLiteral(input.embedding);
+  const vectorType = Prisma.raw("extensions.vector");
   const limit = Math.max(1, Math.min(input.limit, 50));
   const scope = input.examSlug
     ? Prisma.sql`AND d."examSlug" = ${input.examSlug}`
@@ -102,7 +107,7 @@ export async function searchChunks(input: {
            c."ordinal",
            c."text",
            d."examSlug",
-           1 - (c."embedding" <=> ${literal}::vector) AS "similarity"
+           1 - (c."embedding" <=> CAST(${literal} AS ${vectorType})) AS "similarity"
     FROM "Chunk" c
     JOIN "Document" d ON d."id" = c."documentId"
     LEFT JOIN "Section" s ON s."id" = c."sectionId"
@@ -111,7 +116,7 @@ export async function searchChunks(input: {
     ${scope}
     ${eligibility}
     ${mapFilter}
-    ORDER BY c."embedding" <=> ${literal}::vector
+    ORDER BY c."embedding" <=> CAST(${literal} AS ${vectorType})
     LIMIT ${limit}
   `;
 }
@@ -140,9 +145,10 @@ export async function setSyllabusNodeEmbedding(
   embedding: number[],
 ): Promise<void> {
   const literal = toVectorLiteral(embedding);
+  const vectorType = Prisma.raw("extensions.vector");
   await prisma.$executeRaw`
     UPDATE "SyllabusNode"
-    SET "embedding" = ${literal}::vector
+    SET "embedding" = CAST(${literal} AS ${vectorType})
     WHERE "id" = ${nodeId}
   `;
 }
