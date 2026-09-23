@@ -14,7 +14,15 @@ const localeLabels: Record<Locale, string> = {
 function MenuIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CloseMenuIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -35,6 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const userMenuButtonRef = useRef<HTMLButtonElement>(null);
   const languageId = useId();
   const menuId = useId();
+  const navDrawerId = useId();
 
   useEffect(() => {
     setNavOpen(false);
@@ -136,11 +145,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className={styles.headerInner}>
             <div className={styles.headerStart}>
               <IconButton
-                label={t("Open navigation menu")}
+                label={navOpen ? t("Close navigation menu") : t("Open navigation menu")}
                 className={styles.menuButton}
-                onClick={() => setNavOpen(true)}
+                aria-expanded={navOpen}
+                aria-controls={navDrawerId}
+                onClick={() => setNavOpen((open) => !open)}
               >
-                <MenuIcon />
+                {navOpen ? <CloseMenuIcon /> : <MenuIcon />}
               </IconButton>
               <Text size="body" className={styles.mobileBrand}>
                 <img src="/brand.svg" alt="" width={18} height={18} className={styles.brandMark} />
@@ -213,8 +224,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : null}
 
         <aside
+          id={navDrawerId}
           className={[styles.drawer, navOpen ? styles.drawerOpen : ""].filter(Boolean).join(" ")}
           aria-label={t("Primary")}
+          aria-hidden={!navOpen}
+          inert={!navOpen ? true : undefined}
         >
           <div className={styles.drawerHeader}>
             <p className={styles.drawerTitle}>{t("Menu")}</p>
