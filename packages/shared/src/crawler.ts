@@ -341,6 +341,63 @@ export function inferExamKind(title: string, pageText = ""): ExamKind {
   return "concurso";
 }
 
+/**
+ * Product inventory year floor (UTC calendar year).
+ * Past editions are knowledge/evidence only — never searchable open-exam inventory.
+ */
+export function inventoryMinYear(now: Date = new Date()): number {
+  return now.getUTCFullYear();
+}
+
+/** First `20xx` year from editionKey / slug / title / URL / ISO date text. */
+export function parseExamInventoryYear(
+  ...parts: Array<string | null | undefined>
+): number | null {
+  const blob = parts.filter(Boolean).join(" ");
+  const m = blob.match(/\b(20\d{2})\b/);
+  if (!m?.[1]) return null;
+  const year = Number(m[1]);
+  return Number.isFinite(year) ? year : null;
+}
+
+/** Year >= current calendar year. Unknown year kept (registration/grace still apply). */
+export function isInventoryExamYear(
+  year: number | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (year == null || !Number.isFinite(year)) return true;
+  return year >= inventoryMinYear(now);
+}
+
+/** True when exam belongs in product search / open catalog / crawl inventory. */
+export function isInventoryExam(
+  fields: {
+    editionKey?: string | null;
+    examSlug?: string | null;
+    title?: string | null;
+    listingUrl?: string | null;
+    detailUrl?: string | null;
+    registrationEnd?: string | Date | null;
+  },
+  now: Date = new Date(),
+): boolean {
+  const end =
+    fields.registrationEnd instanceof Date
+      ? fields.registrationEnd.toISOString()
+      : fields.registrationEnd ?? null;
+  return isInventoryExamYear(
+    parseExamInventoryYear(
+      fields.editionKey,
+      fields.examSlug,
+      fields.title,
+      fields.listingUrl,
+      fields.detailUrl,
+      end,
+    ),
+    now,
+  );
+}
+
 /** Edition key from URL path or title year (§11.2). */
 export function extractEditionKey(title: string, href: string): string | null {
   const pathSlug = concursoPathSlug(href);
@@ -396,12 +453,17 @@ export function normalizeOpenExam(input: {
 
   const registrationText = [input.detailText, title].filter(Boolean).join(" ");
   const registration = parseRegistrationWindow(registrationText);
-  const likelyOpen = looksLikelyOpen(title) || looksOpenExamUrl(input.href);
+  const inventoryOk = isInventoryExamYear(
+    parseExamInventoryYear(editionKey, examSlug, title, input.href, registration?.end),
+  );
+  // Past-year editions never enter open inventory even if listing copy still says "abertas".
+  const likelyOpen =
+    inventoryOk && (looksLikelyOpen(title) || looksOpenExamUrl(input.href));
   let status: "open" | "unknown" = likelyOpen ? "open" : "unknown";
   let statusSource: OpenExamRecord["statusSource"] = likelyOpen ? "regex" : null;
 
   if (registration) {
-    status = isRegistrationOpen(registration) ? "open" : "unknown";
+    status = inventoryOk && isRegistrationOpen(registration) ? "open" : "unknown";
     statusSource = "date";
   }
 
@@ -509,13 +571,12 @@ export function looksLikelyOpen(text: string): boolean {
 }
 
 /** Banca detail pages like /concurso/transpetro-2026/ or /concursos/pms2026. */
-export function looksOpenExamUrl(href: string): boolean {
-  const current = new Date().getUTCFullYear();
-  const inWindow = (year: number) => year >= current - 1 && year <= current + 1;
+export function looksOpenExamUrl(href: string, now: Date = new Date()): boolean {
+  const okYear = (year: number) => isInventoryExamYear(year, now);
   const hyphenated = href.match(/\/concursos?\/[^/?#]+-(20\d{2})(?:\/|$)/i);
-  if (hyphenated?.[1] && inWindow(Number(hyphenated[1]))) return true;
+  if (hyphenated?.[1] && okYear(Number(hyphenated[1]))) return true;
   const trailing = href.match(/\/concursos?\/[^/?#]*?(20\d{2})(?:\/|$)/i);
-  return Boolean(trailing?.[1] && inWindow(Number(trailing[1])));
+  return Boolean(trailing?.[1] && okYear(Number(trailing[1])));
 }
 
 export function extractEmphasisHints(text: string): string[] {

@@ -118,7 +118,9 @@ comes from the URL segment (`/concursos/PM_AL_26` → slug `pm-al-26`, edition
 2026, title from the page `<h2>`); menu segments (`concursos`, `encerrado`,
 `inscricoes-abertas`) never become exams. `/internal/open-exams` excludes
 rows whose registration ended more than 90 days ago even when a listing regex
-once said "open".
+once said "open". Rows with a parseable edition/slug/title year before the
+current UTC calendar year are also excluded (product inventory = current year
++ future; past editions are knowledge-only).
 
 ## Duplicate documents
 
