@@ -38,6 +38,7 @@ jobs:
           test ! -e apps/content-worker/src/extraction/pdf-text.ts
           test ! -e apps/discovery-crawler/src/listing-parse.ts
       - run: npm run build -w @quizzeira/shared
+      - run: npm run build -w @quizzeira/worker-kit
       - run: npm run db:generate
       - run: npm run test:shared
       - run: npm run test:worker-kit
