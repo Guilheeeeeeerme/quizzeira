@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { openExamId } from "@quizzeira/shared";
+import { isInventoryExam, openExamId } from "@quizzeira/shared";
 import { prisma } from "../../lib/prisma";
 import { examToWire } from "./helpers";
 
@@ -121,6 +121,7 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
    * Study catalog feed. Registration-open exams plus concursos whose
    * registration closed recently (the prova is still ahead — that is the study
    * window). Vestibular/other kinds are excluded (§11.2.5).
+   * Past calendar years are excluded: inventory is current year + future only.
    */
   app.get("/internal/open-exams", async () => {
     const graceStart = new Date(Date.now() - CATALOG_GRACE_DAYS * 86_400_000);
@@ -139,6 +140,16 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
       orderBy: { lastSeenAt: "desc" },
       take: 200,
     });
-    return { items: items.map(examToWire) };
+    const inventory = items.filter((row) =>
+      isInventoryExam({
+        editionKey: row.editionKey,
+        examSlug: row.examSlug,
+        title: row.title,
+        listingUrl: row.listingUrl,
+        detailUrl: row.detailUrl,
+        registrationEnd: row.registrationEnd,
+      }),
+    );
+    return { items: inventory.map(examToWire) };
   });
 }
