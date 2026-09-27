@@ -25,6 +25,9 @@ function phaseToStatus(phase: string): "open" | "closed" | "unknown" {
 function examLifecycleWire(row: {
   id: string;
   examSlug: string;
+  title: string;
+  editionKey: string | null;
+  listingUrl: string;
   status: string;
   lifecyclePhase: string;
   registrationStart: Date | null;
@@ -33,10 +36,22 @@ function examLifecycleWire(row: {
   archivedAt: Date | null;
   purgeEligibleAt: Date | null;
   statusSource: string | null;
+  artifacts: Array<{
+    roleHint: string;
+    kind: string;
+    kindHint: string;
+    published: boolean;
+    bytesPurgedAt: Date | null;
+    storageKey: string | null;
+    byteSize: number | null;
+  }>;
 }) {
   return {
     id: row.id,
     examSlug: row.examSlug,
+    title: row.title,
+    editionKey: row.editionKey,
+    listingUrl: row.listingUrl,
     status: row.status,
     lifecyclePhase: row.lifecyclePhase,
     registrationStart: row.registrationStart?.toISOString() ?? null,
@@ -45,6 +60,15 @@ function examLifecycleWire(row: {
     archivedAt: row.archivedAt?.toISOString() ?? null,
     purgeEligibleAt: row.purgeEligibleAt?.toISOString() ?? null,
     statusSource: row.statusSource,
+    artifacts: row.artifacts.map((a) => ({
+      roleHint: a.roleHint,
+      kind: a.kind,
+      kindHint: a.kindHint,
+      published: a.published,
+      bytesPurgedAt: a.bytesPurgedAt?.toISOString() ?? null,
+      storageKey: a.storageKey,
+      byteSize: a.byteSize,
+    })),
   };
 }
 
@@ -57,26 +81,91 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
    * Exams the worker still has something to decide about. Archived exams only
    * come back once their hard-delete date has passed; otherwise a few hundred
    * idle archives would fill every batch and starve the live ones.
+   *
+   * Calendar-year GC also needs archived past-year rows even before the
+   * examDate hard-delete grace: include them when `includeCalendarGc=1`, but
+   * in a separate reserved sub-batch so archives cannot starve live exams.
    */
-  app.get<{ Querystring: { limit?: string; hardDeleteGraceDays?: string } }>(
-    "/internal/lifecycle/exams",
-    async (request) => {
-      const limit = Math.min(Number(request.query.limit || 50) || 50, 200);
-      const graceDays = Math.max(1, Number(request.query.hardDeleteGraceDays || 90) || 90);
-      const hardDeleteBefore = new Date(Date.now() - graceDays * 86_400_000);
-      const items = await prisma.exam.findMany({
-        where: {
-          OR: [
-            { lifecyclePhase: { not: "archived" } },
-            { lifecyclePhase: "archived", archivedAt: { lte: hardDeleteBefore } },
-          ],
+  app.get<{
+    Querystring: {
+      limit?: string;
+      hardDeleteGraceDays?: string;
+      includeCalendarGc?: string;
+    };
+  }>("/internal/lifecycle/exams", async (request) => {
+    const limit = Math.min(Number(request.query.limit || 50) || 50, 200);
+    const graceDays = Math.max(1, Number(request.query.hardDeleteGraceDays || 90) || 90);
+    const hardDeleteBefore = new Date(Date.now() - graceDays * 86_400_000);
+    const includeCalendarGc =
+      request.query.includeCalendarGc === "1" ||
+      request.query.includeCalendarGc === "true";
+
+    const artifactInclude = {
+      artifacts: {
+        select: {
+          roleHint: true,
+          kind: true,
+          kindHint: true,
+          published: true,
+          bytesPurgedAt: true,
+          storageKey: true,
+          byteSize: true,
         },
-        orderBy: [{ purgeEligibleAt: "asc" }, { lastSeenAt: "asc" }],
-        take: limit,
+      },
+    } as const;
+    const orderBy = [{ purgeEligibleAt: "asc" as const }, { lastSeenAt: "asc" as const }];
+    const liveWhere = {
+      OR: [
+        { lifecyclePhase: { not: "archived" as const } },
+        { lifecyclePhase: "archived" as const, archivedAt: { lte: hardDeleteBefore } },
+      ],
+    };
+
+    // Reserve half the batch for live / hard-delete-due when calendar GC is on.
+    const liveSlots = includeCalendarGc ? Math.max(1, Math.ceil(limit / 2)) : limit;
+    const liveItems = await prisma.exam.findMany({
+      where: liveWhere,
+      include: artifactInclude,
+      orderBy,
+      take: liveSlots,
+    });
+
+    let items = liveItems;
+    if (includeCalendarGc) {
+      const gcSlots = Math.max(1, limit - liveItems.length);
+      const yearStart = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1));
+      const liveIds = liveItems.map((row) => row.id);
+      const gcItems = await prisma.exam.findMany({
+        where: {
+          lifecyclePhase: "archived",
+          ...(liveIds.length ? { id: { notIn: liveIds } } : {}),
+          // Prefer past-year when examDate is known; null examDate still
+          // comes through so GC can resolve year from slug/title or fail-closed.
+          OR: [{ examDate: { lt: yearStart } }, { examDate: null }],
+        },
+        include: artifactInclude,
+        orderBy,
+        take: gcSlots,
       });
-      return { items: items.map(examLifecycleWire) };
-    },
-  );
+      items = [...liveItems, ...gcItems];
+      // Top up leftover slots from the live pool if GC under-filled.
+      if (items.length < limit) {
+        const seen = new Set(items.map((row) => row.id));
+        const topUp = await prisma.exam.findMany({
+          where: {
+            ...liveWhere,
+            id: { notIn: Array.from(seen) },
+          },
+          include: artifactInclude,
+          orderBy,
+          take: limit - items.length,
+        });
+        items = [...items, ...topUp];
+      }
+    }
+
+    return { items: items.map(examLifecycleWire) };
+  });
 
   app.post<{ Body: Record<string, unknown> }>("/internal/lifecycle/transition", async (request) => {
     const body = request.body ?? {};
@@ -132,10 +221,14 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
     if (!examId) {
       throw Object.assign(new Error("examId required"), { statusCode: 400 });
     }
+    const dryRun = Boolean(body.dryRun);
 
     let deletedArtifacts = 0;
     let deletedObjects = 0;
     let keptObjects = 0;
+    let wouldDeleteArtifacts = 0;
+    let wouldDeleteObjects = 0;
+
     if (body.deleteArtifacts || body.deleteMinioObjects) {
       const artifacts = await prisma.artifact.findMany({ where: { examId } });
       const failedKeys = new Set<string>();
@@ -164,6 +257,10 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
             keptObjects += 1;
             continue;
           }
+          if (dryRun) {
+            wouldDeleteObjects += 1;
+            continue;
+          }
           try {
             await deleteArtifactObject(key);
             deletedObjects += 1;
@@ -175,25 +272,31 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
         }
       }
       if (body.deleteArtifacts) {
-        const result = await prisma.artifact.deleteMany({
-          where: {
-            examId,
-            ...(failedKeys.size
-              ? { OR: [{ storageKey: null }, { storageKey: { notIn: Array.from(failedKeys) } }] }
-              : {}),
-          },
-        });
-        deletedArtifacts = result.count;
+        if (dryRun) {
+          wouldDeleteArtifacts = artifacts.filter(
+            (a) => !a.storageKey || !failedKeys.has(a.storageKey),
+          ).length;
+        } else {
+          const result = await prisma.artifact.deleteMany({
+            where: {
+              examId,
+              ...(failedKeys.size
+                ? { OR: [{ storageKey: null }, { storageKey: { notIn: Array.from(failedKeys) } }] }
+                : {}),
+            },
+          });
+          deletedArtifacts = result.count;
+        }
       }
     }
 
-    if (body.deleteTopicQueries) {
+    if (body.deleteTopicQueries && !dryRun) {
       await prisma.topicQuery.deleteMany({ where: { examId } });
     }
 
     // Content/Study reference the exam by examSlug (no FK), so dropping the
     // tombstone orphans their rows for that slug. Off by default in the worker.
-    if (body.deleteExamTombstone) {
+    if (body.deleteExamTombstone && !dryRun) {
       const remaining = await prisma.artifact.count({ where: { examId } });
       if (remaining > 0) {
         throw Object.assign(new Error("exam still has artifacts; purge them first"), {
@@ -203,6 +306,14 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
       await prisma.exam.delete({ where: { id: examId } });
     }
 
-    return { ok: true, deletedArtifacts, deletedObjects, keptObjects };
+    return {
+      ok: true,
+      dryRun,
+      deletedArtifacts,
+      deletedObjects,
+      keptObjects,
+      wouldDeleteArtifacts,
+      wouldDeleteObjects,
+    };
   });
 }

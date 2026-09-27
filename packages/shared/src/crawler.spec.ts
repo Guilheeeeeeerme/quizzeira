@@ -4,8 +4,12 @@ import {
   crawlerSourceId,
   domainFromUrl,
   inferExamKind,
+  inventoryMinYear,
+  isInventoryExam,
+  isInventoryExamYear,
   listingsFingerprint,
   looksLikelyOpen,
+  looksOpenExamUrl,
   concursoPathSlug,
   extractEditionKey,
   isNavigationSlug,
@@ -13,6 +17,7 @@ import {
   titleFromPathSegment,
   normalizeOpenExam,
   openExamFingerprint,
+  parseExamInventoryYear,
   parseRegistrationWindow,
 } from "./crawler.js";
 
@@ -107,6 +112,68 @@ describe("normalizeOpenExam registration status", () => {
     assert.equal(rec.status, "unknown");
     assert.equal(rec.statusSource, "date");
     assert.equal(rec.registrationEnd, "2020-01-31");
+  });
+
+  it("does not mark past-year editions open from listing copy alone", () => {
+    const rec = normalizeOpenExam({
+      title: "TCE-GO — Inscrições abertas",
+      href: "https://portal.example.gov.br/concurso/tce-go-2020/",
+      sourceId: "src1",
+      sourceDomain: "portal.example.gov.br",
+    });
+    assert.equal(rec.status, "unknown");
+  });
+});
+
+describe("inventory year boundary", () => {
+  const now = new Date("2026-06-15T12:00:00Z");
+
+  it("floors inventory at the current UTC calendar year", () => {
+    assert.equal(inventoryMinYear(now), 2026);
+    assert.equal(parseExamInventoryYear("transpetro-2025", "Edital 2025.1"), 2025);
+    assert.equal(isInventoryExamYear(2025, now), false);
+    assert.equal(isInventoryExamYear(2026, now), true);
+    assert.equal(isInventoryExamYear(2027, now), true);
+    assert.equal(isInventoryExamYear(null, now), true);
+  });
+
+  it("keeps current/future URLs and rejects prior-year open-url hints", () => {
+    assert.equal(
+      looksOpenExamUrl("https://www.cesgranrio.org.br/concurso/transpetro-2026/", now),
+      true,
+    );
+    assert.equal(
+      looksOpenExamUrl("https://www.cesgranrio.org.br/concurso/transpetro-2027/", now),
+      true,
+    );
+    assert.equal(
+      looksOpenExamUrl("https://www.cesgranrio.org.br/concurso/transpetro-2025/", now),
+      false,
+    );
+    assert.equal(
+      isInventoryExam(
+        {
+          editionKey: "2025",
+          examSlug: "caixa-2025",
+          title: "Caixa 2025",
+          listingUrl: "https://example/concurso/caixa-2025/",
+        },
+        now,
+      ),
+      false,
+    );
+    assert.equal(
+      isInventoryExam(
+        {
+          editionKey: "2026.1",
+          examSlug: "transpetro-2026",
+          title: "Transpetro 2026",
+          listingUrl: "https://example/concurso/transpetro-2026/",
+        },
+        now,
+      ),
+      true,
+    );
   });
 });
 

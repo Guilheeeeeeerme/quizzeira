@@ -1,5 +1,5 @@
 import type { CrawlerSource } from "@quizzeira/shared";
-import { normalizeOpenExam } from "@quizzeira/shared";
+import { isInventoryExam, normalizeOpenExam } from "@quizzeira/shared";
 
 export interface DiscoveredListing {
   title: string;
@@ -92,15 +92,30 @@ function examLikenessScore(listing: DiscoveredListing): number {
   return score;
 }
 
+/** Drop past-year listing rows before crawl targeting (current year + future only). */
+export function filterInventoryYearListings(
+  listings: DiscoveredListing[],
+  now: Date = new Date(),
+): DiscoveredListing[] {
+  return listings.filter((l) =>
+    isInventoryExam({ title: l.title, listingUrl: l.href }, now),
+  );
+}
+
 export function filterOpenListings(
   listings: DiscoveredListing[],
   openPatterns: string[],
+  now: Date = new Date(),
 ): DiscoveredListing[] {
   if (openPatterns.length > 0) {
     const open = listings.filter((l) => matchesAny(l.textBlob, openPatterns));
-    if (open.length > 0) return open;
+    // Year-filter before the open short-circuit so an all-past-year open
+    // match set falls through to ranked current-year inventory.
+    const inventoryOpen = filterInventoryYearListings(open, now);
+    if (inventoryOpen.length > 0) return inventoryOpen;
   }
-  return [...listings].sort((a, b) => examLikenessScore(b) - examLikenessScore(a));
+  const ranked = [...listings].sort((a, b) => examLikenessScore(b) - examLikenessScore(a));
+  return filterInventoryYearListings(ranked, now);
 }
 
 export function listingsToOpenRecords(listings: DiscoveredListing[], source: CrawlerSource) {

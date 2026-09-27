@@ -20,4 +20,11 @@ export const lifecycleEnv = {
   hardDeleteGraceDays: num("DISCOVERY_LIFECYCLE_HARD_DELETE_DAYS", 90),
   dropTombstone: flag("DISCOVERY_LIFECYCLE_DROP_TOMBSTONE", false),
   batchSize: num("DISCOVERY_LIFECYCLE_BATCH_SIZE", 50),
+  /**
+   * Safety default ON: calendar-year and examDate hard deletes only log what
+   * they would remove. Set DISCOVERY_LIFECYCLE_DRY_RUN=false to mutate.
+   */
+  dryRun: flag("DISCOVERY_LIFECYCLE_DRY_RUN", true),
+  /** Calendar-year product-inventory GC (past year → purge when safe). */
+  calendarGcEnabled: flag("DISCOVERY_LIFECYCLE_CALENDAR_GC", true),
 };
