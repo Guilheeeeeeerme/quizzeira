@@ -16,7 +16,7 @@ the private **infra** repo; this page explains what happens when you push.
 | Supabase Free (`zgoscslzyizwnzqoyqul`, eu-west-1) | Postgres schemas `quizzeira_study`, `quizzeira_discovery`, `quizzeira_content` (pgvector), role `quizzeira`, reached over the IPv6 direct host |
 | Cloudflare Pages `quizzeira-web` | `apps/web` static build → `app.concurseria.ferredemo.dev` |
 | Cloudflare DNS (proxied) | `api.concurseria.ferredemo.dev` → VPS nginx (Let's Encrypt origin) |
-| Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) |
+| Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) — deploy only via infra **Quizzeira edge** (no duplicate Pages workflow in this repo) |
 | LLM | Workers call Gemini/OpenAI directly (`LLM_USE_HEADROOM=false`); Headroom is not used |
 
 **File triage & retention.** `contentworker` runs a `triage` pass every

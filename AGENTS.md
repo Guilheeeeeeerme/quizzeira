@@ -6,6 +6,7 @@ Coding-agent rules for this repository. Project map: [CLAUDE.md](./CLAUDE.md), [
 
 - Work inside this monorepo (`apps/`, `packages/`, `docs/`, `specs/`).
 - Production Compose and GitHub Actions workflows live in **infra** (Jenkins is decommissioned) — do not invent a parallel prod deploy path here.
+- Cloudflare Pages (`quizzeira-web`) and Worker (`quizzeira-edge-watchdog`) deploy only via infra **Quizzeira edge**; this repo’s `.github/workflows/deploy-infra.yml` dispatches VPS deploy — do not add a competing Pages/Worker workflow here.
 - Prefer targeted changes. Do not run the full `npm test` matrix unless asked or the change spans planes.
 
 ## Hard rules
