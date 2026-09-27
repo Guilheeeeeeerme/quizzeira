@@ -90,4 +90,26 @@ describe("parseListingHtml", () => {
     assert.equal(open.length, 1);
     assert.match(open[0]!.href, /transpetro-2026/);
   });
+
+  it("falls through to ranked current-year when open matches are all past-year", () => {
+    const listings = [
+      {
+        title: "Banco 2025 inscrição aberta",
+        href: "https://fixture.local/concurso/banco-2025/",
+        textBlob: "Banco 2025 inscrição aberta",
+      },
+      {
+        title: "TCE-GO 2026 edital",
+        href: "https://fixture.local/concurso/tce-go-2026/",
+        textBlob: "TCE-GO 2026 edital",
+      },
+    ];
+    const open = filterOpenListings(
+      listings,
+      source.openPatterns,
+      new Date("2026-06-15T12:00:00Z"),
+    );
+    assert.equal(open.length, 1);
+    assert.match(open[0]!.href, /tce-go-2026/);
+  });
 });

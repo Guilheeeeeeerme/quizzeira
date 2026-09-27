@@ -127,7 +127,7 @@ async function applyCalendarGc(
       await applyLifecycleTransition({
         examId: exam.id,
         to: "archived",
-        reason: "archive_grace_elapsed",
+        reason: "gc_past_year_soft_archive",
         registrationStatus: "closed",
         archivedAt: now.toISOString(),
       });

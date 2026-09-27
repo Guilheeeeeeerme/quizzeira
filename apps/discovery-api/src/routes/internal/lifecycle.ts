@@ -83,7 +83,8 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
    * idle archives would fill every batch and starve the live ones.
    *
    * Calendar-year GC also needs archived past-year rows even before the
-   * examDate hard-delete grace: include them when `includeCalendarGc=1`.
+   * examDate hard-delete grace: include them when `includeCalendarGc=1`, but
+   * in a separate reserved sub-batch so archives cannot starve live exams.
    */
   app.get<{
     Querystring: {
@@ -99,32 +100,70 @@ export async function registerInternalLifecycleRoutes(app: FastifyInstance): Pro
       request.query.includeCalendarGc === "1" ||
       request.query.includeCalendarGc === "true";
 
-    const items = await prisma.exam.findMany({
-      where: {
-        OR: [
-          { lifecyclePhase: { not: "archived" } },
-          { lifecyclePhase: "archived", archivedAt: { lte: hardDeleteBefore } },
-          ...(includeCalendarGc
-            ? [{ lifecyclePhase: "archived" as const }]
-            : []),
-        ],
-      },
-      include: {
-        artifacts: {
-          select: {
-            roleHint: true,
-            kind: true,
-            kindHint: true,
-            published: true,
-            bytesPurgedAt: true,
-            storageKey: true,
-            byteSize: true,
-          },
+    const artifactInclude = {
+      artifacts: {
+        select: {
+          roleHint: true,
+          kind: true,
+          kindHint: true,
+          published: true,
+          bytesPurgedAt: true,
+          storageKey: true,
+          byteSize: true,
         },
       },
-      orderBy: [{ purgeEligibleAt: "asc" }, { lastSeenAt: "asc" }],
-      take: limit,
+    } as const;
+    const orderBy = [{ purgeEligibleAt: "asc" as const }, { lastSeenAt: "asc" as const }];
+    const liveWhere = {
+      OR: [
+        { lifecyclePhase: { not: "archived" as const } },
+        { lifecyclePhase: "archived" as const, archivedAt: { lte: hardDeleteBefore } },
+      ],
+    };
+
+    // Reserve half the batch for live / hard-delete-due when calendar GC is on.
+    const liveSlots = includeCalendarGc ? Math.max(1, Math.ceil(limit / 2)) : limit;
+    const liveItems = await prisma.exam.findMany({
+      where: liveWhere,
+      include: artifactInclude,
+      orderBy,
+      take: liveSlots,
     });
+
+    let items = liveItems;
+    if (includeCalendarGc) {
+      const gcSlots = Math.max(1, limit - liveItems.length);
+      const yearStart = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1));
+      const liveIds = liveItems.map((row) => row.id);
+      const gcItems = await prisma.exam.findMany({
+        where: {
+          lifecyclePhase: "archived",
+          ...(liveIds.length ? { id: { notIn: liveIds } } : {}),
+          // Prefer past-year when examDate is known; null examDate still
+          // comes through so GC can resolve year from slug/title or fail-closed.
+          OR: [{ examDate: { lt: yearStart } }, { examDate: null }],
+        },
+        include: artifactInclude,
+        orderBy,
+        take: gcSlots,
+      });
+      items = [...liveItems, ...gcItems];
+      // Top up leftover slots from the live pool if GC under-filled.
+      if (items.length < limit) {
+        const seen = new Set(items.map((row) => row.id));
+        const topUp = await prisma.exam.findMany({
+          where: {
+            ...liveWhere,
+            id: { notIn: Array.from(seen) },
+          },
+          include: artifactInclude,
+          orderBy,
+          take: limit - items.length,
+        });
+        items = [...items, ...topUp];
+      }
+    }
+
     return { items: items.map(examLifecycleWire) };
   });
 

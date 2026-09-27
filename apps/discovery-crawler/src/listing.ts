@@ -109,7 +109,10 @@ export function filterOpenListings(
 ): DiscoveredListing[] {
   if (openPatterns.length > 0) {
     const open = listings.filter((l) => matchesAny(l.textBlob, openPatterns));
-    if (open.length > 0) return filterInventoryYearListings(open, now);
+    // Year-filter before the open short-circuit so an all-past-year open
+    // match set falls through to ranked current-year inventory.
+    const inventoryOpen = filterInventoryYearListings(open, now);
+    if (inventoryOpen.length > 0) return inventoryOpen;
   }
   const ranked = [...listings].sort((a, b) => examLikenessScore(b) - examLikenessScore(a));
   return filterInventoryYearListings(ranked, now);
