@@ -177,12 +177,15 @@ services:
       # explicitly — host Cursor tooling can still use Headroom separately.
       LLM_USE_HEADROOM: "false"
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
-      OPENAI_BASE_URL: https://api.openai.com/v1
+      JEV_API_KEY: ${JEV_API_KEY:-}
+      JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
+      JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
+      JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
+      JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
+      JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
       # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
       LLM_PROVIDER: ${LLM_PROVIDER:-}
-      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
       MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
@@ -461,12 +464,15 @@ services:
       # See quiz-corrector: Quizzeira workers skip Headroom.
       LLM_USE_HEADROOM: "false"
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
-      OPENAI_BASE_URL: https://api.openai.com/v1
+      JEV_API_KEY: ${JEV_API_KEY:-}
+      JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
+      JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
+      JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
+      JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
+      JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
       # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
       LLM_PROVIDER: ${LLM_PROVIDER:-}
-      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
@@ -587,11 +593,14 @@ services:
       LLM_USE_HEADROOM: "false"
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
-      OPENAI_BASE_URL: https://api.openai.com/v1
+      JEV_API_KEY: ${JEV_API_KEY:-}
+      JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
+      JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
+      JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
+      JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
+      JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-}
-      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
@@ -633,12 +642,15 @@ services:
       # See quiz-corrector: Quizzeira workers skip Headroom.
       LLM_USE_HEADROOM: "false"
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
-      OPENAI_BASE_URL: https://api.openai.com/v1
+      JEV_API_KEY: ${JEV_API_KEY:-}
+      JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
+      JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
+      JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
+      JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
+      JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
       # §41.3: LLM_PROVIDER=fixture for deterministic E2E (see .env.sample).
       LLM_PROVIDER: ${LLM_PROVIDER:-}
-      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
       LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
       LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
       LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}

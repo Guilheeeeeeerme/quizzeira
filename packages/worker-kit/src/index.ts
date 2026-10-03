@@ -1,10 +1,21 @@
-export { workerEnv, DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_BASE_URL, DEFAULT_OPENAI_BASE_URL } from "./env";
+export {
+  workerEnv,
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_GEMINI_BASE_URL,
+  DEFAULT_JEV_MODEL,
+  DEFAULT_JEV_BASE_URL,
+  JEV_MODES,
+  parseJevMode,
+  normalizeProviderRoot,
+  type JevMode,
+} from "./env";
 export { dmzFetch, dmzGet, dmzPost, dmzPut, dmzPatch } from "./dmz";
 export {
   generateJson,
   requireJsonShape,
   hasLlmProvider,
   configuredProviderNames,
+  generationOwner,
   consumeBudget,
   resetBudgetForTests,
   type GenerateJsonOptions,
@@ -34,6 +45,35 @@ export {
   neutralizeUntrusted,
 } from "./guardrails";
 export { rankFor, rankForTier, type ModelTier } from "./model-rank";
+export {
+  jevDecide,
+  jevShadow,
+  jevModeFor,
+  jevConfigured,
+  checkJevReadiness,
+  validateJevAnswers,
+  validateJevQuestions,
+  estimateJevUsd,
+  topChoice,
+  JEV_TASKS,
+  JEV_INPUT_USD_PER_MILLION,
+  type JevTask,
+  type JevQuestion,
+  type JevChoiceQuestion,
+  type JevScoreQuestion,
+  type JevAnswer,
+  type JevChoiceAnswer,
+  type JevScoreAnswer,
+  type JevAnswersFor,
+  type JevDecision,
+  type JevRequest,
+  type JevDeps,
+  type JevShadowDeps,
+  type JevCallMetadata,
+  type JevUsage,
+  type JevReadiness,
+  type JevTypedError,
+} from "./jev";
 export {
   checkProviderReadiness,
   type ProviderReadiness,

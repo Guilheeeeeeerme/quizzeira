@@ -1,7 +1,6 @@
 import { workerEnv } from "./env";
 import { llmError, llmErrorCode, type LlmErrorCode } from "./errors";
 import { extractJson, geminiProvider, type LlmProvider } from "./gemini";
-import { openaiProvider } from "./openai";
 import { fixtureProvider } from "./providers/fixture";
 import {
   fenceUntrusted,
@@ -13,9 +12,15 @@ import { rankFor, rankForTier } from "./model-rank";
 import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
 import { circuitGuard, circuitRecordFailure, circuitRecordSuccess } from "./circuit";
 
+/**
+ * Generation owners. OpenAI is gone from Quizzeira (JEV audit plan Stage A):
+ * exactly one provider owns a `generateJson` call — `fixture` when selected
+ * for deterministic CI, otherwise Gemini — and a failure retries the same
+ * provider's ranked models only. Unknown names in LLM_PROVIDER_ORDER (e.g. a
+ * stale `openai`) are ignored, never dialed.
+ */
 const PROVIDERS: Record<string, LlmProvider> = {
   gemini: geminiProvider,
-  openai: openaiProvider,
   fixture: fixtureProvider,
 };
 
@@ -49,10 +54,14 @@ export function requireJsonShape<T>(
   return record as T;
 }
 
+/**
+ * Resolve the single generation owner. `fixture` wins when explicitly selected
+ * (LLM_PROVIDER=fixture or listed in LLM_PROVIDER_ORDER, §41.3); otherwise
+ * Gemini when its key is present. Returns an empty list when nothing is
+ * configured so readiness can report `no_configured_provider`.
+ */
 function providerOrder(): LlmProvider[] {
-  const seen = new Set<LlmProvider>();
   const names: string[] = [];
-  // Prefer explicit LLM_PROVIDER=fixture for deterministic CI / compose (§41.3).
   if ((process.env.LLM_PROVIDER ?? "").trim().toLowerCase() === "fixture") {
     names.push("fixture");
   }
@@ -60,11 +69,15 @@ function providerOrder(): LlmProvider[] {
     const name = raw.trim().toLowerCase();
     if (name) names.push(name);
   }
-  for (const name of names) {
-    const provider = PROVIDERS[name];
-    if (provider && !seen.has(provider)) seen.add(provider);
-  }
-  return [...seen].filter((provider) => provider.available());
+  const fixture = names.includes("fixture") ? PROVIDERS.fixture : null;
+  if (fixture && fixture.available()) return [fixture];
+  const gemini = PROVIDERS.gemini;
+  return gemini.available() ? [gemini] : [];
+}
+
+/** Name of the generation owner, for logs/readiness. */
+export function generationOwner(): "gemini" | "fixture" | null {
+  return providerOrder()[0]?.name ?? null;
 }
 
 const MINUTE_MS = 60_000;
@@ -169,6 +182,33 @@ async function reserveBudgetKeyspace(
   }
 }
 
+/**
+ * Reserve `amount` on a Redis counter under `cap` (non-incrementing on reject).
+ * Falls back to an in-process window when Redis is absent (tests / memory
+ * mode). Used by the JEV shadow headroom caps (`jev.ts`).
+ */
+const memoryCounters = new Map<string, number>();
+export async function reserveCounter(
+  key: string,
+  cap: number,
+  amount: number,
+  ttlSeconds: number,
+): Promise<boolean> {
+  if (cap <= 0 || amount <= 0) return true;
+  assertRedisOrTestMode();
+  const redis = workerEnv.redisUrl ? getWorkerRedis() : null;
+  if (!redis) {
+    const cur = memoryCounters.get(key) ?? 0;
+    if (cur + amount > cap) return false;
+    memoryCounters.set(key, cur + amount);
+    return true;
+  }
+  const result = (await redis.eval(BUDGET_RESERVE_LUA, 1, key, String(cap), String(amount))) as number;
+  if (result === -1) return false;
+  if (result === amount) await redis.expire(key, ttlSeconds);
+  return true;
+}
+
 async function consumeBudgetRedis(
   now: number,
   opts: { tokens?: number; calls?: number } = {},
@@ -209,6 +249,7 @@ export function resetBudgetForTests(): void {
   dailyWindow.count = 0;
   dailyWindow.tokens = 0;
   resetStageRateLimitsForTests();
+  memoryCounters.clear();
   void resetWorkerRedisForTests();
 }
 
@@ -255,7 +296,7 @@ function consumeStageRateLimitMemory(stage: string, minuteBucket: number, cap: n
  * (ku/classify/residue/mapping) must never crowd out that minute's
  * generation/judge slot by exhausting the shared counter first.
  */
-async function consumeStageRateLimit(
+export async function consumeStageRateLimit(
   stage: GenerateJsonOptions["stage"],
   now: number = Date.now(),
 ): Promise<void> {
@@ -329,7 +370,7 @@ async function writeCache(cacheKey: string, value: unknown): Promise<void> {
   }
 }
 
-async function consumeStageBudget(stage: GenerateJsonOptions["stage"], tokens: number): Promise<void> {
+export async function consumeStageBudget(stage: GenerateJsonOptions["stage"], tokens: number): Promise<void> {
   const cap = stageBudgetCap(stage);
   if (!cap || !stage) return;
   assertRedisOrTestMode();
@@ -376,6 +417,7 @@ export async function generateJson<T>(
   // past the policy screen (OWASP LLM01 encoding axis).
   const cleanUser = neutralizeUntrusted(user);
   screenUntrusted(cleanUser);
+  // Exactly one owner (Gemini, or fixture in CI). No cross-provider failover.
   const providers = providerOrder();
   if (providers.length === 0) {
     throw llmError("llm_unavailable", "llm_unavailable: no provider API key configured");
@@ -411,8 +453,9 @@ export async function generateJson<T>(
       ? rankForTier(provider.name, opts.tier)
       : rankFor(provider.name);
     // Transient provider errors (503 high demand, 429, retired model 404) fail
-    // over to the next ranked model of the same provider instead of failing
-    // the whole call — one busy model must not stall a stage.
+    // over to the next ranked model of the SAME provider instead of failing
+    // the whole call — one busy model must not stall a stage. There is no
+    // other provider to continue to.
     const candidates = rank.slice(index, index + MODEL_FAILOVER_DEPTH);
     if (candidates.length === 0) candidates.push(rank[index] ?? provider.defaultModel());
     for (const model of candidates) {

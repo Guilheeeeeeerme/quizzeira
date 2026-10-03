@@ -21,15 +21,19 @@ function looksLikeHeadroom(url: string): boolean {
 }
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
-export const DEFAULT_OPENAI_MODEL = "gpt-5-nano";
 export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
-export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_JEV_MODEL = "jev-1.13.0";
+export const DEFAULT_JEV_BASE_URL = "https://api.typesafe.ai";
+
+/** Staged authority for a JEV-owned decision (JEV audit plan §6). */
+export type JevMode = "off" | "shadow" | "active";
+export const JEV_MODES: readonly JevMode[] = ["off", "shadow", "active"];
 
 /**
- * When false, workers talk to public Gemini/OpenAI URLs even if GEMINI_BASE_URL
- * / OPENAI_BASE_URL point at Headroom. Use this when Headroom breaks a path
- * (auth, Docker networking to 127.0.0.1:8787, etc.). Host-side Cursor tooling
- * can keep using Headroom independently.
+ * When false, workers talk to the public Gemini URL even if GEMINI_BASE_URL
+ * points at Headroom. Use this when Headroom breaks a path (auth, Docker
+ * networking to 127.0.0.1:8787, etc.). Host-side tooling can keep using
+ * Headroom independently. JEV never goes through Headroom.
  */
 const llmUseHeadroom = flag("LLM_USE_HEADROOM", true);
 
@@ -42,16 +46,72 @@ function resolveLlmBaseUrl(
   return raw;
 }
 
+/**
+ * Provider roots are operator configuration, not user input, but a typo that
+ * embeds credentials or a query string in the root would leak into every
+ * request log line. Fail loudly instead of normalizing it away.
+ */
+export function normalizeProviderRoot(configured: string | undefined, publicDefault: string): string {
+  const raw = (configured || publicDefault).trim().replace(/\/+$/, "");
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`invalid provider base URL (unparseable)`);
+  }
+  if (url.username || url.password) throw new Error("provider base URL must not embed credentials");
+  if (url.search || url.hash) throw new Error("provider base URL must not carry a query or fragment");
+  if (url.protocol !== "https:" && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname)) {
+    throw new Error("provider base URL must use https");
+  }
+  return raw;
+}
+
+/**
+ * `JEV_<TASK>_MODE` parsing. Unset → `shadow` when a key is present, `off`
+ * otherwise (first-deploy default from the audit plan §8). An explicit
+ * `shadow`/`active` without a key is a readiness failure, surfaced by
+ * `checkJevReadiness`, never a silent no-op. Unknown values are rejected.
+ */
+export function parseJevMode(raw: string | undefined, hasKey: boolean): JevMode {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (!value) return hasKey ? "shadow" : "off";
+  if ((JEV_MODES as readonly string[]).includes(value)) return value as JevMode;
+  throw new Error(`invalid JEV mode "${value}" (expected off | shadow | active)`);
+}
+
+const jevApiKey = (process.env.JEV_API_KEY ?? "").trim();
+
 export const workerEnv = {
   /** Explicit opt-in/out for Headroom LLM proxy. */
   llmUseHeadroom,
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
   geminiBaseUrl: resolveLlmBaseUrl(process.env.GEMINI_BASE_URL, DEFAULT_GEMINI_BASE_URL),
-  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
-  openaiModel: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
-  openaiBaseUrl: resolveLlmBaseUrl(process.env.OPENAI_BASE_URL, DEFAULT_OPENAI_BASE_URL),
-  llmProviderOrder: process.env.LLM_PROVIDER_ORDER || "gemini,openai",
+  /**
+   * Generation owner list. Only `gemini` and `fixture` are registered; the
+   * list exists so deterministic CI can select `fixture`. There is no
+   * cross-provider failover any more (JEV audit plan §6 Stage A).
+   */
+  llmProviderOrder: process.env.LLM_PROVIDER_ORDER || "gemini",
+  /** JEV (TypeSafe) — typed Choice/Score decisions, direct transport. */
+  jevApiKey,
+  jevBaseUrl: normalizeProviderRoot(process.env.JEV_BASE_URL, DEFAULT_JEV_BASE_URL),
+  jevModel: process.env.JEV_MODEL || DEFAULT_JEV_MODEL,
+  jevTimeoutMs: num("JEV_TIMEOUT_SECONDS", 10) * 1000,
+  jevMaxAttempts: num("JEV_MAX_ATTEMPTS", 3),
+  /** Largest `state` payload (chars) sent to JEV; keeps requests under its 32k-token state limit. */
+  jevMaxStateChars: num("JEV_MAX_STATE_CHARS", 60_000),
+  jevClassifyMode: parseJevMode(process.env.JEV_CLASSIFY_MODE, Boolean(jevApiKey)),
+  jevMappingMode: parseJevMode(process.env.JEV_MAPPING_MODE, Boolean(jevApiKey)),
+  jevJudgeMode: parseJevMode(process.env.JEV_JUDGE_MODE, Boolean(jevApiKey)),
+  /**
+   * Shadow headroom rule: shadow JEV calls have their own per-minute and daily
+   * call caps and never draw from the shared `llm:rate:*` limiter, so a wide
+   * shadow sample cannot starve the generation/judge production slots.
+   */
+  jevShadowRatePerMinute: num("JEV_SHADOW_RATE_PER_MINUTE", 10),
+  jevShadowDailyCalls: num("JEV_SHADOW_DAILY_CALLS", 500),
   modelRankRefreshMs: num("MODEL_RANK_REFRESH_MS", 43_200_000),
   modelRankTopN: num("MODEL_RANK_TOP_N", 3),
   llmRateLimitPerMinute: num("LLM_RATE_LIMIT_PER_MINUTE", 20),

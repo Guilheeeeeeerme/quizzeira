@@ -34,5 +34,5 @@ export function isDeferrableLlmError(err: unknown): boolean {
   if (code === "llm_budget_exceeded" || code === "llm_unavailable") return true;
   const msg = err instanceof Error ? err.message : String(err ?? "");
   if (HARD_MESSAGE_RE.test(msg)) return false;
-  return /llm_budget_exceeded|llm_unavailable|429|503|high demand|rate limit/i.test(msg);
+  return /llm_budget_exceeded|llm_unavailable|429|503|529|high demand|overloaded|rate limit|timeout/i.test(msg);
 }
