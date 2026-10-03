@@ -122,6 +122,8 @@ export function parseDetailHtml(
   html: string,
   detailUrl: string,
   listingTitle: string,
+  /** Clock for the registration-window check; injectable so specs are not calendar bombs. */
+  now: Date = new Date(),
 ): DetailPageParse {
   const pageText = textOf(html);
   const title = resolveDetailTitle(html, pageText, detailUrl, listingTitle);
@@ -144,7 +146,7 @@ export function parseDetailHtml(
   let status: "open" | "unknown" = "unknown";
   let statusSource: "date" | "regex" | null = null;
   if (regWindow) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = now.toISOString().slice(0, 10);
     status = today >= regWindow.start && today <= regWindow.end ? "open" : "unknown";
     statusSource = "date";
   } else if (looksLikelyOpen(pageText) || looksLikelyOpen(title)) {

@@ -23,11 +23,11 @@ afterEach(async () => {
 describe("classifyProviderError", () => {
   it("classifies authentication failures", () => {
     expect(classifyProviderError(new Error("Gemini 401: API key not valid"))).toBe("authentication");
-    expect(classifyProviderError(new Error("OpenAI 403: unauthorized"))).toBe("authentication");
+    expect(classifyProviderError(new Error("JEV 403: unauthorized"))).toBe("authentication");
   });
 
   it("classifies billing/credit failures", () => {
-    expect(classifyProviderError(new Error("OpenAI 429: insufficient_quota, no credits"))).toBe("billing");
+    expect(classifyProviderError(new Error("Gemini 429: insufficient_quota, no credits"))).toBe("billing");
     expect(classifyProviderError(new Error("quota project misconfigured"))).toBe("billing");
   });
 

@@ -58,7 +58,6 @@ export const contentEnv = {
 
   embeddingDimensions: num("CONTENT_EMBEDDING_DIMENSIONS", 768),
   geminiEmbeddingModel: process.env.CONTENT_GEMINI_EMBEDDING_MODEL || "gemini-embedding-001",
-  openaiEmbeddingModel: process.env.CONTENT_OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
 
   discoveryApiUrl: (process.env.DISCOVERY_API_URL ?? "http://discovery-api:3010").replace(
     /\/$/,

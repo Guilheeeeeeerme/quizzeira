@@ -3,11 +3,23 @@
 //
 // The judge scores, it does not rewrite. V2 adds relevance / durability /
 // grounding axes so metadata trivia cannot publish on a high overall score alone.
+//
+// Owner (JEV audit plan §4): JEV Score×4 + Choice `answerIndex`, staged by
+// JEV_JUDGE_MODE. Reasons are code-mapped tags and notes come from a template:
+// JEV never generates prose. `off` keeps the Gemini JSON judge; `shadow`
+// decides with Gemini and logs JEV beside it; `active` decides with JEV only.
 import { qualityEnv } from "./env.js";
 import {
   generateJson,
   hasLlmProvider,
+  jevDecide,
+  jevModeFor,
+  jevShadow,
   screenModelStrings,
+  topChoice,
+  type JevChoiceQuestion,
+  type JevMode,
+  type JevScoreQuestion,
   type LlmErrorCode,
 } from "@quizzeira/worker-kit";
 
@@ -42,6 +54,14 @@ export interface JudgeVerdict {
   model: string | null;
 }
 
+export interface JudgeDeps {
+  generate?: typeof generateJson;
+  jev?: typeof jevDecide;
+  mode?: JevMode;
+  hasProvider?: () => boolean;
+  log?: { info: (m: string, f?: Record<string, unknown>) => void; warn: (m: string, f?: Record<string, unknown>) => void };
+}
+
 export const JUDGE_SYSTEM_PROMPT = [
   "Você é um revisor técnico de itens de concurso público brasileiro.",
   "Avalie a questão apresentada com rigor e responda a questão de forma independente.",
@@ -51,6 +71,104 @@ export const JUDGE_SYSTEM_PROMPT = [
 ].join(" ");
 
 export const JUDGE_REQUIRED_KEYS = ["score", "reasons"] as const;
+export const JUDGE_RUBRIC_VERSION = "judge-jev-v1";
+
+/** Five ordered levels → `normalized` 0, .25, .5, .75, 1. */
+const LEVELS = {
+  score: [
+    "Inutilizável: incorreta, ambígua ou sem alternativa defensável.",
+    "Fraca: problemas sérios de correção ou clareza.",
+    "Aceitável: correta, mas com imprecisões ou redação a melhorar.",
+    "Boa: correta, clara e com exatamente uma alternativa defensável.",
+    "Pronta para uso em concurso: correta, clara, autocontida e no nível adequado.",
+  ],
+  relevance: [
+    "Não trata do subtópico indicado.",
+    "Tangencia o subtópico.",
+    "Parcialmente sobre o subtópico.",
+    "Majoritariamente sobre o subtópico.",
+    "Exatamente sobre o subtópico indicado.",
+  ],
+  durability: [
+    "Testa metadados do concurso/portal (vagas, taxas, cronograma, navegação).",
+    "Testa informação temporária ou trivia incidental.",
+    "Mistura conhecimento da disciplina com detalhe circunstancial.",
+    "Testa conhecimento da disciplina com dependência menor de contexto.",
+    "Testa conhecimento durável da disciplina.",
+  ],
+  grounding: [
+    "A resposta-chave contradiz ou ignora as unidades de conhecimento citadas.",
+    "A resposta-chave é fracamente sustentada pelas unidades citadas.",
+    "A resposta-chave é parcialmente sustentada.",
+    "A resposta-chave é majoritariamente sustentada.",
+    "A resposta-chave é diretamente sustentada pelas unidades citadas.",
+  ],
+} as const;
+
+export type JudgeQuestions = {
+  score: JevScoreQuestion;
+  relevance: JevScoreQuestion;
+  durability: JevScoreQuestion;
+  grounding: JevScoreQuestion;
+  answerIndex?: JevChoiceQuestion;
+};
+
+export function buildJudgeState(input: JudgeInput): unknown {
+  return {
+    rubric: JUDGE_RUBRIC_VERSION,
+    exam: input.examSlug,
+    syllabusPath: (input.syllabusPath ?? []).length ? input.syllabusPath : [input.subject],
+    type: input.type,
+    prompt: input.prompt,
+    options: input.type === "MULTIPLE_CHOICE" ? (input.options ?? []).map((o, i) => ({ index: i, text: o })) : null,
+    keyedIndex: input.type === "MULTIPLE_CHOICE" ? input.correctIndex : null,
+    referenceAnswer: input.type === "OPEN" ? input.referenceAnswer : null,
+    explanation: input.explanation,
+    knowledgeUnits: (input.knowledgeUnitStatements ?? []).slice(0, 6),
+  };
+}
+
+export function buildJudgeQuestions(input: JudgeInput): JudgeQuestions {
+  const path = (input.syllabusPath ?? []).join(" ▸ ") || input.subject;
+  const questions: JudgeQuestions = {
+    score: {
+      type: "score",
+      instructions:
+        "Qualidade geral da questão para uso em concurso público brasileiro: correção factual, exatamente uma alternativa defensável, enunciado claro e autocontido, nível adequado.",
+      criteria: [...LEVELS.score],
+    },
+    relevance: {
+      type: "score",
+      instructions: `A questão é sobre o subtópico do conteúdo programático "${path}"?`,
+      criteria: [...LEVELS.relevance],
+    },
+    durability: {
+      type: "score",
+      instructions:
+        "A questão testa conhecimento durável da disciplina, e não metadados do edital, do portal, instruções processuais ou informação temporária (lista B1–B6)?",
+      criteria: [...LEVELS.durability],
+    },
+    grounding: {
+      type: "score",
+      instructions:
+        "A resposta-chave é sustentada pelas unidades de conhecimento citadas no estado?",
+      criteria: [...LEVELS.grounding],
+    },
+  };
+  if (input.type === "MULTIPLE_CHOICE" && (input.options ?? []).length >= 2) {
+    const criteria: Record<string, string> = {};
+    (input.options ?? []).forEach((o, i) => {
+      criteria[String(i)] = o.slice(0, 300);
+    });
+    questions.answerIndex = {
+      type: "choice",
+      instructions:
+        "Independentemente da alternativa indicada como correta, qual alternativa VOCÊ considera correta?",
+      criteria,
+    };
+  }
+  return questions;
+}
 
 export function buildJudgePrompt(input: JudgeInput): string {
   const optionLines = (input.options ?? [])
@@ -109,20 +227,114 @@ export function buildJudgePrompt(input: JudgeInput): string {
     .join("\n");
 }
 
-export async function judgeItem(input: JudgeInput): Promise<JudgeVerdict> {
-  if (!hasLlmProvider()) {
+type ScoreLike = { normalized: number; confidence: number };
+type ChoiceLike = { choice: string; probabilities: Record<string, number>; confidence: number };
+
+/**
+ * Validated JEV answers → verdict. Reasons are code tags, notes a fixed
+ * template with the numbers — no model prose enters the publish record.
+ */
+export function verdictFromJev(
+  answers: {
+    score: ScoreLike;
+    relevance: ScoreLike;
+    durability: ScoreLike;
+    grounding: ScoreLike;
+    answerIndex?: ChoiceLike;
+  },
+  input: Pick<JudgeInput, "type" | "correctIndex">,
+  model: string | null,
+): JudgeVerdict {
+  const score = clamp01(answers.score.normalized);
+  const relevance = clamp01(answers.relevance.normalized);
+  const durability = clamp01(answers.durability.normalized);
+  const grounding = clamp01(answers.grounding.normalized);
+  let answerIndex: number | null = null;
+  if (input.type === "MULTIPLE_CHOICE" && answers.answerIndex) {
+    const top = topChoice(answers.answerIndex.probabilities) ?? answers.answerIndex.choice;
+    const parsed = Number(top);
+    answerIndex = Number.isInteger(parsed) ? parsed : null;
+  }
+  const reasons = ["jev_scored"];
+  if (score < 0.5) reasons.push("jev_low_overall");
+  if (relevance < 0.5) reasons.push("jev_low_relevance");
+  if (durability < 0.5) reasons.push("jev_low_durability");
+  if (grounding < 0.5) reasons.push("jev_low_grounding");
+  if (answerIndex != null && input.correctIndex != null && answerIndex !== input.correctIndex) {
+    reasons.push("jev_answer_disagrees");
+  }
+  const fmt = (n: number) => n.toFixed(2);
+  const notes =
+    `JEV ${JUDGE_RUBRIC_VERSION}: score ${fmt(score)}, relevance ${fmt(relevance)}, ` +
+    `durability ${fmt(durability)}, grounding ${fmt(grounding)}` +
+    (answerIndex != null
+      ? `, answerIndex ${answerIndex} (p=${fmt(answers.answerIndex?.probabilities[String(answerIndex)] ?? 0)})`
+      : "") +
+    `; confidence ${fmt(answers.score.confidence)}`;
+  return { score, answerIndex, relevance, durability, grounding, reasons, notes, model };
+}
+
+export async function judgeItem(input: JudgeInput, deps: JudgeDeps = {}): Promise<JudgeVerdict> {
+  const mode = deps.mode ?? jevModeFor("judge");
+  const hasProvider = deps.hasProvider ?? hasLlmProvider;
+  if (mode !== "active" && !hasProvider()) {
     throw Object.assign(new Error("llm_unavailable: no provider API key configured"), {
       code: "llm_unavailable" satisfies LlmErrorCode,
     });
   }
+  const jev = deps.jev ?? jevDecide;
+  const generate = deps.generate ?? generateJson;
+  const state = buildJudgeState(input);
+  const questions = buildJudgeQuestions(input);
 
-  const raw = await generateJson<Record<string, unknown>>(
+  if (mode === "active") {
+    // JEV owns scores + answerIndex. Errors propagate to the pipeline's
+    // defer/backoff path — never a Gemini substitute for this decision.
+    const decision = await jev({ task: "judge", state, questions, mode: "active" }, {});
+    return verdictFromJev(decision.answers, input, decision.meta.returnedModel ?? decision.meta.requestedModel);
+  }
+
+  const productionPromise = generate<Record<string, unknown>>(
     JUDGE_SYSTEM_PROMPT,
     buildJudgePrompt(input),
     { temperature: 0, requiredKeys: JUDGE_REQUIRED_KEYS, tier: qualityEnv.judgeTier, stage: "judge" },
-  );
+  ).then(normalizeJudgeResponse);
 
-  return normalizeJudgeResponse(raw);
+  if (mode === "shadow") {
+    // Shadow never changes the production verdict; a Gemini failure still
+    // propagates exactly as before once the shadow call has settled.
+    const settled = await Promise.allSettled([
+      productionPromise,
+      jevShadow(
+        { task: "judge", state, questions },
+        (decision) => {
+          const jevVerdict = verdictFromJev(decision.answers, input, null);
+          return { rubric: JUDGE_RUBRIC_VERSION, jevScore: jevVerdict.score, jevAnswerIndex: jevVerdict.answerIndex, jevLowAxes: jevVerdict.reasons.filter((r) => r.startsWith("jev_low_")).length };
+        },
+        { decide: jev, ...(deps.log ? { log: deps.log } : {}) },
+      ),
+    ]);
+    const production = settled[0];
+    if (production.status === "rejected") throw production.reason;
+    const shadow = settled[1].status === "fulfilled" ? settled[1].value : null;
+    if (shadow) {
+      const jevVerdict = verdictFromJev(shadow.answers, input, null);
+      const log = deps.log ?? { info: () => {}, warn: () => {} };
+      log.info("jev shadow vs gemini judge", {
+        event: "jev_shadow_compare",
+        task: "judge",
+        rubric: JUDGE_RUBRIC_VERSION,
+        geminiScore: production.value.score,
+        jevScore: jevVerdict.score,
+        scoreDelta: Number((jevVerdict.score - production.value.score).toFixed(3)),
+        geminiAnswerIndex: production.value.answerIndex,
+        jevAnswerIndex: jevVerdict.answerIndex,
+        answerAgree: production.value.answerIndex === jevVerdict.answerIndex,
+      });
+    }
+    return production.value;
+  }
+  return productionPromise;
 }
 
 export function normalizeJudgeResponse(raw: Record<string, unknown>): JudgeVerdict {
