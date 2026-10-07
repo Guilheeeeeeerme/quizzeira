@@ -1,0 +1,35 @@
+# Keep production image builds slim and hermetic. Prisma/pnpm generated
+# clients are generated INSIDE the images (`prisma generate` in each app
+# Dockerfile) — never bake local copies in.
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.github
+.vscode
+.idea
+
+# Generated Prisma clients (regenerated during image build)
+apps/*/src/generated
+packages/*/dist
+
+# Not needed inside images
+edge
+fixtures
+docs
+specs
+.specify
+.agents
+branding
+scripts
+START_HERE.md
+*.md
+docker-compose.yml
+.env
+.env.*
+
+# Exception: the one-shot migrate service entrypoint ships inside the api image.
+!deploy/migrate.sh
+
+# Exceptions inside "not needed" dirs are unnecessary — no app source lives there.

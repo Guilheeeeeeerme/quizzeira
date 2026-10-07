@@ -12,6 +12,7 @@ async function main(): Promise<void> {
   const app = Fastify({ logger: true, bodyLimit: 32 * 1024 * 1024 });
 
   app.get("/health", async () => ({ ok: true, service: "content-api" }));
+  app.get("/version", async () => ({ service: "content-api", gitsha: process.env.GIT_SHA ?? "" }));
 
   app.setErrorHandler((error, _request, reply) => {
     const status = (error as { statusCode?: number }).statusCode ?? 500;

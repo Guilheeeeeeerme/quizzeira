@@ -9,6 +9,7 @@ async function bootstrap() {
   // 1 MiB default and was dropped with 413. Matches content-api.
   const app = Fastify({ logger: true, bodyLimit: 32 * 1024 * 1024 });
   app.get("/health", async () => ({ ok: true, service: "discovery-api" }));
+  app.get("/version", async () => ({ service: "discovery-api", gitsha: process.env.GIT_SHA ?? "" }));
   await registerInternalRoutes(app);
   await registerAdminRoutes(app);
   await app.listen({ port: env.port, host: "0.0.0.0" });

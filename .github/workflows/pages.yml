@@ -1,0 +1,67 @@
+# Quizzeira web (Cloudflare Pages) + edge watchdog Worker.
+# Pages project: `quizzeira-app`. Worker: `quizzeira-edge-watchdog` (KV already
+# bound in edge/edge-watchdog/wrangler.toml).
+#
+# Worker secrets WATCH_TARGETS / ALERT_WEBHOOK / WATCH_SECRET are NOT managed
+# here — `wrangler deploy` does not touch them; set/rotate them in the
+# Cloudflare dashboard or with `npx wrangler secret put <NAME>` for
+# quizzeira-edge-watchdog (see deploy/README.md).
+name: Pages + edge
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-quizzeira
+  cancel-in-progress: true
+
+env:
+  API_ORIGIN: https://api.concurseria.ferredemo.dev
+
+jobs:
+  pages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build -w @quizzeira/shared
+      - name: build web
+        working-directory: apps/web
+        env:
+          VITE_API_ORIGIN: ${{ env.API_ORIGIN }}
+        run: npm run build
+      - uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=quizzeira-app
+
+  worker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+      - name: typecheck
+        working-directory: edge/edge-watchdog
+        run: |
+          # edge-watchdog is not a workspace member; install a local toolchain.
+          npm install --no-save --no-audit --no-fund typescript tsx @cloudflare/workers-types
+          npx tsc --noEmit -p tsconfig.json
+      - uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: edge/edge-watchdog
+          command: deploy
