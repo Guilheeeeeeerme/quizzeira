@@ -12,6 +12,9 @@ services:
       test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
 
   migrate:
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       GIT_SHA: ${GIT_SHA}
       DEV_ROOT_EMAIL: ${SMOKE_DEV_ROOT_EMAIL}
