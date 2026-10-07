@@ -111,6 +111,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+        # Profiled one-shot; never blocks stacks where migrate is disabled
+        # (required:false composes with the panel profile per deploy/README).
+        required: false
       redis:
         condition: service_healthy
     healthcheck:
@@ -205,6 +208,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+        # Profiled one-shot; never blocks stacks where migrate is disabled
+        # (required:false composes with the panel profile per deploy/README).
+        required: false
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -239,6 +245,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+        # Profiled one-shot; never blocks stacks where migrate is disabled
+        # (required:false composes with the panel profile per deploy/README).
+        required: false
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3020/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
