@@ -192,6 +192,11 @@ jobs:
         if: ${{ env.SKIP_MIGRATIONS_INPUT == 'true' }}
         run: |
           echo "skip_migrations=true â€” operator must have SKIP_MIGRATIONS=1 set on the Dokploy stack env before this webhook fires (panel keeps it for the rollback deploy)"
+      - name: fail if the deploy hook is not configured (no silent skips)
+        if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL == '' }}
+        run: |
+          echo "::error::DOKPLOY_DEPLOY_HOOK_URL secret missing — create the Dokploy Compose stack (panel: https://dokploy.ferredemo.dev), copy its deploy hook URL, add it as this repo's secret. See deploy/README.md + infra docs/RUNBOOK-REBUILD.md"
+          exit 1
       - name: trigger Dokploy webhook
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL != '' }}
         run: |
