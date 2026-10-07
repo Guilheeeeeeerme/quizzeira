@@ -27,6 +27,11 @@ RUN npm ci --no-audit --no-fund
 COPY packages/shared packages/shared
 COPY packages/worker-kit packages/worker-kit
 COPY apps/api apps/api
+# The one-shot migrate service handles all THREE Supabase schemas and runs
+# from this image — copy the discovery/content prisma dirs (schemas+migrations)
+# even though only @quizzeira/api is built here.
+COPY apps/discovery-api/prisma apps/discovery-api/prisma
+COPY apps/content-api/prisma apps/content-api/prisma
 # Prisma generate parses env() from the schema only; never touches the DB.
 ARG DATABASE_URL="postgresql://build:build@build.loc:5432/postgres?schema=quizzeira_study"
 ARG DATABASE_DIRECT_URL="postgresql://build:build@build.loc:5432/postgres?schema=quizzeira_study"
