@@ -47,8 +47,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: build @quizzeira/shared (specs import the built dist)
-        run: npm run build -w @quizzeira/shared
+      - name: build @quizzeira/shared + worker-kit (specs import the built dist)
+        run: |
+          npm run build -w @quizzeira/shared
+          npm run build -w @quizzeira/worker-kit
       - name: shared + i18n (pre-deploy gate)
         run: |
           npm run test:shared
