@@ -37,9 +37,9 @@ Guardrails: [`docs/guardrails.md`](docs/guardrails.md). Concepts: [`docs/ai-swe-
 
 | Plane | Apps | Store |
 | --- | --- | --- |
-| Discovery | `discovery-api`, `discovery-crawler` | Postgres + MinIO |
-| Content | `content-api`, `content-worker`, `content-quality` | Postgres + pgvector |
-| Study | `api`, `web`, `quiz-corrector` | Postgres `quizzeira_study` + Redis |
+| Discovery | `discovery-api`, `discovery-crawler` | Supabase (`quizzeira_discovery`) + R2 objects |
+| Content | `content-api`, `content-worker`, `content-quality` | Supabase (`quizzeira_content`) + pgvector |
+| Study | `api`, `web`, `quiz-corrector` | Supabase `quizzeira_study` + per-app Redis |
 
 Brand mark: [`branding/quizzeira.svg`](branding/quizzeira.svg) — exam card + Eval check gate (filename kept for engineering continuity).
 
