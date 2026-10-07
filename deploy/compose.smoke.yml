@@ -8,6 +8,9 @@
 #     --profile migrate up -d --wait redis migrate api
 services:
   redis:
+    # The override healthcheck reads $$REDIS_PASSWORD inside the container.
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
 
