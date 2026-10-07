@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # Production migration entrypoint for Quizzeira (one-shot `migrate` service).
 #
 # Runs `prisma migrate deploy` against the THREE existing Supabase schemas
@@ -10,7 +10,7 @@
 # SKIP_MIGRATIONS=1 → exit 0 immediately (rollback switch).
 # The `migrate` profile stays enabled in Dokploy so each deploy recreates and
 # re-runs it; `migrate deploy` is idempotent.
-set -euo pipefail
+set -eu
 
 if [ "${SKIP_MIGRATIONS:-}" = "1" ]; then
   echo "[migrate] SKIP_MIGRATIONS=1 — skipping all migrations"
