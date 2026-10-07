@@ -11,10 +11,12 @@ describe("parseDetailHtml", () => {
       resolve(__dirname, "../fixtures/detail-page.html"),
       "utf8",
     );
+    // Fixture window is 01/03/2026–30/09/2026; pin the clock inside it.
     const detail = parseDetailHtml(
       html,
       "https://www.cesgranrio.org.br/concurso/transpetro-2026/",
       "Transpetro 2026",
+      new Date("2026-06-15T12:00:00Z"),
     );
 
     assert.ok(detail.documentLinks.length >= 3);
