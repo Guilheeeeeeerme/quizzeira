@@ -1,0 +1,69 @@
+# Runner-only smoke override for deploy/compose.prod.yml (CI, not Dokploy).
+#
+# Adds a local postgres (pgvector image because quizzeira_content needs the
+# vector extension — the content migration runs CREATE EXTENSION IF NOT EXISTS
+# vector itself), creates the three Supabase schema names, and relaxes the
+# external dokploy-network into a locally-created one. Core services only:
+#   IMAGE_TAG=<sha> docker compose -f deploy/compose.prod.yml -f deploy/compose.smoke.yml \
+#     --profile migrate up -d --wait redis migrate api
+services:
+  redis:
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+
+  migrate:
+    environment:
+      GIT_SHA: ${GIT_SHA}
+      DEV_ROOT_EMAIL: ${SMOKE_DEV_ROOT_EMAIL}
+      DEV_ROOT_PASSWORD: ${SMOKE_DEV_ROOT_PASSWORD}
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_DIRECT_URL: ${DATABASE_DIRECT_URL}
+      DISCOVERY_DATABASE_URL: ${DISCOVERY_DATABASE_URL}
+      DISCOVERY_DATABASE_DIRECT_URL: ${DISCOVERY_DATABASE_DIRECT_URL}
+      CONTENT_DATABASE_URL: ${CONTENT_DATABASE_URL}
+      CONTENT_DATABASE_DIRECT_URL: ${CONTENT_DATABASE_DIRECT_URL}
+      SKIP_MIGRATIONS: ${SKIP_MIGRATIONS:-}
+
+  api:
+    # Publish only for the runner smoke poll (127.0.0.1 = not LAN-exposed); the
+    # production stack has no `ports` — Traefik does the ingress.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      GIT_SHA: ${GIT_SHA}
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      API_ORIGIN: ${API_ORIGIN}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_DIRECT_URL: ${DATABASE_DIRECT_URL}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      INTERNAL_API_KEY_CORRECTOR: ${INTERNAL_API_KEY_CORRECTOR}
+      CONTENT_API_URL: http://content-api:3020
+      DISCOVERY_API_URL: http://discovery-api:3010
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: "no"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - ./smoke/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - private
+
+networks:
+  dokploy-network:
+    name: dokploy-network
+    external: false

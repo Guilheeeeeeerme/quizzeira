@@ -1,0 +1,469 @@
+# Production Quizzeira (Concurseria) stack for Dokploy.
+#
+# Never used by local dev — build against THIS file only from CI/Dokploy with
+# image names from GHCR (`docker compose -f deploy/compose.prod.yml config` is
+# the local validation). The local dev compose (`docker-compose.yml` at repo
+# root) remains untouched.
+#
+# Planes and profiles:
+#   always on : redis, migrate* (profile `migrate`), api, quiz-corrector,
+#               discovery-api, content-api (the two inner APIs stay on the
+#               private network — no Traefik router, internal callers only)
+#   `content` : content-worker, content-quality, doc-processor
+#               (doc-processor lives here on purpose: only content-worker's
+#               extraction/documents pass calls DOC_PROCESSOR_URL; quiz-corrector
+#               grades via the study api + LLM only — grep'd: no DOC_PROCESSOR_URL
+#               reference in apps/quiz-corrector)
+#   `discovery`: discovery-crawler (Playwright, shm_size 1gb), discovery-lifecycle
+#   `social`  : discovery-social-scout
+#
+# Profiles + gates (compose-valid pattern for profiled deps): core services do
+# not use `depends_on` against profiled services (except migrate, see below) —
+# workers reach their APIs by URL and wait on Redis health instead. `migrate`
+# stays gated in, and the Dokploy profile `migrate` is kept enabled so every
+# deploy recreates it and re-runs migrations; with SKIP_MIGRATIONS=1 it exits 0
+# immediately, which also makes it the rollback switch.
+#
+# Memory limits come from deploy/tiers/<tier>.env (mem_limit vars); defaults are
+# safe primaries only and the tier files are the real budget.
+
+x-llm-direct: &llm-direct
+  # HARD RULE — Quizzeira LLM workers skip Headroom by design
+  # (infra docs/quizzeira-headroom.md): direct public provider endpoints even
+  # when env values look like Headroom; never "fix" this to headroom:8787.
+  LLM_USE_HEADROOM: "false"
+  GEMINI_BASE_URL: https://generativelanguage.googleapis.com
+  OPENAI_BASE_URL: https://api.openai.com/v1
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass '${REDIS_PASSWORD:?}' --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD:?}' ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    mem_limit: ${MEM_REDIS:-256m}
+    networks:
+      - private
+
+  # One-shot migration + platform seed (image = api image, ships deploy/migrate.sh).
+  # SKIPPED work: none — with SKIP_MIGRATIONS=1 sh exits 0 immediately.
+  migrate:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/api:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: "no"
+    profiles: ["migrate"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_DIRECT_URL: ${DATABASE_DIRECT_URL}
+      DISCOVERY_DATABASE_URL: ${DISCOVERY_DATABASE_URL}
+      DISCOVERY_DATABASE_DIRECT_URL: ${DISCOVERY_DATABASE_DIRECT_URL}
+      CONTENT_DATABASE_URL: ${CONTENT_DATABASE_URL}
+      CONTENT_DATABASE_DIRECT_URL: ${CONTENT_DATABASE_DIRECT_URL}
+      DEV_ROOT_EMAIL: ${DEV_ROOT_EMAIL}
+      DEV_ROOT_PASSWORD: ${DEV_ROOT_PASSWORD}
+    entrypoint: ["bash", "/app/deploy/migrate.sh"]
+    networks:
+      - private
+
+  api:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/api:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      API_ORIGIN: ${API_ORIGIN}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_DIRECT_URL: ${DATABASE_DIRECT_URL}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      INTERNAL_API_KEY_CORRECTOR: ${INTERNAL_API_KEY_CORRECTOR}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-30}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-1000}
+      INTERNAL_RATE_LIMIT_MAX: ${INTERNAL_RATE_LIMIT_MAX:-120}
+      CONTENT_API_URL: http://content-api:3020
+      DISCOVERY_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY_DISCOVERY: ${INTERNAL_API_KEY_DISCOVERY}
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-quizzeira}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_NAME: quizzeira-api
+      GIT_SHA: ${GIT_SHA}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    mem_limit: ${MEM_API:-768m}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.quizzeira-api.rule=Host(`api.concurseria.ferredemo.dev`)
+      - traefik.http.routers.quizzeira-api.entrypoints=websecure
+      - traefik.http.routers.quizzeira-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.quizzeira-api.middlewares=security-headers@file,compress@file
+      - traefik.http.routers.quizzeira-api-internal.rule=Host(`api.concurseria.ferredemo.dev`) && PathPrefix(`/internal`)
+      - traefik.http.routers.quizzeira-api-internal.priority=200
+      - traefik.http.routers.quizzeira-api-internal.service=noop@internal
+      - traefik.http.services.quizzeira-api.loadbalancer.server.port=3000
+    networks:
+      - private
+      - dokploy-network
+
+  quiz-corrector:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/quizcorrector:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://api:3000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_CORRECTOR}
+      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
+      WORKER_WINDOWS: ${WORKER_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      SERVICE_NAME: quizzeira-corrector
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
+      MODEL_RANK_REFRESH_MS: ${MODEL_RANK_REFRESH_MS:-43200000}
+      MODEL_RANK_TOP_N: ${MODEL_RANK_TOP_N:-3}
+      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
+      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
+      LLM_RATE_GENERATION_PER_MINUTE: ${LLM_RATE_GENERATION_PER_MINUTE:-1}
+      LLM_RATE_JUDGE_PER_MINUTE: ${LLM_RATE_JUDGE_PER_MINUTE:-1}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      GIT_SHA: ${GIT_SHA}
+      <<: *llm-direct
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: ${MEM_QUIZ_CORRECTOR:-384m}
+    networks:
+      - private
+
+  discovery-api:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/discoveryapi:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+      DISCOVERY_DATABASE_URL: ${DISCOVERY_DATABASE_URL}
+      DISCOVERY_DATABASE_DIRECT_URL: ${DISCOVERY_DATABASE_DIRECT_URL}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-quizzeira}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_NAME: quizzeira-discovery-api
+      GIT_SHA: ${GIT_SHA}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    mem_limit: ${MEM_DISCOVERY_API:-384m}
+    networks:
+      - private
+
+  content-api:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/contentapi:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3020
+      CONTENT_DATABASE_URL: ${CONTENT_DATABASE_URL}
+      CONTENT_DATABASE_DIRECT_URL: ${CONTENT_DATABASE_DIRECT_URL}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_CONTENT}
+      CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
+      CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-quizzeira}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_NAME: quizzeira-content-api
+      GIT_SHA: ${GIT_SHA}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3020/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    mem_limit: ${MEM_CONTENT_API:-512m}
+    networks:
+      - private
+
+  # ── Content plane (profile: content) ─────────────────────────────────────
+  doc-processor:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/docprocessor:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["content"]
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      GIT_SHA: ${GIT_SHA}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3030/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: ${MEM_DOC_PROCESSOR:-512m}
+    networks:
+      - private
+
+  content-worker:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/contentworker:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["content"]
+    environment:
+      NODE_ENV: production
+      SERVICE_NAME: quizzeira-contentworker
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DISCOVERY_API_URL: http://discovery-api:3010
+      CONTENT_API_URL: http://content-api:3020
+      INTERNAL_API_KEY_DISCOVERY: ${INTERNAL_API_KEY_DISCOVERY}
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT}
+      DOC_PROCESSOR_URL: http://doc-processor:3030
+      WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
+      WORKER_WINDOWS: ${CONTENT_WORKER_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
+      LLM_BUDGET_KU_TOKENS: ${LLM_BUDGET_KU_TOKENS:-500000}
+      LLM_BUDGET_GENERATION_TOKENS: ${LLM_BUDGET_GENERATION_TOKENS:-800000}
+      LLM_BUDGET_JUDGE_TOKENS: ${LLM_BUDGET_JUDGE_TOKENS:-400000}
+      LLM_BUDGET_RESIDUE_TOKENS: ${LLM_BUDGET_RESIDUE_TOKENS:-200000}
+      LLM_CACHE_TTL_DAYS: ${LLM_CACHE_TTL_DAYS:-90}
+      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
+      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
+      LLM_RATE_GENERATION_PER_MINUTE: ${LLM_RATE_GENERATION_PER_MINUTE:-1}
+      LLM_RATE_JUDGE_PER_MINUTE: ${LLM_RATE_JUDGE_PER_MINUTE:-1}
+      CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
+      CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
+      GIT_SHA: ${GIT_SHA}
+      <<: *llm-direct
+    depends_on:
+      redis:
+        condition: service_healthy
+      content-api:
+        condition: service_healthy
+    mem_limit: ${MEM_CONTENT_WORKER:-768m}
+    networks:
+      - private
+
+  content-quality:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/contentquality:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["content"]
+    environment:
+      NODE_ENV: production
+      SERVICE_NAME: quizzeira-contentquality
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CONTENT_API_URL: http://content-api:3020
+      INTERNAL_API_KEY_CONTENT: ${INTERNAL_API_KEY_CONTENT}
+      WORKER_INTERVAL_MS: ${CONTENT_QUALITY_INTERVAL_MS:-60000}
+      WORKER_WINDOWS: ${CONTENT_QUALITY_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-openai,gemini}
+      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-20}
+      LLM_DAILY_BUDGET: ${LLM_DAILY_BUDGET:-500}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-2000000}
+      LLM_RATE_GENERATION_PER_MINUTE: ${LLM_RATE_GENERATION_PER_MINUTE:-1}
+      LLM_RATE_JUDGE_PER_MINUTE: ${LLM_RATE_JUDGE_PER_MINUTE:-1}
+      CONTENT_QUALITY_ENABLED: ${CONTENT_QUALITY_ENABLED:-true}
+      # Structurally-ok past-exam extraction can publish without LLM judge.
+      CONTENT_QUALITY_PUBLISH_EXTRACTION_WITHOUT_JUDGE: ${CONTENT_QUALITY_PUBLISH_EXTRACTION_WITHOUT_JUDGE:-false}
+      CONTENT_QUALITY_PUBLISH_THRESHOLD: ${CONTENT_QUALITY_PUBLISH_THRESHOLD:-0.8}
+      CONTENT_QUALITY_FAIL_THRESHOLD: ${CONTENT_QUALITY_FAIL_THRESHOLD:-0.5}
+      GIT_SHA: ${GIT_SHA}
+      <<: *llm-direct
+    depends_on:
+      redis:
+        condition: service_healthy
+      content-api:
+        condition: service_healthy
+    mem_limit: ${MEM_CONTENT_QUALITY:-256m}
+    networks:
+      - private
+
+  # ── Discovery plane (profile: discovery) ─────────────────────────────────
+  discovery-crawler:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/discoverycrawler:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["discovery"]
+    environment:
+      NODE_ENV: production
+      SERVICE_NAME: quizzeira-crawler
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY}
+      WORKER_INTERVAL_MS: ${DISCOVERY_CRAWLER_INTERVAL_MS:-1800000}
+      WORKER_WINDOWS: ${DISCOVERY_CRAWLER_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      DISCOVERY_CRAWLER_ENABLED: ${DISCOVERY_CRAWLER_ENABLED:-true}
+      DISCOVERY_CRAWLER_FIXTURE_MODE: ${DISCOVERY_CRAWLER_FIXTURE_MODE:-false}
+      DISCOVERY_CRAWLER_MAX_SOURCES: ${DISCOVERY_CRAWLER_MAX_SOURCES:-6}
+      DISCOVERY_CRAWLER_MAX_OPEN_PER_SOURCE: ${DISCOVERY_CRAWLER_MAX_OPEN_PER_SOURCE:-8}
+      DISCOVERY_CRAWLER_MAX_ARTIFACTS: ${DISCOVERY_CRAWLER_MAX_ARTIFACTS:-4}
+      DISCOVERY_CRAWLER_MAX_OAB_EDITIONS: ${DISCOVERY_CRAWLER_MAX_OAB_EDITIONS:-3}
+      DISCOVERY_CRAWLER_NAV_TIMEOUT_MS: ${DISCOVERY_CRAWLER_NAV_TIMEOUT_MS:-45000}
+      SEARCH_API_URL: ${SEARCH_API_URL}
+      SEARCH_API_KEY: ${SEARCH_API_KEY}
+      GIT_SHA: ${GIT_SHA}
+    shm_size: 1gb
+    mem_limit: ${MEM_DISCOVERY_CRAWLER:-1536m}
+    networks:
+      - private
+
+  discovery-lifecycle:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/discoverylifecycle:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["discovery"]
+    environment:
+      NODE_ENV: production
+      PORT: 3012
+      SERVICE_NAME: quizzeira-lifecycle
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY}
+      WORKER_INTERVAL_MS: ${DISCOVERY_LIFECYCLE_INTERVAL_MS:-900000}
+      WORKER_WINDOWS: ${DISCOVERY_LIFECYCLE_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_LIFECYCLE_ENABLED: ${DISCOVERY_LIFECYCLE_ENABLED:-true}
+      DISCOVERY_LIFECYCLE_DRY_RUN: ${DISCOVERY_LIFECYCLE_DRY_RUN:-true}
+      DISCOVERY_LIFECYCLE_CALENDAR_GC: ${DISCOVERY_LIFECYCLE_CALENDAR_GC:-true}
+      DISCOVERY_LIFECYCLE_SOFT_ARCHIVE_DAYS: ${DISCOVERY_LIFECYCLE_SOFT_ARCHIVE_DAYS:-30}
+      DISCOVERY_LIFECYCLE_HARD_DELETE_DAYS: ${DISCOVERY_LIFECYCLE_HARD_DELETE_DAYS:-90}
+      DISCOVERY_LIFECYCLE_DROP_TOMBSTONE: ${DISCOVERY_LIFECYCLE_DROP_TOMBSTONE:-false}
+      DISCOVERY_LIFECYCLE_BATCH_SIZE: ${DISCOVERY_LIFECYCLE_BATCH_SIZE:-50}
+      GIT_SHA: ${GIT_SHA}
+    mem_limit: ${MEM_DISCOVERY_LIFECYCLE:-256m}
+    networks:
+      - private
+
+  # ── Social scout (profile: social) — off by default; fixture mode ─────────
+  discovery-social-scout:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/discoverysocial:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["social"]
+    environment:
+      NODE_ENV: production
+      PORT: 3013
+      SERVICE_NAME: quizzeira-social
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY}
+      WORKER_INTERVAL_MS: ${DISCOVERY_SOCIAL_INTERVAL_MS:-3600000}
+      WORKER_WINDOWS: ${DISCOVERY_SOCIAL_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_SOCIAL_ENABLED: ${DISCOVERY_SOCIAL_ENABLED:-false}
+      DISCOVERY_SOCIAL_FIXTURE_MODE: ${DISCOVERY_SOCIAL_FIXTURE_MODE:-true}
+      DISCOVERY_SOCIAL_STORE_URL_ARTIFACTS: ${DISCOVERY_SOCIAL_STORE_URL_ARTIFACTS:-false}
+      DISCOVERY_SOCIAL_LOCALE: ${DISCOVERY_SOCIAL_LOCALE:-pt-BR}
+      DISCOVERY_SOCIAL_ADAPTERS: ${DISCOVERY_SOCIAL_ADAPTERS:-fixture}
+      DISCOVERY_SOCIAL_MAX_POSTS: ${DISCOVERY_SOCIAL_MAX_POSTS:-40}
+      DISCOVERY_SOCIAL_MAX_FILES: ${DISCOVERY_SOCIAL_MAX_FILES:-12}
+      DISCOVERY_SOCIAL_KEYWORDS: ${DISCOVERY_SOCIAL_KEYWORDS}
+      DISCOVERY_SOCIAL_KEYWORDS_EXTRA: ${DISCOVERY_SOCIAL_KEYWORDS_EXTRA}
+      X_BEARER_TOKEN: ${X_BEARER_TOKEN}
+      GOOGLE_CSE_API_KEY: ${GOOGLE_CSE_API_KEY}
+      GOOGLE_CSE_CX: ${GOOGLE_CSE_CX}
+      INSTAGRAM_ACCESS_TOKEN: ${INSTAGRAM_ACCESS_TOKEN}
+      INSTAGRAM_BUSINESS_ACCOUNT_IDS: ${INSTAGRAM_BUSINESS_ACCOUNT_IDS}
+      FACEBOOK_ACCESS_TOKEN: ${FACEBOOK_ACCESS_TOKEN}
+      FACEBOOK_PAGE_IDS: ${FACEBOOK_PAGE_IDS}
+      META_GRAPH_ACCESS_TOKEN: ${META_GRAPH_ACCESS_TOKEN}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      GIT_SHA: ${GIT_SHA}
+    mem_limit: ${MEM_SOCIAL:-192m}
+    networks:
+      - private
+
+networks:
+  # Stack-private network (no host/LAN egress). Named to avoid collisions with
+  # other Dokploy stacks' private networks (per-app isolation).
+  private:
+    driver: bridge
+    internal: true
+    name: quizzeira-internal
+  # Dokploy-managed ingress network — created by the Dokploy install and only
+  # joined by the routed `api` service. On the CI runner, create it first:
+  #   docker network create dokploy-network
+  dokploy-network:
+    external: true
