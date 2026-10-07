@@ -68,10 +68,12 @@ The local dev compose (`docker-compose.yml`) is untouched and is NOT this stack.
    - no real secrets in git — the panel holds the only copies; keep a
      password-manager copy;
    - `SKIP_MIGRATIONS=1` only on rollback deploys;
-   - **`LLM_USE_HEADROOM=false`** and direct provider base URLs for quizzeira
+   - **`LLM_USE_HEADROOM=false`** and direct Gemini + JEV base URLs for quizzeira
      workers (quiz-corrector, content-worker, content-quality) — hard rule from
      `AGENTS.md` / `infra/docs/quizzeira-headroom.md`. Do not point them at
-     Headroom even though PromptDesk/Argus workers use it.
+     Headroom (Argus-only). Set `S3_BUCKET=quizzeira-objects`.
+   - DB target: discovery on Supabase `ferredemo`; content + study → VPS Postgres
+     (pgvector) when that cutover lands — not “three schemas forever on one Free project”.
 4. **Profiles.** Dokploy → this stack → Services/Profiles: enable `migrate`
    (keep enabled), and enable `content` / `discovery` / `social` when their
    budget exists (see Secret-free sizing below). A profile's service only runs
