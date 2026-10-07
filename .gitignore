@@ -27,3 +27,6 @@ apps/*/src/generated/
 .windsurf/
 skills-lock.json
 __pycache__/
+
+# ---- Local git worktrees ----
+.worktrees/
