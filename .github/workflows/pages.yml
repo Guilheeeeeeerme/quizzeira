@@ -39,11 +39,11 @@ jobs:
         env:
           VITE_API_ORIGIN: ${{ env.API_ORIGIN }}
         run: npm run build
-      - uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name=quizzeira-app
+      - name: Deploy to Pages (quizzeira-app)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@^4 pages deploy apps/web/dist --project-name=quizzeira-app
 
   worker:
     runs-on: ubuntu-24.04
@@ -59,9 +59,9 @@ jobs:
           # edge-watchdog is not a workspace member; install a local toolchain.
           npm install --no-save --no-audit --no-fund typescript tsx @cloudflare/workers-types
           npx tsc --noEmit -p tsconfig.json
-      - uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: edge/edge-watchdog
-          command: deploy
+      - name: Deploy edge-watchdog Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@^4 deploy
+        working-directory: edge/edge-watchdog
