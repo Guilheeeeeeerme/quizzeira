@@ -21,7 +21,6 @@ type CallRecord = { url: string; body: Record<string, unknown> };
 
 const calls: CallRecord[] = [];
 let geminiStatus = 200;
-let openaiStatus = 200;
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -35,12 +34,6 @@ const geminiText = (text: string) =>
     usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
   });
 
-const openaiText = (text: string) =>
-  jsonResponse({
-    choices: [{ message: { content: text } }],
-    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-  });
-
 async function stubFetch(input: unknown, init?: RequestInit): Promise<Response> {
   const url = String(input);
   const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
@@ -48,10 +41,6 @@ async function stubFetch(input: unknown, init?: RequestInit): Promise<Response> 
   if (url.includes(":generateContent")) {
     if (geminiStatus !== 200) return jsonResponse({ error: { message: "up" } }, geminiStatus);
     return geminiText('{"ok":true}');
-  }
-  if (url.includes("/chat/completions")) {
-    if (openaiStatus !== 200) return jsonResponse({ error: { message: "down" } }, openaiStatus);
-    return openaiText('{"ok":true}');
   }
   if (url.includes("v1beta/models") || url.endsWith("/models")) {
     return jsonResponse({ models: [], data: [] });
@@ -64,16 +53,12 @@ const saved = { ...workerEnv } as Record<string, unknown>;
 beforeEach(() => {
   calls.length = 0;
   geminiStatus = 200;
-  openaiStatus = 200;
   workerEnv.geminiApiKey = "test-gemini";
-  workerEnv.openaiApiKey = "test-openai";
-  workerEnv.llmProviderOrder = "gemini,openai";
+  workerEnv.llmProviderOrder = "gemini";
   workerEnv.llmRateLimitPerMinute = 100;
   workerEnv.llmDailyBudget = 1000;
   workerEnv.geminiModel = "gemini-2.5-flash-lite";
-  workerEnv.openaiModel = "gpt-5-nano";
   workerEnv.modelRankTopN = 3;
-  workerEnv.openaiBaseUrl = "https://api.openai.com/v1";
   workerEnv.redisUrl = "";
   workerEnv.allowMemoryBudget = true;
   resetBudgetForTests();
@@ -93,12 +78,11 @@ describe("provider circuits gate failed providers", () => {
     await circuitRecordFailure("gemini", new Error("Gemini 401: API key not valid"));
     expect((await circuitHealth("gemini")).state).toBe("open");
     await resetCircuitsForTests();
-    expect(classifyProviderError(new Error("OpenAI 429: no credits"))).toBe("billing");
+    expect(classifyProviderError(new Error("JEV 429: no credits"))).toBe("billing");
   });
 
-  it("does not charge the budget while provider circuits are open", async () => {
+  it("does not charge the budget while the generation circuit is open", async () => {
     await circuitRecordFailure("gemini", new Error("Gemini 401: API key not valid"));
-    await circuitRecordFailure("openai", new Error("OpenAI 403: no credits"));
     await expect(generateJson("system", "user")).rejects.toMatchObject({
       code: "llm_unavailable",
     });
@@ -107,48 +91,43 @@ describe("provider circuits gate failed providers", () => {
   });
 });
 
-describe("provider order", () => {
-  it("prefers gemini and skips openai on success", async () => {
+describe("single generation owner (OpenAI removed)", () => {
+  it("uses gemini and nothing else on success", async () => {
     const result = await generateJson<{ ok: boolean }>("system", "user");
     expect(result).toEqual({ ok: true });
-    expect(calls.map((c) => c.url)).toEqual([
-      expect.stringContaining(":generateContent"),
-    ]);
+    expect(calls.map((c) => c.url)).toEqual([expect.stringContaining(":generateContent")]);
   });
 
-  it("falls back to openai when gemini fails", async () => {
+  it("surfaces a gemini hard failure instead of dialing another provider", async () => {
     geminiStatus = 500;
-    const result = await generateJson<{ ok: boolean }>("system", "user");
-    expect(result).toEqual({ ok: true });
-    expect(calls.map((c) => c.url)).toEqual([
-      expect.stringContaining(":generateContent"),
-      expect.stringContaining("/chat/completions"),
-    ]);
+    await expect(generateJson("system", "user")).rejects.toThrow(/Gemini 500/);
+    const urls = calls.map((c) => c.url);
+    expect(urls.length).toBeGreaterThanOrEqual(1);
+    expect(urls.every((u) => u.includes(":generateContent"))).toBe(true);
+    expect(urls.join(" ")).not.toMatch(/openai|chat\/completions/);
   });
 
-  it("fails over to the next ranked gemini model on 503 before leaving the provider", async () => {
+  it("fails over to the next ranked gemini model on 503 and then stops within the provider", async () => {
     geminiStatus = 503;
-    const result = await generateJson<{ ok: boolean }>("system", "user", { tier: "mid" });
-    expect(result).toEqual({ ok: true });
+    await expect(generateJson("system", "user", { tier: "mid" })).rejects.toThrow(/Gemini 503/);
     const urls = calls.map((c) => c.url);
     expect(urls.filter((u) => u.includes(":generateContent")).length).toBeGreaterThanOrEqual(2);
-    expect(urls[urls.length - 1]).toEqual(expect.stringContaining("/chat/completions"));
+    expect(urls.every((u) => u.includes("generativelanguage"))).toBe(true);
   });
 
-  it("throws llm_unavailable when no provider key is set, without calling fetch", async () => {
+  it("throws llm_unavailable when no gemini key is set, without calling fetch", async () => {
     workerEnv.geminiApiKey = "";
-    workerEnv.openaiApiKey = "";
     await expect(generateJson("system", "user")).rejects.toMatchObject({
       code: "llm_unavailable",
     });
     expect(calls).toHaveLength(0);
   });
 
-  it("uses only openai when gemini key is absent", async () => {
-    workerEnv.geminiApiKey = "";
+  it("ignores a stale openai entry in LLM_PROVIDER_ORDER", async () => {
+    workerEnv.llmProviderOrder = "openai,gemini";
     const result = await generateJson<{ ok: boolean }>("system", "user");
     expect(result).toEqual({ ok: true });
-    expect(calls.map((c) => c.url)).toEqual([expect.stringContaining("/chat/completions")]);
+    expect(calls.map((c) => c.url)).toEqual([expect.stringContaining(":generateContent")]);
   });
 });
 
@@ -263,30 +242,7 @@ describe("guardrail wiring", () => {
     expect(user).toContain("What is 2+2?");
   });
 
-  it("moves to the next provider on shape-guard failure", async () => {
-    geminiStatus = 200;
-    const first = vi.stubGlobal("fetch", vi.fn(async (input: unknown, init?: RequestInit) => {
-      const url = String(input);
-      const body = init?.body ? JSON.parse(String(init.body)) : {};
-      calls.push({ url, body });
-      if (url.includes(":generateContent")) return geminiText('{"wrong":true}');
-      if (url.includes("/chat/completions")) return openaiText('{"ok":true}');
-      return jsonResponse({ models: [], data: [] });
-    }));
-    expect(first).toBeDefined();
-    const result = await generateJson<{ ok: boolean }>("system", "user", {
-      requiredKeys: ["ok"],
-    });
-    expect(result).toEqual({ ok: true });
-    expect(calls.map((c) => c.url)).toEqual([
-      expect.stringContaining(":generateContent"),
-      expect.stringContaining("/chat/completions"),
-    ]);
-  });
-
-  it("surfaces the shape error after all providers fail shape", async () => {
-    geminiStatus = 200;
-    openaiStatus = 200;
+  it("surfaces the shape error from gemini without trying another provider", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: unknown, init?: RequestInit) => {
@@ -294,8 +250,7 @@ describe("guardrail wiring", () => {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
         calls.push({ url, body });
         if (url.includes(":generateContent")) return geminiText('{"nope":1}');
-        if (url.includes("/chat/completions")) return openaiText('{"nah":2}');
-        return jsonResponse({ models: [], data: [] });
+        return jsonResponse({ models: [] });
       }),
     );
     let code: string | null = null;
@@ -305,6 +260,7 @@ describe("guardrail wiring", () => {
       code = llmErrorCode(err);
     }
     expect(code).toBe("llm_shape");
+    expect(calls.map((c) => c.url)).toEqual([expect.stringContaining(":generateContent")]);
   });
 });
 

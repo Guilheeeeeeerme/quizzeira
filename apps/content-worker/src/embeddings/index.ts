@@ -1,8 +1,9 @@
 // Concept: Embeddings (chunk text → vector, stored in pgvector)
 //
-// Provider order mirrors worker-kit's LLM_PROVIDER_ORDER so a deployment that
-// only has one key configured still works. Dimensions must match the
-// vector(768) column, which is why the OpenAI call pins `dimensions`.
+// Gemini is the only embedding owner (JEV audit plan §4): one vector space,
+// `outputDimensionality` pinned to the vector(768) column. There is no
+// second provider to fall back to — a Gemini outage stops the pass instead of
+// silently writing vectors from another space.
 import { logInfo, logWarn, workerEnv } from "@quizzeira/worker-kit";
 import { content } from "../clients.js";
 import { contentEnv } from "../env.js";
@@ -15,7 +16,7 @@ export interface EmbeddingPassResult {
 }
 
 export function hasEmbeddingProvider(): boolean {
-  return Boolean(workerEnv.geminiApiKey || workerEnv.openaiApiKey);
+  return Boolean(workerEnv.geminiApiKey);
 }
 
 export async function runEmbeddingPass(): Promise<EmbeddingPassResult> {
@@ -81,19 +82,8 @@ export async function runEmbeddingPass(): Promise<EmbeddingPassResult> {
 }
 
 export async function embedText(text: string): Promise<number[]> {
-  const order = workerEnv.llmProviderOrder.split(",").map((p) => p.trim().toLowerCase());
-  let lastError: Error | null = null;
-
-  for (const provider of order) {
-    try {
-      if (provider === "gemini" && workerEnv.geminiApiKey) return await embedGemini(text);
-      if (provider === "openai" && workerEnv.openaiApiKey) return await embedOpenai(text);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-    }
-  }
-
-  throw lastError ?? new Error("no embedding provider available");
+  if (!workerEnv.geminiApiKey) throw new Error("no embedding provider available");
+  return embedGemini(text);
 }
 
 async function embedGemini(text: string): Promise<number[]> {
@@ -121,27 +111,6 @@ async function embedGemini(text: string): Promise<number[]> {
   }
   const json = (await res.json()) as { embedding?: { values?: number[] } };
   return assertDimensions(json.embedding?.values ?? []);
-}
-
-async function embedOpenai(text: string): Promise<number[]> {
-  const res = await fetch(`${workerEnv.openaiBaseUrl}/embeddings`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${workerEnv.openaiApiKey}`,
-    },
-    body: JSON.stringify({
-      model: contentEnv.openaiEmbeddingModel,
-      input: text,
-      dimensions: contentEnv.embeddingDimensions,
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) {
-    throw new Error(`openai embed ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  }
-  const json = (await res.json()) as { data?: Array<{ embedding?: number[] }> };
-  return assertDimensions(json.data?.[0]?.embedding ?? []);
 }
 
 function assertDimensions(embedding: number[]): number[] {

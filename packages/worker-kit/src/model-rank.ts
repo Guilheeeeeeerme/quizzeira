@@ -1,6 +1,10 @@
 import { workerEnv } from "./env";
 
-export type ProviderName = "gemini" | "openai" | "fixture";
+/**
+ * Generation providers only. JEV is not ranked: it is a single pinned model
+ * (`JEV_MODEL`) with same-model retry, see `jev.ts`.
+ */
+export type ProviderName = "gemini" | "fixture";
 
 export interface RankedModel {
   provider: ProviderName;
@@ -8,22 +12,15 @@ export interface RankedModel {
   inputUsdPerMillion: number;
 }
 
+/**
+ * Same-provider failover depth for Gemini. The configured model (default
+ * `gemini-2.5-flash-lite`) always ranks first; the seeds below are the only
+ * models a transient failure may fall over to. No cross-provider entries.
+ */
 export const SEED_TABLE: readonly RankedModel[] = [
   { provider: "gemini", model: "gemini-2.5-flash-lite", inputUsdPerMillion: 0.1 },
   { provider: "gemini", model: "gemini-2.5-flash", inputUsdPerMillion: 0.3 },
-  { provider: "openai", model: "gpt-5-nano", inputUsdPerMillion: 0.05 },
-  { provider: "openai", model: "gpt-4.1-nano", inputUsdPerMillion: 0.1 },
-  { provider: "openai", model: "gpt-4o-mini", inputUsdPerMillion: 0.15 },
 ];
-
-const OPENAI_NON_TEXT = /embedding|whisper|tts|dall-e|moderation|audio|image|transcribe|realtime|search|codex/i;
-const OPENAI_TEXT_PATTERN = /^(gpt-|o\d)/;
-
-export function filterTextGenOpenai(modelIds: readonly string[]): string[] {
-  return modelIds.filter(
-    (id) => OPENAI_NON_TEXT.test(id) === false && OPENAI_TEXT_PATTERN.test(id),
-  );
-}
 
 interface GeminiModelEntry {
   name: string;
@@ -87,9 +84,8 @@ let scheduled = false;
 let refreshing = false;
 
 function defaultModelFor(provider: ProviderName): string {
-  if (provider === "gemini") return workerEnv.geminiModel;
   if (provider === "fixture") return "fixture-v1";
-  return workerEnv.openaiModel;
+  return workerEnv.geminiModel;
 }
 
 async function fetchGeminiCatalog(): Promise<RankedModel[]> {
@@ -106,46 +102,21 @@ async function fetchGeminiCatalog(): Promise<RankedModel[]> {
   }));
 }
 
-async function fetchOpenaiCatalog(): Promise<RankedModel[]> {
-  const res = await fetch(`${workerEnv.openaiBaseUrl}/models`, {
-    headers: { authorization: `Bearer ${workerEnv.openaiApiKey}` },
-  });
-  if (!res.ok) throw new Error(`OpenAI models.list ${res.status}`);
-  const data = (await res.json()) as { data?: Array<{ id?: string }> };
-  return filterTextGenOpenai(
-    (data.data ?? []).map((entry) => entry.id ?? "").filter(Boolean),
-  ).map((model) => ({
-    provider: "openai",
-    model,
-    inputUsdPerMillion: Number.POSITIVE_INFINITY,
-  }));
-}
-
 async function refreshCatalog(): Promise<void> {
   if (refreshing) return;
   refreshing = true;
   try {
-    const providers: ProviderName[] = ["gemini", "openai"];
-    const fetched = await Promise.all(
-      providers.map(async (provider) => {
-        try {
-          if (
-            provider === "gemini" ? !workerEnv.geminiApiKey : !workerEnv.openaiApiKey
-          ) {
-            return [];
-          }
-          return provider === "gemini"
-            ? await fetchGeminiCatalog()
-            : await fetchOpenaiCatalog();
-        } catch {
-          return [];
-        }
-      }),
-    );
+    if (!workerEnv.geminiApiKey) return;
+    let fetched: RankedModel[] = [];
+    try {
+      fetched = await fetchGeminiCatalog();
+    } catch {
+      fetched = [];
+    }
     const merged = new Map(
       catalog.map((entry) => [`${entry.provider}:${entry.model}`, entry]),
     );
-    for (const entry of fetched.flat()) {
+    for (const entry of fetched) {
       merged.set(`${entry.provider}:${entry.model}`, entry);
     }
     catalog = [...merged.values()];
@@ -181,17 +152,14 @@ export type ModelTier = "cheap" | "mid" | "strong";
 const TIER_MODELS: Record<ModelTier, Partial<Record<ProviderName, string[]>>> = {
   cheap: {
     gemini: ["gemini-2.5-flash-lite"],
-    openai: ["gpt-5-nano", "gpt-4.1-nano"],
   },
   mid: {
     gemini: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
-    openai: ["gpt-4o-mini", "gpt-4.1-nano"],
   },
   strong: {
     // Retry attempts walk this list in order: keep a model that always answers
     // before the preview tier. gemini-2.5-pro was retired for new users (404).
     gemini: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-pro-preview"],
-    openai: ["gpt-4o", "gpt-4o-mini"],
   },
 };
 

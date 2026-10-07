@@ -10,7 +10,7 @@ secrets or payloads live in logs (worker-kit `log.ts` redacts them).
 | --- | --- | --- |
 | No new exam/artifact beyond freshness SLO | Discovery `last_new_exam_at`, `StageMetric` | Check scout/crawler `CrawlRun` status; inspect broken sources count |
 | Oldest runnable job beyond stage SLO | `StageMetric`, Loki job events | Look for deferred-with-backoff loops (judge provider outage is expected to defer, not stall) |
-| Provider circuit open / credential failure | `circuit_opened` / `circuit_closed` log events | ADC rotation of `GEMINI_API_KEY` / fund OpenAI; circuits reopen automatically after `CIRCUIT_AUTH_OPEN_MS` (default 6 h) |
+| Provider circuit open / credential failure | `circuit_opened` / `circuit_closed` log events | Rotate `GEMINI_API_KEY` or the Quizzeira-only `JEV_API_KEY` via infra SOPS → Secrets sync (`recreate=quizzeira`); circuits reopen automatically after `CIRCUIT_AUTH_OPEN_MS` (default 6 h) |
 | Dead letters, repeated lease expiry, retry storm | `GET /internal/jobs/dead` (content-api and discovery-api each have their own `Job` table — §5) | Read `lastErrorCode`; poison jobs must be parked (`status=dead`), not hot-looped. A job cycling `queued→leased→queued` without ever completing means its lease keeps expiring mid-work — check the claiming worker's actual runtime, not just its `leaseMs` |
 | Worker restart / OOM | Docker events, `worker_restarted` | Check which profile OOM'd (`quizzeira-contentworker-*`); scale memory, keep one pass per lease |
 | Embedding / syllabus coverage stagnation | Content admin metrics | Likely embedding provider budget/circuit; resume after refill |
