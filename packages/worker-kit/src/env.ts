@@ -114,8 +114,6 @@ export const workerEnv = {
    */
   jevShadowRatePerMinute: num("JEV_SHADOW_RATE_PER_MINUTE", 10),
   jevShadowDailyCalls: num("JEV_SHADOW_DAILY_CALLS", 500),
-  modelRankRefreshMs: num("MODEL_RANK_REFRESH_MS", 43_200_000),
-  modelRankTopN: num("MODEL_RANK_TOP_N", 3),
   llmRateLimitPerMinute: num("LLM_RATE_LIMIT_PER_MINUTE", 20),
   /**
    * Per-stage per-minute call ceilings (§9): "at most one generation batch

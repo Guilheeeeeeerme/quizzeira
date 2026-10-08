@@ -10,7 +10,7 @@ Headroom on workers).
 | Layer | Owner | Why |
 | --- | --- | --- |
 | Closed Choice / Score (classify T3, mapping T3, judge scores + `answerIndex`) | **JEV** when mode=`active` | Cheap, fast, typed; no Gemini substitute on failure |
-| Open Portuguese generation + embeddings + quiz corrector | **Gemini** `gemini-2.5-flash-lite` / `gemini-embedding-001` | Bulk JSON + vectors |
+| Open Portuguese generation + embeddings + quiz corrector | **Gemini** pinned `GEMINI_MODEL=gemini-2.5-flash-lite` / `CONTENT_GEMINI_EMBEDDING_MODEL=gemini-embedding-001` | Bulk JSON + vectors; no models.list |
 | Staging comparison | mode=`shadow` | Fires **both** JEV and Gemini — double spend; staging/holdout only |
 | Discovery topic search | allowlist / `SEARCH_API_*` / fixture | No LLM; Firecrawl removed |
 
@@ -30,7 +30,10 @@ Portuguese holdout evaluation before promoting a rubric change; never leave prod
 | T0–T2 classify/mapping, budgets, circuits, publish gate | Code | — |
 
 `generateJson` has exactly one owner per call (Gemini, or the `fixture` provider in CI)
-and retries only that provider's ranked models. No cross-provider failover.
+and dials the pinned env model only (`GEMINI_MODEL`, default `gemini-2.5-flash-lite` —
+cheapest stable Flash-Lite per Google pricing). There is no `models.list` catalog
+refresh, no model-rank `setInterval`, and no cross-model failover. Embeddings use
+`CONTENT_GEMINI_EMBEDDING_MODEL` (`gemini-embedding-001` @ 768).
 
 ## JEV transport and contract
 

@@ -8,15 +8,14 @@ import {
   renderPrompt,
   screenUntrusted,
 } from "./guardrails";
-import { rankFor, rankForTier } from "./model-rank";
 import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
 import { circuitGuard, circuitRecordFailure, circuitRecordSuccess } from "./circuit";
 
 /**
  * Generation owners. Stack is Gemini (+ fixture in CI) and JEV for typed
- * decisions — no cross-provider failover. Exactly one provider owns a
- * `generateJson` call; failures retry that provider's ranked models only.
- * Unknown names in LLM_PROVIDER_ORDER are ignored, never dialed.
+ * decisions. Exactly one provider owns a `generateJson` call and uses the
+ * pinned env model (`GEMINI_MODEL` / fixture) — no models.list discovery,
+ * no cross-model failover. Unknown names in LLM_PROVIDER_ORDER are ignored.
  */
 const PROVIDERS: Record<string, LlmProvider> = {
   gemini: geminiProvider,
@@ -25,10 +24,11 @@ const PROVIDERS: Record<string, LlmProvider> = {
 
 export interface GenerateJsonOptions {
   temperature?: number;
+  /** @deprecated Ignored — model is always `GEMINI_MODEL` / fixture. */
   attempt?: number;
   requiredKeys?: readonly string[];
   grounding?: boolean;
-  /** Model tier preference (§27.2). */
+  /** @deprecated Ignored — model is always `GEMINI_MODEL` / fixture. */
   tier?: "cheap" | "mid" | "strong";
   /** Stage key for per-stage token budgets (§27.4). */
   stage?: "ku" | "generation" | "judge" | "residue" | "classify" | "mapping" | "corrector";
@@ -396,10 +396,7 @@ export async function consumeStageBudget(stage: GenerateJsonOptions["stage"], to
   }
 }
 
-/** How many ranked models of one provider a single call may try. */
-const MODEL_FAILOVER_DEPTH = 3;
-
-/** 5xx / 429 / retired-model 404 from the provider: worth trying the next model. */
+/** Used by circuit classification; Gemini no longer fails over across model ids. */
 export function isTransientProviderError(err: unknown): boolean {
   const code = llmErrorCode(err);
   if (code === "llm_budget_exceeded" || code === "guardrail_block" || code === "llm_shape") return false;
@@ -416,7 +413,7 @@ export async function generateJson<T>(
   // past the policy screen (OWASP LLM01 encoding axis).
   const cleanUser = neutralizeUntrusted(user);
   screenUntrusted(cleanUser);
-  // Exactly one owner (Gemini, or fixture in CI). No cross-provider failover.
+  // Exactly one owner (Gemini, or fixture in CI). Pinned env model only.
   const providers = providerOrder();
   if (providers.length === 0) {
     throw llmError("llm_unavailable", "llm_unavailable: no provider API key configured");
@@ -429,14 +426,11 @@ export async function generateJson<T>(
     }
   }
 
-  // One reservation per generateJson call, not per model-failover attempt
-  // below: "one generation batch / one judge item per minute" (§9) is about
-  // how often this stage runs, not how many providers it tries for one run.
+  // One reservation per generateJson call (§9 stage ceilings).
   await consumeStageRateLimit(opts.stage);
 
   const guardedSystem = `${system}\n\n${renderPrompt("guardrail.system")}`;
   const fencedUser = fenceUntrusted(cleanUser);
-  const index = Math.max(0, opts.attempt ?? 0);
   let lastError: unknown;
   let circuitTripped: string | null = null;
   for (const provider of providers) {
@@ -448,40 +442,26 @@ export async function generateJson<T>(
       circuitTripped = circuitTripped ?? String((guardErr as Error).message ?? "circuit open");
       continue;
     }
-    const rank = opts.tier
-      ? rankForTier(provider.name, opts.tier)
-      : rankFor(provider.name);
-    // Transient provider errors (503 high demand, 429, retired model 404) fail
-    // over to the next ranked model of the SAME provider instead of failing
-    // the whole call — one busy model must not stall a stage. There is no
-    // other provider to continue to.
-    const candidates = rank.slice(index, index + MODEL_FAILOVER_DEPTH);
-    if (candidates.length === 0) candidates.push(rank[index] ?? provider.defaultModel());
-    for (const model of candidates) {
-      // Every failover attempt is a separate billable call (OWASP LLM06).
-      await consumeBudget(Date.now(), { calls: 1 });
-      try {
-        const completion = await provider.complete({
-          system: guardedSystem,
-          user: fencedUser,
-          model,
-          temperature: opts.temperature,
-          grounding: opts.grounding,
-        });
-        const tokens = Math.max(1, completion.usage.totalTokens);
-        await consumeBudget(Date.now(), { tokens, calls: 0 });
-        await consumeStageBudget(opts.stage, tokens);
-        await circuitRecordSuccess(provider.name);
-        const shaped = requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
-        if (opts.cacheKey) await writeCache(opts.cacheKey, shaped);
-        return shaped;
-      } catch (err) {
-        lastError = err;
-        // Hard provider failures (auth/billing) must open the circuit instead
-        // of being retried; success closes it.
-        await circuitRecordFailure(provider.name, err);
-        if (!isTransientProviderError(err)) break;
-      }
+    const model = provider.defaultModel();
+    await consumeBudget(Date.now(), { calls: 1 });
+    try {
+      const completion = await provider.complete({
+        system: guardedSystem,
+        user: fencedUser,
+        model,
+        temperature: opts.temperature,
+        grounding: opts.grounding,
+      });
+      const tokens = Math.max(1, completion.usage.totalTokens);
+      await consumeBudget(Date.now(), { tokens, calls: 0 });
+      await consumeStageBudget(opts.stage, tokens);
+      await circuitRecordSuccess(provider.name);
+      const shaped = requireJsonShape<T>(extractJson(completion.text), opts.requiredKeys ?? []);
+      if (opts.cacheKey) await writeCache(opts.cacheKey, shaped);
+      return shaped;
+    } catch (err) {
+      lastError = err;
+      await circuitRecordFailure(provider.name, err);
     }
   }
   if (lastError == null && circuitTripped) {
