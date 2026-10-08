@@ -1,6 +1,7 @@
 # Quizzeira web (Cloudflare Pages) + edge watchdog Worker.
-# Pages project: `quizzeira-app`. Worker: `quizzeira-edge-watchdog` (KV already
-# bound in edge/edge-watchdog/wrangler.toml).
+# Pages project: `quizzeira-web` (custom domain app.concurseria.ferredemo.dev).
+# Worker: `quizzeira-edge-watchdog` (KV already bound in
+# edge/edge-watchdog/wrangler.toml).
 #
 # Worker secrets WATCH_TARGETS / ALERT_WEBHOOK / WATCH_SECRET are NOT managed
 # here — `wrangler deploy` does not touch them; set/rotate them in the
@@ -39,11 +40,11 @@ jobs:
         env:
           VITE_API_ORIGIN: ${{ env.API_ORIGIN }}
         run: npm run build
-      - name: Deploy to Pages (quizzeira-app)
+      - name: Deploy to Pages (quizzeira-web)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@^4 pages deploy apps/web/dist --project-name=quizzeira-app
+        run: npx --yes wrangler@^4 pages deploy apps/web/dist --project-name=quizzeira-web
 
   worker:
     runs-on: ubuntu-24.04
