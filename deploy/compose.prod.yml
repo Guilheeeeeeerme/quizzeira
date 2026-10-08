@@ -152,6 +152,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      WORKER_APP: quiz-corrector
       INTERNAL_API_URL: http://api:3000
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_CORRECTOR}
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
