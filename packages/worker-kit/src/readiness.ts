@@ -19,8 +19,12 @@ export interface ProviderReadiness {
 
 /**
  * Readiness for provider-dependent workers (§9): unhealthy when no generation
- * provider is configured, when its circuit is open, or when a JEV task mode
- * is `shadow`/`active` without a JEV key (audit plan §6 — never a silent no-op).
+ * provider (Gemini/fixture) is configured, when its circuit is open, or when a
+ * JEV task mode is `shadow`/`active` without a JEV key (never a silent no-op).
+ *
+ * Gemini remains required even when all `JEV_*_MODE=active`: generation,
+ * embeddings, and quiz-corrector still use Gemini. Active JEV only removes
+ * Gemini from closed Choice/Score paths (no double-pay).
  */
 export async function checkProviderReadiness(): Promise<ProviderReadiness> {
   const jev = checkJevReadiness();

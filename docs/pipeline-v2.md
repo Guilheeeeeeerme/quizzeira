@@ -98,8 +98,8 @@ deployment (admin action, §17.6), e.g. `kind=educational_site`,
 listing sources rotate by least-recent success within
 `DISCOVERY_CRAWLER_MAX_SOURCES`.
 
-Search provider order (§17.4): `SEARCH_API_URL` → `FIRECRAWL_API_KEY`
-(Firecrawl `/v2/search`, optional `FIRECRAWL_API_URL`) → allowlist-only stub.
+Search provider order (§17.4): fixture (tests) → `SEARCH_API_URL` →
+allowlist-only. Firecrawl is not used.
 
 ## Listing sources that are already a concurso page
 

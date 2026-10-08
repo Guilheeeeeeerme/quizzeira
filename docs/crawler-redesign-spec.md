@@ -1007,7 +1007,7 @@ interface SearchProvider {
 }
 ```
 
-Implementations, selectable by env: (a) `allowlist-only` — no external search; iterate the `educational_site` sources' own search endpoints or sitemaps filtered by query terms (zero cost, high precision, low recall); (b) `web-search-api` — a paid web search API (SerpAPI/Brave/Bing) with the same allow/deny filters; (c) `firecrawl` — already available in this environment as an MCP tool and usable server-side via its HTTP API; (d) `fixture` for tests. Default order: allowlist → web-search-api. Every hit records `provider`, `rank`, `query` on the artifact for source ranking.
+Implementations, selectable by env: (a) `allowlist-only` — no external search; iterate the `educational_site` sources' own search endpoints or sitemaps filtered by query terms (zero cost, high precision, low recall); (b) `web-search-api` — a paid web search API (SerpAPI/Brave/Bing) via `SEARCH_API_URL` / `SEARCH_API_KEY` with the same allow/deny filters; (c) `fixture` for tests. Default order: fixture (when `DISCOVERY_CRAWLER_FIXTURE_MODE`) → `SEARCH_API_URL` → allowlist-only. Firecrawl is not part of the stack. Every hit records `provider`, `rank`, `query` on the artifact for source ranking.
 
 ### 17.5 Coverage planner
 
@@ -1476,7 +1476,7 @@ Extend `model-rank.ts` with a **tier** concept: `cheap`, `mid`, `strong`, each m
 
 - Every prompt has a `promptVersion` constant; stored on runs, reviews, and KUs.
 - Cache: Redis (already present) for classification/mapping/KU results keyed as above, TTL 90 days; a cache hit is logged as an LLM call with `cached=true` and zero tokens so metrics stay honest.
-- Provider prompt caching: the generation and judge system prompts are stable and long; enable provider-side caching where available (OpenAI automatic prefix caching; Gemini context caching for the system prompt + style profile when a leaf is generated in bursts).
+- Provider prompt caching: the generation system prompts are stable and long; enable Gemini context caching for the system prompt + style profile when a leaf is generated in bursts. Judge closed scores use JEV (no Gemini prose).
 
 ### 27.4 Budgets
 

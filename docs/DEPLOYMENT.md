@@ -17,7 +17,7 @@ the private **infra** repo; this page explains what happens when you push.
 | Cloudflare Pages `quizzeira-web` | `apps/web` static build → `app.concurseria.ferredemo.dev` |
 | Cloudflare DNS (proxied) | `api.concurseria.ferredemo.dev` → VPS nginx (Let's Encrypt origin) |
 | Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) — deploy only via infra **Quizzeira edge** (no duplicate Pages/Worker workflow in this repo) |
-| LLM | Workers call Gemini (generation + embeddings) and TypeSafe JEV (typed decisions, `JEV_*_MODE`) directly (`LLM_USE_HEADROOM=false`); Headroom is not used; no OpenAI — see [llm-ownership.md](./llm-ownership.md) |
+| LLM | Workers call Gemini (generation + embeddings) and TypeSafe JEV (typed decisions, `JEV_*_MODE`, default `active` with key) directly (`LLM_USE_HEADROOM=false`); Headroom is not used — see [llm-ownership.md](./llm-ownership.md) |
 
 **File triage & retention.** `contentworker` runs a `triage` pass every
 `CONTENT_TRIAGE_INTERVAL_SEC` (default 6h): re-tries the LLM classifier on files

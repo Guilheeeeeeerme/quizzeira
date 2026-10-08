@@ -13,11 +13,10 @@ import { getWorkerRedis, resetWorkerRedisForTests } from "./redis";
 import { circuitGuard, circuitRecordFailure, circuitRecordSuccess } from "./circuit";
 
 /**
- * Generation owners. OpenAI is gone from Quizzeira (JEV audit plan Stage A):
- * exactly one provider owns a `generateJson` call — `fixture` when selected
- * for deterministic CI, otherwise Gemini — and a failure retries the same
- * provider's ranked models only. Unknown names in LLM_PROVIDER_ORDER (e.g. a
- * stale `openai`) are ignored, never dialed.
+ * Generation owners. Stack is Gemini (+ fixture in CI) and JEV for typed
+ * decisions — no cross-provider failover. Exactly one provider owns a
+ * `generateJson` call; failures retry that provider's ranked models only.
+ * Unknown names in LLM_PROVIDER_ORDER are ignored, never dialed.
  */
 const PROVIDERS: Record<string, LlmProvider> = {
   gemini: geminiProvider,

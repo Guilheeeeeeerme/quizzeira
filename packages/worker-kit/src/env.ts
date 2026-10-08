@@ -68,14 +68,16 @@ export function normalizeProviderRoot(configured: string | undefined, publicDefa
 }
 
 /**
- * `JEV_<TASK>_MODE` parsing. Unset → `shadow` when a key is present, `off`
- * otherwise (first-deploy default from the audit plan §8). An explicit
- * `shadow`/`active` without a key is a readiness failure, surfaced by
- * `checkJevReadiness`, never a silent no-op. Unknown values are rejected.
+ * `JEV_<TASK>_MODE` parsing. Unset → `active` when a key is present, `off`
+ * otherwise (cheapest stable prod default: JEV owns closed decisions, Gemini
+ * is not double-paid). Use explicit `shadow` only in staging/holdout to
+ * compare against Gemini. An explicit `shadow`/`active` without a key is a
+ * readiness failure, surfaced by `checkJevReadiness`, never a silent no-op.
+ * Unknown values are rejected.
  */
 export function parseJevMode(raw: string | undefined, hasKey: boolean): JevMode {
   const value = (raw ?? "").trim().toLowerCase();
-  if (!value) return hasKey ? "shadow" : "off";
+  if (!value) return hasKey ? "active" : "off";
   if ((JEV_MODES as readonly string[]).includes(value)) return value as JevMode;
   throw new Error(`invalid JEV mode "${value}" (expected off | shadow | active)`);
 }

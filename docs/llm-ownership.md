@@ -1,8 +1,22 @@
-# LLM ownership — Gemini generation, JEV typed decisions, no OpenAI
+# LLM ownership — Gemini generation, JEV typed decisions
 
 Implements the Quizzeira JEV/Gemini audit (`JEV_GEMINI_AUDIT_PLAN.md`, Stage A + B).
 Engineering truth for which model owns which call. Discovery has no LLM. Study API/web
-never call providers.
+never call providers. Stack is **Gemini + JEV only** (no OpenAI, no Firecrawl, no
+Headroom on workers).
+
+## Cost-aware routing (cheapest stable)
+
+| Layer | Owner | Why |
+| --- | --- | --- |
+| Closed Choice / Score (classify T3, mapping T3, judge scores + `answerIndex`) | **JEV** when mode=`active` | Cheap, fast, typed; no Gemini substitute on failure |
+| Open Portuguese generation + embeddings + quiz corrector | **Gemini** `gemini-2.5-flash-lite` / `gemini-embedding-001` | Bulk JSON + vectors |
+| Staging comparison | mode=`shadow` | Fires **both** JEV and Gemini — double spend; staging/holdout only |
+| Discovery topic search | allowlist / `SEARCH_API_*` / fixture | No LLM; Firecrawl removed |
+
+Prefer `active` in production so closed decisions pay JEV once. Keep `shadow` for
+Portuguese holdout evaluation before promoting a rubric change; never leave prod on
+`shadow` long-term.
 
 ## Owners
 
@@ -15,9 +29,8 @@ never call providers.
 | Chunk / leaf embeddings | **Gemini** `gemini-embedding-001` @ 768 | `apps/content-worker/src/embeddings/index.ts` |
 | T0–T2 classify/mapping, budgets, circuits, publish gate | Code | — |
 
-OpenAI is removed: no client, no embedding path, no env, no model-rank seeds, no
-cross-provider failover. `generateJson` has exactly one owner per call (Gemini, or the
-`fixture` provider in CI) and retries only that provider's ranked models.
+`generateJson` has exactly one owner per call (Gemini, or the `fixture` provider in CI)
+and retries only that provider's ranked models. No cross-provider failover.
 
 ## JEV transport and contract
 
@@ -36,22 +49,27 @@ cross-provider failover. `generateJson` has exactly one owner per call (Gemini, 
 | Mode | Production decision | JEV call | Failure handling |
 | --- | --- | --- | --- |
 | `off` | Gemini / code (legacy path) | none | unchanged |
-| `shadow` | Gemini / code | fired beside it, result logged (`jev_shadow`, `jev_shadow_compare`) | logged as `jev_shadow_error`; production untouched |
+| `shadow` | Gemini / code | fired beside it, result logged (`jev_shadow`, `jev_shadow_compare`) | logged as `jev_shadow_error`; production untouched; **double cost** |
 | `active` | **JEV** | owns the decision | typed error → stage defers/retries; **no Gemini substitute** |
 
-Unset `JEV_*_MODE` → `shadow` when `JEV_API_KEY` is present, `off` otherwise. `shadow`/`active`
-without a key fails `checkProviderReadiness` with `jev_key_missing` (loud at startup).
+Unset `JEV_*_MODE` → `active` when `JEV_API_KEY` is present, `off` otherwise
+(empty compose passthrough so local stacks without a key stay `off`).
+`shadow`/`active` without a key fails `checkProviderReadiness` with `jev_key_missing`
+(loud at startup). Production env example sets modes to `active` explicitly.
 
 Budgets: `active` JEV calls are counted exactly like Gemini calls (global per-minute, daily
 calls/tokens, per-stage caps). `shadow` calls use their own caps (`JEV_SHADOW_RATE_PER_MINUTE`,
 `JEV_SHADOW_DAILY_CALLS`) and never the shared `llm:rate:*` limiter, so shadow sampling cannot
 starve the generation/judge production slots. Both share the `jev` circuit breaker.
 
+Readiness still requires Gemini when JEV is fully `active`: generation, embeddings, and
+quiz-corrector are Gemini-owned.
+
 ## Promotion checklist (Stage C — per task, operator config only)
 
-Promote one task at a time by setting its `JEV_<TASK>_MODE=active` in infra SOPS
-(`quizzeira:` section) → Secrets sync `recreate=quizzeira`. Before that, for a frozen
-Portuguese holdout with the rubric versions below pinned:
+Prod defaults to `active`. After changing a rubric, model, or threshold, temporarily set
+`JEV_<TASK>_MODE=shadow` for a Portuguese holdout, then return to `active`. Before that
+holdout window ends, for a frozen set with the rubric versions below pinned:
 
 1. No material quality regression vs the Gemini/code baseline (role accuracy; leaf accuracy;
    judge score/answer agreement and no new false publishes).
@@ -60,15 +78,15 @@ Portuguese holdout with the rubric versions below pinned:
 4. Acceptance artifact tied to `JEV_MODEL`, rubric version, prompt/config fingerprint.
 
 Rubric versions: `role-t3-jev-v1`, `map-t3-jev-v1`, `judge-jev-v1`. Changing a rubric,
-model or threshold returns that task to `shadow` until re-evaluated.
+model or threshold returns that task to `shadow` until re-evaluated, then back to `active`.
 
-Rollback = set the mode to `shadow`/`off` and recreate. Never roll back to an image that
-re-enables OpenAI.
+Rollback = set the mode to `shadow`/`off` and recreate. Never introduce a second generation
+provider.
 
 ## Secrets
 
-The Quizzeira JEV key is Quizzeira-only. It lives in infra SOPS `production.enc.yaml` under
-`quizzeira:` → `/opt/infra/secrets/quizzeira.env` → Compose `env_file`. Never reuse an Argus,
-PromptDesk, `providers` or `headroom` token; never put it in `.env.sample`, build args, images,
-workflow logs or docs. Portainer is for verifying `JEV_*` present / `OPENAI_*` absent on
-`content-worker`, `content-quality`, `quiz-corrector` after a sync — not for durable edits.
+The Quizzeira JEV key is Quizzeira-only. It lives in infra SOPS / Dokploy panel under
+`quizzeira:` → Compose `env_file`. Never reuse an Argus, PromptDesk, `providers` or
+`headroom` token; never put it in `.env.sample`, build args, images, workflow logs or docs.
+Panel checks: `JEV_*` present on `content-worker`, `content-quality`, `quiz-corrector`;
+no retired provider keys.

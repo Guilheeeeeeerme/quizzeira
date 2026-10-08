@@ -104,7 +104,7 @@ describe("single generation owner (OpenAI removed)", () => {
     const urls = calls.map((c) => c.url);
     expect(urls.length).toBeGreaterThanOrEqual(1);
     expect(urls.every((u) => u.includes(":generateContent"))).toBe(true);
-    expect(urls.join(" ")).not.toMatch(/openai|chat\/completions/);
+    expect(urls.every((u) => u.includes("generativelanguage"))).toBe(true);
   });
 
   it("fails over to the next ranked gemini model on 503 and then stops within the provider", async () => {
@@ -123,8 +123,8 @@ describe("single generation owner (OpenAI removed)", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("ignores a stale openai entry in LLM_PROVIDER_ORDER", async () => {
-    workerEnv.llmProviderOrder = "openai,gemini";
+  it("ignores unknown names in LLM_PROVIDER_ORDER", async () => {
+    workerEnv.llmProviderOrder = "bogus,gemini";
     const result = await generateJson<{ ok: boolean }>("system", "user");
     expect(result).toEqual({ ok: true });
     expect(calls.map((c) => c.url)).toEqual([expect.stringContaining(":generateContent")]);

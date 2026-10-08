@@ -181,6 +181,7 @@ services:
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      # Unset → active when JEV_API_KEY is set; use shadow only for staging holdout.
       JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
       JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
       JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
@@ -468,6 +469,7 @@ services:
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      # Unset → active when JEV_API_KEY is set; use shadow only for staging holdout.
       JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
       JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
       JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
@@ -597,6 +599,7 @@ services:
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      # Unset → active when JEV_API_KEY is set; use shadow only for staging holdout.
       JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
       JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
       JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
@@ -646,6 +649,7 @@ services:
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
+      # Unset → active when JEV_API_KEY is set; use shadow only for staging holdout.
       JEV_CLASSIFY_MODE: ${JEV_CLASSIFY_MODE:-}
       JEV_MAPPING_MODE: ${JEV_MAPPING_MODE:-}
       JEV_JUDGE_MODE: ${JEV_JUDGE_MODE:-}
