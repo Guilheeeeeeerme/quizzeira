@@ -35,7 +35,7 @@ Use existing connections before installing replacements. Tool availability does 
 
 Connection check (2026-09-22): GitHub repository read, Supabase project listing (`ACTIVE_HEALTHY`), Cloudflare Worker listing, and Grafana datasource listing (Loki) succeeded. Hostinger DNS read for `ferredemo.dev` did not respond within a 20-second verification window; authentication and VPS access remain unverified. Recheck before Hostinger work; a timeout alone does not establish an authentication failure.
 
-Task-dependent tools: Playwright/browser for UI verification, Context7 for library documentation, and Firecrawl for discovery research. Redis and MinIO use existing app/infra access, without new hosted plugins. Headroom/RTK/Serena usage follows active chat policy; production workers still use `LLM_USE_HEADROOM=false`.
+Task-dependent tools: Playwright/browser for UI verification and Context7 for library documentation. Discovery topic search in-app is allowlist / `SEARCH_API_*` / fixture only (no Firecrawl). Redis and MinIO use existing app/infra access, without new hosted plugins. Headroom/RTK/Serena usage follows active chat policy; production workers still use `LLM_USE_HEADROOM=false`.
 
 Connections belong in local Codex plugin/MCP settings, not application `.env` or committed credentials. If a read fails, record the actual error and reconnect the existing provider account before installing replacements. Connection setup does not authorize production deployments, database writes, DNS changes, purchases, or plan upgrades.
 

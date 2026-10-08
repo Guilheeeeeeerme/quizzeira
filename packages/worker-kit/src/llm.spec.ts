@@ -15,8 +15,6 @@ import {
   classifyProviderError,
   resetCircuitsForTests,
 } from "./circuit";
-import { resetModelRankForTests } from "./model-rank";
-
 type CallRecord = { url: string; body: Record<string, unknown> };
 
 const calls: CallRecord[] = [];
@@ -42,9 +40,6 @@ async function stubFetch(input: unknown, init?: RequestInit): Promise<Response> 
     if (geminiStatus !== 200) return jsonResponse({ error: { message: "up" } }, geminiStatus);
     return geminiText('{"ok":true}');
   }
-  if (url.includes("v1beta/models") || url.endsWith("/models")) {
-    return jsonResponse({ models: [], data: [] });
-  }
   return jsonResponse({ error: { message: "unexpected" } }, 500);
 }
 
@@ -58,11 +53,9 @@ beforeEach(() => {
   workerEnv.llmRateLimitPerMinute = 100;
   workerEnv.llmDailyBudget = 1000;
   workerEnv.geminiModel = "gemini-2.5-flash-lite";
-  workerEnv.modelRankTopN = 3;
   workerEnv.redisUrl = "";
   workerEnv.allowMemoryBudget = true;
   resetBudgetForTests();
-  resetModelRankForTests();
   void resetCircuitsForTests();
   vi.stubGlobal("fetch", vi.fn(stubFetch));
 });
@@ -104,15 +97,14 @@ describe("single generation owner (OpenAI removed)", () => {
     const urls = calls.map((c) => c.url);
     expect(urls.length).toBeGreaterThanOrEqual(1);
     expect(urls.every((u) => u.includes(":generateContent"))).toBe(true);
-    expect(urls.join(" ")).not.toMatch(/openai|chat\/completions/);
+    expect(urls.every((u) => u.includes("generativelanguage"))).toBe(true);
   });
 
-  it("fails over to the next ranked gemini model on 503 and then stops within the provider", async () => {
+  it("uses only the pinned GEMINI_MODEL and does not fail over to another id on 503", async () => {
     geminiStatus = 503;
     await expect(generateJson("system", "user", { tier: "mid" })).rejects.toThrow(/Gemini 503/);
     const urls = calls.map((c) => c.url);
-    expect(urls.filter((u) => u.includes(":generateContent")).length).toBeGreaterThanOrEqual(2);
-    expect(urls.every((u) => u.includes("generativelanguage"))).toBe(true);
+    expect(urls).toEqual([expect.stringContaining("models/gemini-2.5-flash-lite:generateContent")]);
   });
 
   it("throws llm_unavailable when no gemini key is set, without calling fetch", async () => {
@@ -123,8 +115,8 @@ describe("single generation owner (OpenAI removed)", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("ignores a stale openai entry in LLM_PROVIDER_ORDER", async () => {
-    workerEnv.llmProviderOrder = "openai,gemini";
+  it("ignores unknown names in LLM_PROVIDER_ORDER", async () => {
+    workerEnv.llmProviderOrder = "bogus,gemini";
     const result = await generateJson<{ ok: boolean }>("system", "user");
     expect(result).toEqual({ ok: true });
     expect(calls.map((c) => c.url)).toEqual([expect.stringContaining(":generateContent")]);
@@ -213,15 +205,15 @@ describe("screening and budgets gate before fetch", () => {
   });
 });
 
-describe("model per attempt", () => {
-  it("picks rank[attempt] and falls back to the default model", async () => {
-    workerEnv.modelRankTopN = 3;
+describe("pinned model", () => {
+  it("always dials GEMINI_MODEL regardless of attempt/tier options", async () => {
+    workerEnv.geminiModel = "gemini-2.5-flash-lite";
     await generateJson("system", "user", { attempt: 0 });
-    expect(calls[0].url).toContain("models/gemini-2.5-flash-lite:");
-    await generateJson("system", "user", { attempt: 1 });
-    expect(calls[1].url).toContain("models/gemini-2.5-flash:");
-    await generateJson("system", "user", { attempt: 9 });
-    expect(calls[2].url).toContain("models/gemini-2.5-flash-lite:");
+    await generateJson("system", "user", { attempt: 1, tier: "strong" });
+    expect(calls.map((c) => c.url)).toEqual([
+      expect.stringContaining("models/gemini-2.5-flash-lite:generateContent"),
+      expect.stringContaining("models/gemini-2.5-flash-lite:generateContent"),
+    ]);
   });
 });
 

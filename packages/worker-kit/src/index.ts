@@ -44,7 +44,6 @@ export {
   fenceUntrusted,
   neutralizeUntrusted,
 } from "./guardrails";
-export { rankFor, rankForTier, type ModelTier } from "./model-rank";
 export {
   jevDecide,
   jevShadow,

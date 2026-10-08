@@ -87,9 +87,10 @@ afterEach(() => {
 });
 
 describe("JEV mode parsing", () => {
-  it("defaults to shadow with a key and off without", () => {
-    expect(parseJevMode(undefined, true)).toBe("shadow");
+  it("defaults to active with a key and off without", () => {
+    expect(parseJevMode(undefined, true)).toBe("active");
     expect(parseJevMode("", false)).toBe("off");
+    expect(parseJevMode(" shadow ", true)).toBe("shadow");
     expect(parseJevMode(" ACTIVE ", true)).toBe("active");
   });
 

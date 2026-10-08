@@ -33,7 +33,7 @@ Specs / agent tooling: `docs/`, `specs/`, `.specify/`, `.agents/skills/` (e.g. R
 
 - TypeScript/Node, Prisma, React
 - Postgres/pgvector (Study + Discovery + Content) + Redis + MinIO
-- LLM via `worker-kit` (workers: `LLM_USE_HEADROOM=false`): Gemini `gemini-2.5-flash-lite` owns generation + embeddings; JEV (TypeSafe `jev-1.13.0`) owns closed Choice/Score decisions under `JEV_*_MODE` off|shadow|active. No OpenAI. See [docs/llm-ownership.md](./docs/llm-ownership.md).
+- LLM via `worker-kit` (workers: `LLM_USE_HEADROOM=false`): Gemini `gemini-2.5-flash-lite` owns generation + embeddings; JEV (TypeSafe `jev-1.13.0`) owns closed Choice/Score decisions under `JEV_*_MODE` (default `active` with key; `shadow` = staging only). See [docs/llm-ownership.md](./docs/llm-ownership.md).
 
 ## Local
 

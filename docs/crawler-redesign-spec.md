@@ -1007,7 +1007,7 @@ interface SearchProvider {
 }
 ```
 
-Implementations, selectable by env: (a) `allowlist-only` — no external search; iterate the `educational_site` sources' own search endpoints or sitemaps filtered by query terms (zero cost, high precision, low recall); (b) `web-search-api` — a paid web search API (SerpAPI/Brave/Bing) with the same allow/deny filters; (c) `firecrawl` — already available in this environment as an MCP tool and usable server-side via its HTTP API; (d) `fixture` for tests. Default order: allowlist → web-search-api. Every hit records `provider`, `rank`, `query` on the artifact for source ranking.
+Implementations, selectable by env: (a) `allowlist-only` — no external search; iterate the `educational_site` sources' own search endpoints or sitemaps filtered by query terms (zero cost, high precision, low recall); (b) `web-search-api` — a paid web search API (SerpAPI/Brave/Bing) via `SEARCH_API_URL` / `SEARCH_API_KEY` with the same allow/deny filters; (c) `fixture` for tests. Default order: fixture (when `DISCOVERY_CRAWLER_FIXTURE_MODE`) → `SEARCH_API_URL` → allowlist-only. Firecrawl is not part of the stack. Every hit records `provider`, `rank`, `query` on the artifact for source ranking.
 
 ### 17.5 Coverage planner
 
@@ -1470,13 +1470,13 @@ Everything else is code. `hasLlmProvider()` false → the pipeline still normali
 
 ### 27.2 Model tiering
 
-Extend `model-rank.ts` with a **tier** concept: `cheap`, `mid`, `strong`, each mapping to a provider-ordered list. Call sites request a tier; the existing attempt-based fallback moves within the tier first, then up one tier. Costs per 1M input tokens from the existing `SEED_TABLE` remain the ranking signal.
+Generation uses a single pinned `GEMINI_MODEL` (no models.list / model-rank refresh). Tier options on call sites are ignored; change cost by changing the env pin.
 
 ### 27.3 Prompt versioning and caching
 
 - Every prompt has a `promptVersion` constant; stored on runs, reviews, and KUs.
 - Cache: Redis (already present) for classification/mapping/KU results keyed as above, TTL 90 days; a cache hit is logged as an LLM call with `cached=true` and zero tokens so metrics stay honest.
-- Provider prompt caching: the generation and judge system prompts are stable and long; enable provider-side caching where available (OpenAI automatic prefix caching; Gemini context caching for the system prompt + style profile when a leaf is generated in bursts).
+- Provider prompt caching: the generation system prompts are stable and long; enable Gemini context caching for the system prompt + style profile when a leaf is generated in bursts. Judge closed scores use JEV (no Gemini prose).
 
 ### 27.4 Budgets
 
@@ -2352,7 +2352,7 @@ Legend: **N** new, **M** modify, **D** delete, **K** keep.
 | File | Op | Change |
 | --- | --- | --- |
 | `src/llm.ts` | M | `tier` option; per-stage budget keys; cache hook (`cacheKey`, Redis) |
-| `src/model-rank.ts` | M | tiers |
+| ~~`src/model-rank.ts`~~ | removed | pinned `GEMINI_MODEL` only |
 | `src/env.ts` | M | `LLM_BUDGET_*_TOKENS`, `LLM_CACHE_TTL_DAYS` |
 | `src/providers/fixture.ts` | N | recorded-response provider for tests |
 | `src/log.ts` | M | `stage`/`unitType` event helper + `StageMetric` counter flush |
