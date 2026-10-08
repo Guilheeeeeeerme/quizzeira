@@ -10,7 +10,7 @@ Headroom on workers).
 | Layer | Owner | Why |
 | --- | --- | --- |
 | Closed Choice / Score (classify T3, mapping T3, judge scores + `answerIndex`) | **JEV** when mode=`active` | Cheap, fast, typed; no Gemini substitute on failure |
-| Open Portuguese generation + embeddings + quiz corrector | **Gemini** pinned `GEMINI_MODEL=gemini-2.5-flash-lite` / `CONTENT_GEMINI_EMBEDDING_MODEL=gemini-embedding-001` | Bulk JSON + vectors; no models.list |
+| Open Portuguese generation + embeddings + quiz corrector | **Gemini** pinned `GEMINI_MODEL=gemini-3.1-flash-lite` / `CONTENT_GEMINI_EMBEDDING_MODEL=gemini-embedding-001` | Bulk JSON + vectors; no models.list |
 | Staging comparison | mode=`shadow` | Fires **both** JEV and Gemini — double spend; staging/holdout only |
 | Discovery topic search | allowlist / `SEARCH_API_*` / fixture | No LLM; Firecrawl removed |
 
@@ -25,13 +25,13 @@ Portuguese holdout evaluation before promoting a rubric change; never leave prod
 | Classify T3 role residue | **JEV Choice** over the closed `DocumentRole` set (`JEV_CLASSIFY_MODE`) | `apps/content-worker/src/stages/classify-llm.ts` |
 | Mapping T3 syllabus residue | **JEV Choice**, batched (≤8 chunks × ≤12 leaves + `none`) (`JEV_MAPPING_MODE`) | `apps/content-worker/src/stages/knowledge/mapping-llm.ts` |
 | Eval judge scores + `answerIndex` | **JEV Score×4 + Choice**; reason tags and notes are code templates (`JEV_JUDGE_MODE`) | `apps/content-quality/src/judge.ts` |
-| Syllabus residue topics, KU distill, question generation, quiz corrector | **Gemini** `gemini-2.5-flash-lite` via `generateJson` | content-worker stages, `quiz-corrector` |
+| Syllabus residue topics, KU distill, question generation, quiz corrector | **Gemini** `gemini-3.1-flash-lite` via `generateJson` | content-worker stages, `quiz-corrector` |
 | Chunk / leaf embeddings | **Gemini** `gemini-embedding-001` @ 768 | `apps/content-worker/src/embeddings/index.ts` |
 | T0–T2 classify/mapping, budgets, circuits, publish gate | Code | — |
 
 `generateJson` has exactly one owner per call (Gemini, or the `fixture` provider in CI)
-and dials the pinned env model only (`GEMINI_MODEL`, default `gemini-2.5-flash-lite` —
-cheapest stable Flash-Lite per Google pricing). There is no `models.list` catalog
+and dials the pinned env model only (`GEMINI_MODEL`, default `gemini-3.1-flash-lite` —
+cheapest unrestricted stable Flash-Lite per Google pricing (2.5 is access-gated)). There is no `models.list` catalog
 refresh, no model-rank `setInterval`, and no cross-model failover. Embeddings use
 `CONTENT_GEMINI_EMBEDDING_MODEL` (`gemini-embedding-001` @ 768).
 

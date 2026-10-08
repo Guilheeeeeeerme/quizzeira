@@ -161,7 +161,7 @@ services:
       SERVICE_NAME: quizzeira-corrector
       LOG_LEVEL: ${LOG_LEVEL:-info}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       JEV_API_KEY: ${QUIZZEIRA_JEV_API_KEY:-${JEV_API_KEY:-}}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
@@ -299,7 +299,7 @@ services:
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       JEV_API_KEY: ${QUIZZEIRA_JEV_API_KEY:-${JEV_API_KEY:-}}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
@@ -349,7 +349,7 @@ services:
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       JEV_API_KEY: ${QUIZZEIRA_JEV_API_KEY:-${JEV_API_KEY:-}}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
