@@ -71,7 +71,9 @@ services:
       DEV_ROOT_PASSWORD: ${DEV_ROOT_PASSWORD}
     entrypoint: ["bash", "/app/deploy/migrate.sh"]
     networks:
+      # private alone has no egress; Supabase pooler needs dokploy-network
       - private
+      - dokploy-network
 
   api:
     image: ghcr.io/guilheeeeeeerme/quizzeira/api:${IMAGE_TAG:-production}
