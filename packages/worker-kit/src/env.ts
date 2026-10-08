@@ -20,7 +20,7 @@ function looksLikeHeadroom(url: string): boolean {
   return /headroom|:8787\b/i.test(url);
 }
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 export const DEFAULT_JEV_MODEL = "jev-1.13.0";
 export const DEFAULT_JEV_BASE_URL = "https://api.typesafe.ai";

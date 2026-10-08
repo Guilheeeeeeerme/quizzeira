@@ -52,7 +52,7 @@ beforeEach(() => {
   workerEnv.llmProviderOrder = "gemini";
   workerEnv.llmRateLimitPerMinute = 100;
   workerEnv.llmDailyBudget = 1000;
-  workerEnv.geminiModel = "gemini-2.5-flash-lite";
+  workerEnv.geminiModel = "gemini-3.1-flash-lite";
   workerEnv.redisUrl = "";
   workerEnv.allowMemoryBudget = true;
   resetBudgetForTests();
@@ -104,7 +104,7 @@ describe("single generation owner (OpenAI removed)", () => {
     geminiStatus = 503;
     await expect(generateJson("system", "user", { tier: "mid" })).rejects.toThrow(/Gemini 503/);
     const urls = calls.map((c) => c.url);
-    expect(urls).toEqual([expect.stringContaining("models/gemini-2.5-flash-lite:generateContent")]);
+    expect(urls).toEqual([expect.stringContaining("models/gemini-3.1-flash-lite:generateContent")]);
   });
 
   it("throws llm_unavailable when no gemini key is set, without calling fetch", async () => {
@@ -207,12 +207,12 @@ describe("screening and budgets gate before fetch", () => {
 
 describe("pinned model", () => {
   it("always dials GEMINI_MODEL regardless of attempt/tier options", async () => {
-    workerEnv.geminiModel = "gemini-2.5-flash-lite";
+    workerEnv.geminiModel = "gemini-3.1-flash-lite";
     await generateJson("system", "user", { attempt: 0 });
     await generateJson("system", "user", { attempt: 1, tier: "strong" });
     expect(calls.map((c) => c.url)).toEqual([
-      expect.stringContaining("models/gemini-2.5-flash-lite:generateContent"),
-      expect.stringContaining("models/gemini-2.5-flash-lite:generateContent"),
+      expect.stringContaining("models/gemini-3.1-flash-lite:generateContent"),
+      expect.stringContaining("models/gemini-3.1-flash-lite:generateContent"),
     ]);
   });
 });
