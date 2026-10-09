@@ -1,6 +1,4 @@
-# Quizzeira discovery lifecycle (apps/discovery-lifecycle) — self-contained port
-# of infra containers/quizzeira/discovery-lifecycle.Dockerfile. Runs from TS via
-# tsx like the infra image (PORT 3012 set in compose).
+# Quizzeira discovery-portal-monitor — probe Sources, heal broken portals.
 # syntax=docker/dockerfile:1
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
@@ -10,13 +8,13 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/content-api/package.json apps/content-api/package.json
 COPY apps/content-quality/package.json apps/content-quality/package.json
 COPY apps/content-worker/package.json apps/content-worker/package.json
+COPY apps/content-freshness/package.json apps/content-freshness/package.json
 COPY apps/discovery-api/package.json apps/discovery-api/package.json
 COPY apps/discovery-crawler/package.json apps/discovery-crawler/package.json
 COPY apps/discovery-lifecycle/package.json apps/discovery-lifecycle/package.json
 COPY apps/discovery-social-scout/package.json apps/discovery-social-scout/package.json
 COPY apps/discovery-source-scout/package.json apps/discovery-source-scout/package.json
 COPY apps/discovery-portal-monitor/package.json apps/discovery-portal-monitor/package.json
-COPY apps/content-freshness/package.json apps/content-freshness/package.json
 COPY apps/quiz-corrector/package.json apps/quiz-corrector/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
@@ -27,7 +25,7 @@ RUN npm ci --no-audit --no-fund
 
 COPY packages/shared packages/shared
 COPY packages/worker-kit packages/worker-kit
-COPY apps/discovery-lifecycle apps/discovery-lifecycle
+COPY apps/discovery-portal-monitor apps/discovery-portal-monitor
 RUN npm run build -w @quizzeira/shared \
     && npm run build -w @quizzeira/worker-kit
 
@@ -38,4 +36,4 @@ COPY --from=build /app ./
 ENV NODE_ENV=production \
     GIT_SHA=${GIT_SHA}
 USER node
-CMD ["sh", "-c", "exec node --import tsx apps/discovery-lifecycle/src/index.ts"]
+CMD ["sh", "-c", "exec node --import tsx apps/discovery-portal-monitor/src/index.ts"]

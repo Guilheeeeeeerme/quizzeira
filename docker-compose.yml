@@ -334,6 +334,75 @@ services:
     networks:
       - private
 
+  # Curated official portals → SourceCandidate (observe/quarantine). Opt-in.
+  discovery-source-scout:
+    <<: *host-gateway
+    profiles: ["source-scout"]
+    build:
+      context: .
+      dockerfile: apps/discovery-source-scout/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3014
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      WORKER_INTERVAL_MS: ${DISCOVERY_SOURCE_SCOUT_INTERVAL_MS:-3600000}
+      WORKER_WINDOWS: ${DISCOVERY_SOURCE_SCOUT_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_SOURCE_SCOUT_ENABLED: ${DISCOVERY_SOURCE_SCOUT_ENABLED:-false}
+      DISCOVERY_SOURCE_SCOUT_MAX_PER_PASS: ${DISCOVERY_SOURCE_SCOUT_MAX_PER_PASS:-6}
+      DISCOVERY_SOURCE_SCOUT_PRIORITY: ${DISCOVERY_SOURCE_SCOUT_PRIORITY:-P0}
+    volumes:
+      - ./apps/discovery-source-scout:/app/apps/discovery-source-scout
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/discovery-source-scout/node_modules
+    depends_on:
+      discovery-api:
+        condition: service_healthy
+    networks:
+      - private
+
+  # Probe registered Sources; heal broken portals via health + force-crawl.
+  discovery-portal-monitor:
+    <<: *host-gateway
+    profiles: ["portal-monitor"]
+    build:
+      context: .
+      dockerfile: apps/discovery-portal-monitor/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3015
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY:-dev-discovery-key}
+      WORKER_INTERVAL_MS: ${DISCOVERY_PORTAL_MONITOR_INTERVAL_MS:-1800000}
+      WORKER_WINDOWS: ${DISCOVERY_PORTAL_MONITOR_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_PORTAL_MONITOR_ENABLED: ${DISCOVERY_PORTAL_MONITOR_ENABLED:-false}
+      DISCOVERY_PORTAL_MONITOR_MAX_PER_PASS: ${DISCOVERY_PORTAL_MONITOR_MAX_PER_PASS:-8}
+      DISCOVERY_PORTAL_MONITOR_FORCE_CRAWL: ${DISCOVERY_PORTAL_MONITOR_FORCE_CRAWL:-true}
+      DISCOVERY_PORTAL_MONITOR_STALE_HOURS: ${DISCOVERY_PORTAL_MONITOR_STALE_HOURS:-36}
+      DISCOVERY_PORTAL_MONITOR_PROBE_TIMEOUT_MS: ${DISCOVERY_PORTAL_MONITOR_PROBE_TIMEOUT_MS:-15000}
+    volumes:
+      - ./apps/discovery-portal-monitor:/app/apps/discovery-portal-monitor
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/discovery-portal-monitor/node_modules
+    depends_on:
+      discovery-api:
+        condition: service_healthy
+    networks:
+      - dmz
+      - private
+
   # Social → Discovery scout (fixture/stubs; off by default). Never registers
   # social hosts as Sources — proposes outbound file domains via scout API.
   discovery-social-scout:
@@ -671,6 +740,42 @@ services:
       content-api:
         condition: service_healthy
       redis:
+        condition: service_healthy
+    networks:
+      - dmz
+      - private
+
+  # Legislation amendment watcher (opt-in). No LLM — HTTP fingerprints only.
+  content-freshness:
+    <<: *host-gateway
+    profiles: ["freshness"]
+    build:
+      context: .
+      dockerfile: apps/content-freshness/Dockerfile.dev
+      network: host
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3024
+      INTERNAL_API_URL: http://content-api:3020
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_CONTENT:-dev-content-key}
+      WORKER_INTERVAL_MS: ${CONTENT_FRESHNESS_INTERVAL_MS:-21600000}
+      WORKER_WINDOWS: ${CONTENT_FRESHNESS_WINDOWS:-}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      CONTENT_FRESHNESS_ENABLED: ${CONTENT_FRESHNESS_ENABLED:-false}
+      CONTENT_FRESHNESS_DRY_RUN: ${CONTENT_FRESHNESS_DRY_RUN:-true}
+      CONTENT_FRESHNESS_MAX_PER_PASS: ${CONTENT_FRESHNESS_MAX_PER_PASS:-8}
+      CONTENT_FRESHNESS_PROBE_TIMEOUT_MS: ${CONTENT_FRESHNESS_PROBE_TIMEOUT_MS:-15000}
+      LLM_USE_HEADROOM: "false"
+    volumes:
+      - ./apps/content-freshness:/app/apps/content-freshness
+      - ./packages/shared:/app/packages/shared
+      - ./packages/worker-kit:/app/packages/worker-kit
+      - /app/node_modules
+      - /app/apps/content-freshness/node_modules
+    depends_on:
+      content-api:
         condition: service_healthy
     networks:
       - dmz

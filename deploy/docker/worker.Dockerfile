@@ -17,6 +17,9 @@ COPY apps/discovery-api/package.json apps/discovery-api/package.json
 COPY apps/discovery-crawler/package.json apps/discovery-crawler/package.json
 COPY apps/discovery-lifecycle/package.json apps/discovery-lifecycle/package.json
 COPY apps/discovery-social-scout/package.json apps/discovery-social-scout/package.json
+COPY apps/discovery-source-scout/package.json apps/discovery-source-scout/package.json
+COPY apps/discovery-portal-monitor/package.json apps/discovery-portal-monitor/package.json
+COPY apps/content-freshness/package.json apps/content-freshness/package.json
 COPY apps/quiz-corrector/package.json apps/quiz-corrector/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json

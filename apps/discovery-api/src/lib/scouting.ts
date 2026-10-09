@@ -66,6 +66,18 @@ const SOCIAL_HOSTS = new Set([
   "olx.com.br",
 ]);
 
+/** Commercial Q-banks / course dumps — never register as Discovery Sources. */
+const COMMERCIAL_BANK_HOSTS = new Set([
+  "qconcursos.com",
+  "tecconcursos.com.br",
+  "pciconcursos.com.br",
+  "concursosnobrasil.com.br",
+  "grancursosonline.com.br",
+  "estrategiaconcursos.com.br",
+  "passeidireto.com",
+  "scribd.com",
+]);
+
 const LOGIN_PREFIX = /^(login|auth|accounts|sso)\./i;
 const SOCIAL_WORDS = /\b(social|navigation|link farm|linkfarm)\b/i;
 const STOREFRONT_WORDS = /\b(loja|shop|store|assine|compre|promo)\b/i;
@@ -73,7 +85,7 @@ const UNRELATED_WORDS = /\b(marketplace|hotel|market|flea|wedding)\b/i;
 
 const OFFICIAL_HOSTS = /\.(gov|jus|leg|edu|mil)\.br$/i;
 const BANCA_NAMES =
-  /(vunesp|fundação\s+carlos\s+chagas|fundacao\s+carlos\s+chagas|\bfcc\b|fgv|cebraspe|cespe|cesgranrio|consulplan|ibfc|quadrix|idecan|fundetec)/i;
+  /(vunesp|fundação\s+carlos\s+chagas|fundacao\s+carlos\s+chagas|\bfcc\b|fgv|cebraspe|cespe|cesgranrio|consulplan|ibfc|quadrix|idecan|fundetec|fundatec|aocp|instituto\s+aocp|iades|bamsp|ibam)/i;
 const EXAM_LANGUAGE =
   /\b(concursos?|editais?|edital|oab|provas?|gabarito|inscri[cç]([aã]o|[oõ]es)|inscricoes|banca|cargos?|vestibular)\b/i;
 
@@ -87,6 +99,14 @@ function hostsOf(urls: string[]): string[] {
   });
 }
 
+function hostMatchesDenySet(host: string, denied: Set<string>): string | null {
+  const bare = host.replace(/^www\./, "");
+  for (const entry of denied) {
+    if (bare === entry || bare.endsWith(`.${entry}`)) return entry;
+  }
+  return null;
+}
+
 /** Returns the hard-deny reason, or null when the candidate is acceptable. */
 export function hardDeny(name: string, urls: string[]): string | null {
   const hosts = hostsOf(urls).filter(Boolean);
@@ -94,6 +114,8 @@ export function hardDeny(name: string, urls: string[]): string | null {
     if (SOCIAL_HOSTS.has(host)) {
       return `social network domain (deny): ${host}`;
     }
+    const commercial = hostMatchesDenySet(host, COMMERCIAL_BANK_HOSTS);
+    if (commercial) return `commercial question-bank (deny): ${commercial}`;
     if (LOGIN_PREFIX.test(host)) return `login/auth domain (deny): ${host}`;
   }
   const haystack = `${name} ${hosts.join(" ")}`;

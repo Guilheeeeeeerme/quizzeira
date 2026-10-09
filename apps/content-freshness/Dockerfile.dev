@@ -1,0 +1,20 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+COPY apps/content-freshness/package.json ./apps/content-freshness/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/worker-kit/package.json ./packages/worker-kit/
+
+RUN npm install
+
+COPY packages/shared ./packages/shared
+COPY packages/worker-kit ./packages/worker-kit
+COPY apps/content-freshness ./apps/content-freshness
+
+RUN npm run build -w @quizzeira/shared
+
+WORKDIR /app/apps/content-freshness
+
+CMD ["npm", "run", "dev"]

@@ -12,6 +12,13 @@ describe("hard deny (§6.1)", () => {
     assert.ok(store && /storefront/.test(store));
     assert.equal(hardDeny("Diário Oficial", ["https://www.in.gov.br/arquivo"]), null);
   });
+
+  it("rejects commercial question-bank hosts", () => {
+    const pci = hardDeny("PCI", ["https://www.pciconcursos.com.br/provas/"]);
+    assert.ok(pci && /commercial/.test(pci));
+    const qc = hardDeny("QConcursos", ["https://www.qconcursos.com/questoes"]);
+    assert.ok(qc && /commercial/.test(qc));
+  });
 });
 
 describe("deterministic scoring (§6.1)", () => {

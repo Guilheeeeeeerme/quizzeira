@@ -1,4 +1,4 @@
-# Quizzeira (Concurseria) CI: tests → GHCR matrix build → runner smoke → Dokploy webhook.
+# Quizzeira (Concurseria) CI: tests â GHCR matrix build â runner smoke â Dokploy webhook.
 # Replaces the old dispatch-to-infra path (deploy-infra.yml is deleted).
 #
 # Deploy contract (infra docs/RUNBOOK-REBUILD.md): immutable `<sha>` images and a
@@ -37,7 +37,7 @@ jobs:
     env:
       # START_HERE.md gotchas: content-quality/worker tests require no host
       # Redis and deterministic LLMs. (Full content-worker suite has pre-existing
-      # baseline failures — deliberately run only suites with a clean baseline.)
+      # baseline failures â deliberately run only suites with a clean baseline.)
       REDIS_URL: ""
       LLM_PROVIDER: fixture
     steps:
@@ -91,6 +91,15 @@ jobs:
           - name: discoverycrawler
             dockerfile: discovery-crawler.Dockerfile
             build-args: "APP="
+          - name: discoverysourcescout
+            dockerfile: discovery-source-scout.Dockerfile
+            build-args: "APP="
+          - name: discoveryportalmonitor
+            dockerfile: discovery-portal-monitor.Dockerfile
+            build-args: "APP="
+          - name: discoverysocial
+            dockerfile: discovery-social-scout.Dockerfile
+            build-args: "APP="
           - name: contentapi
             dockerfile: content-api.Dockerfile
             build-args: "APP="
@@ -100,6 +109,9 @@ jobs:
           - name: contentquality
             dockerfile: worker.Dockerfile
             build-args: "APP=content-quality"
+          - name: contentfreshness
+            dockerfile: content-freshness.Dockerfile
+            build-args: "APP="
           - name: quizcorrector
             dockerfile: worker.Dockerfile
             build-args: "APP=quiz-corrector"
@@ -191,11 +203,11 @@ jobs:
       - name: rollback switch note
         if: ${{ env.SKIP_MIGRATIONS_INPUT == 'true' }}
         run: |
-          echo "skip_migrations=true — operator must have SKIP_MIGRATIONS=1 set on the Dokploy stack env before this webhook fires (panel keeps it for the rollback deploy)"
+          echo "skip_migrations=true â operator must have SKIP_MIGRATIONS=1 set on the Dokploy stack env before this webhook fires (panel keeps it for the rollback deploy)"
       - name: fail if the deploy hook is not configured (no silent skips)
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL == '' }}
         run: |
-          echo "::error::DOKPLOY_DEPLOY_HOOK_URL secret missing � create the Dokploy Compose stack (panel: https://dokploy.ferredemo.dev), copy its deploy hook URL, add it as this repo's secret. See deploy/README.md + infra docs/RUNBOOK-REBUILD.md"
+          echo "::error::DOKPLOY_DEPLOY_HOOK_URL secret missing  create the Dokploy Compose stack (panel: https://dokploy.ferredemo.dev), copy its deploy hook URL, add it as this repo's secret. See deploy/README.md + infra docs/RUNBOOK-REBUILD.md"
           exit 1
       - name: trigger Dokploy webhook
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL != '' }}
@@ -206,7 +218,7 @@ jobs:
       - name: skip note
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL == '' }}
         run: |
-          echo "DOKPLOY_DEPLOY_HOOK_URL not set — skipping webhook (images pushed: see build job)"
+          echo "DOKPLOY_DEPLOY_HOOK_URL not set â skipping webhook (images pushed: see build job)"
       - name: poll /version equals released SHA
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL != '' }}
         run: |

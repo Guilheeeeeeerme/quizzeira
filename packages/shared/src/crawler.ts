@@ -549,7 +549,7 @@ export function titleFromPathSegment(href: string): string | null {
 const ORG_RE =
   /\b(transpetro|petrobras|banco\s+do\s+brasil|\bbb\b|caixa(?:\s+econ[oô]mica)?|correios|marinha|inss|receita\s+federal|pol[ií]cia\s+federal|\bpf\b|prefeitura|ibamsp|aneel|anatel|anvisa|ibama|mpm|mpu|tcu|tst|trf|trt|prf)\b/i;
 const BANCA_RE =
-  /\b(cesgranrio|fgv|fcc|cebraspe|cespe|vunesp|ibfc|iades|fundatec|ibamsp)\b/i;
+  /\b(cesgranrio|fgv|fcc|cebraspe|cespe|vunesp|ibfc|iades|fundatec|fundetec|ibamsp|aocp|quadrix|idecan|consulplan)\b/i;
 const OPEN_RE =
   /\b(inscri[cç][oõ]es?\s+abertas?|edital\s+(?:publicado|de\s+abertura)|concurso\s+aberto|aceita\s+inscri|prazo\s+de\s+inscri)/i;
 const EMPHASIS_RE =
