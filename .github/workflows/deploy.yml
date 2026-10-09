@@ -214,9 +214,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # No checkout in this job  update the ref via API.
           # Dokploy Generic Git watches `production`; keep it at the released SHA.
-          git fetch origin "${DEPLOY_SHA}"
-          git push origin "${DEPLOY_SHA}:refs/heads/production"
+          if gh api "repos/${{ github.repository }}/git/ref/heads/production" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${{ github.repository }}/git/refs/heads/production" -f sha="${DEPLOY_SHA}" -F force=true
+          else
+            gh api -X POST "repos/${{ github.repository }}/git/refs" -f ref="refs/heads/production" -f sha="${DEPLOY_SHA}"
+          fi
       - name: trigger Dokploy webhook
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL != '' }}
         run: |
