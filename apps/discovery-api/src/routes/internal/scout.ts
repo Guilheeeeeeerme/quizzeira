@@ -44,13 +44,15 @@ export async function registerInternalScoutRoutes(app: FastifyInstance): Promise
     const urls: string[] = url ? [url] : [];
     const domainNorm = domain.toLowerCase().replace(/^www\./, "");
 
-    // Already known: nothing to scout.
+    // Already known: treat as dedupe so source-scout can rotate past it.
     const knownSource = await prisma.source.findFirst({
-      where: { domain: { contains: domainNorm } },
+      where: { domain: { contains: domainNorm, mode: "insensitive" } },
     });
-    if (knownSource) return { rejected: true, reason: "existing source" };
+    if (knownSource) {
+      return { rejected: false, dedupe: true, reason: "existing source", sourceId: knownSource.id };
+    }
     const knownCandidate = await prisma.sourceCandidate.findFirst({
-      where: { domain: { contains: domainNorm } },
+      where: { domain: { contains: domainNorm, mode: "insensitive" } },
       orderBy: { updatedAt: "desc" },
     });
     if (knownCandidate) {

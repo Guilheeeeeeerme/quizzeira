@@ -498,6 +498,28 @@ model Job {
   @@index([status, leaseExpiresAt])
 }
 
+/// Legislation / knowledge URL fingerprints for content-freshness (§amendment loop).
+/// Not a question seed — only tracks official source URLs operators already ingest.
+model FreshnessWatch {
+  id            String    @id @default(cuid())
+  watchId       String    @unique
+  url           String
+  title         String?
+  topicTags     Json      @default("[]")
+  fingerprint   String?
+  etag          String?
+  lastModified  String?
+  contentLength String?
+  lastCheckedAt DateTime  @default(now())
+  lastChangedAt DateTime?
+  changeCount   Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([url])
+  @@index([lastCheckedAt])
+}
+
 /// Hourly stage funnel counters (§31.1) — admin dashboards without a log backend.
 model StageMetric {
   id            String   @id @default(cuid())

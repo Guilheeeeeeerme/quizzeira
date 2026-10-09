@@ -14,8 +14,10 @@
 #               extraction/documents pass calls DOC_PROCESSOR_URL; quiz-corrector
 #               grades via the study api + LLM only — grep'd: no DOC_PROCESSOR_URL
 #               reference in apps/quiz-corrector)
-#   `discovery`: discovery-crawler (Playwright, shm_size 1gb), discovery-lifecycle
+#   `discovery`: discovery-crawler (Playwright, shm_size 1gb), discovery-lifecycle,
+#                discovery-source-scout, discovery-portal-monitor
 #   `social`  : discovery-social-scout
+#   `content` also includes content-freshness (legislation amendment watcher)
 #
 # Profiles + gates (compose-valid pattern for profiled deps): core services do
 # not use `depends_on` against profiled services (except migrate, see below) —
@@ -333,6 +335,32 @@ services:
     networks:
       - private
 
+  content-freshness:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/contentfreshness:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["content"]
+    environment:
+      NODE_ENV: production
+      PORT: 3024
+      SERVICE_NAME: quizzeira-contentfreshness
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      INTERNAL_API_URL: http://content-api:3020
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_CONTENT}
+      WORKER_INTERVAL_MS: ${CONTENT_FRESHNESS_INTERVAL_MS:-21600000}
+      WORKER_WINDOWS: ${CONTENT_FRESHNESS_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      CONTENT_FRESHNESS_ENABLED: ${CONTENT_FRESHNESS_ENABLED:-false}
+      CONTENT_FRESHNESS_DRY_RUN: ${CONTENT_FRESHNESS_DRY_RUN:-true}
+      CONTENT_FRESHNESS_MAX_PER_PASS: ${CONTENT_FRESHNESS_MAX_PER_PASS:-8}
+      CONTENT_FRESHNESS_PROBE_TIMEOUT_MS: ${CONTENT_FRESHNESS_PROBE_TIMEOUT_MS:-15000}
+      LLM_USE_HEADROOM: "false"
+      GIT_SHA: ${GIT_SHA}
+    mem_limit: ${MEM_CONTENT_FRESHNESS:-192m}
+    networks:
+      - private
+      - dokploy-network
+
   content-quality:
     image: ghcr.io/guilheeeeeeerme/quizzeira/contentquality:${IMAGE_TAG:-production}
     pull_policy: always
@@ -437,6 +465,55 @@ services:
     mem_limit: ${MEM_DISCOVERY_LIFECYCLE:-256m}
     networks:
       - private
+
+  discovery-source-scout:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/discoverysourcescout:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["discovery"]
+    environment:
+      NODE_ENV: production
+      PORT: 3014
+      SERVICE_NAME: quizzeira-sourcescout
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY}
+      WORKER_INTERVAL_MS: ${DISCOVERY_SOURCE_SCOUT_INTERVAL_MS:-3600000}
+      WORKER_WINDOWS: ${DISCOVERY_SOURCE_SCOUT_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_SOURCE_SCOUT_ENABLED: ${DISCOVERY_SOURCE_SCOUT_ENABLED:-false}
+      DISCOVERY_SOURCE_SCOUT_MAX_PER_PASS: ${DISCOVERY_SOURCE_SCOUT_MAX_PER_PASS:-6}
+      DISCOVERY_SOURCE_SCOUT_PRIORITY: ${DISCOVERY_SOURCE_SCOUT_PRIORITY:-P0}
+      GIT_SHA: ${GIT_SHA}
+    mem_limit: ${MEM_DISCOVERY_SOURCE_SCOUT:-192m}
+    networks:
+      - private
+
+  discovery-portal-monitor:
+    image: ghcr.io/guilheeeeeeerme/quizzeira/discoveryportalmonitor:${IMAGE_TAG:-production}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["discovery"]
+    environment:
+      NODE_ENV: production
+      PORT: 3015
+      SERVICE_NAME: quizzeira-portalmonitor
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      INTERNAL_API_URL: http://discovery-api:3010
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY_DISCOVERY}
+      WORKER_INTERVAL_MS: ${DISCOVERY_PORTAL_MONITOR_INTERVAL_MS:-1800000}
+      WORKER_WINDOWS: ${DISCOVERY_PORTAL_MONITOR_WINDOWS}
+      WORKER_TZ: ${WORKER_TZ:-UTC}
+      DISCOVERY_PORTAL_MONITOR_ENABLED: ${DISCOVERY_PORTAL_MONITOR_ENABLED:-false}
+      DISCOVERY_PORTAL_MONITOR_MAX_PER_PASS: ${DISCOVERY_PORTAL_MONITOR_MAX_PER_PASS:-8}
+      DISCOVERY_PORTAL_MONITOR_FORCE_CRAWL: ${DISCOVERY_PORTAL_MONITOR_FORCE_CRAWL:-true}
+      DISCOVERY_PORTAL_MONITOR_STALE_HOURS: ${DISCOVERY_PORTAL_MONITOR_STALE_HOURS:-36}
+      DISCOVERY_PORTAL_MONITOR_PROBE_TIMEOUT_MS: ${DISCOVERY_PORTAL_MONITOR_PROBE_TIMEOUT_MS:-15000}
+      GIT_SHA: ${GIT_SHA}
+    mem_limit: ${MEM_DISCOVERY_PORTAL_MONITOR:-192m}
+    networks:
+      - private
+      - dokploy-network
 
   # ── Social scout (profile: social) — off by default; fixture mode ─────────
   discovery-social-scout:

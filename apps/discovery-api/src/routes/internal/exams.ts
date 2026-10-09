@@ -50,45 +50,48 @@ export async function registerInternalExamRoutes(app: FastifyInstance): Promise<
           : nextStatus === "closed"
             ? "registration_closed"
             : "announced";
-    const row = await prisma.exam.upsert({
-      where: { examSlug_listingUrl: { examSlug, listingUrl } },
-      create: {
-        id: existing?.id || id,
-        examSlug,
-        title,
-        org: (body.org as string) || null,
-        banca: (body.banca as string) || null,
-        emphasis: body.emphasis ?? [],
-        editalUrl,
-        listingUrl,
-        kind: examKind as never,
-        editionKey,
-        detailUrl,
-        registrationEnd,
-        statusSource,
-        positions,
-        status: nextStatus as never,
-        lifecyclePhase: nextPhase as never,
-        sourceId: String(body.sourceId || ""),
-        sourceDomain: String(body.sourceDomain || ""),
-      },
-      update: {
-        title,
-        org: (body.org as string) || null,
-        banca: (body.banca as string) || null,
-        emphasis: body.emphasis ?? [],
-        editalUrl,
-        kind: examKind as never,
-        editionKey,
-        detailUrl,
-        registrationEnd,
-        statusSource,
-        positions,
-        lastSeenAt: new Date(),
-        status: nextStatus as never,
-        lifecyclePhase: nextPhase as never,
-      },
-    });
+    // Prefer update-by-id when the row was found via id (title-derived ids can
+    // diverge from examSlug+listingUrl). Upsert-on-slug alone then CREATE races
+    // on the primary key (P2002) and marks the Source broken.
+    const createData = {
+      id: existing?.id || id,
+      examSlug,
+      title,
+      org: (body.org as string) || null,
+      banca: (body.banca as string) || null,
+      emphasis: body.emphasis ?? [],
+      editalUrl,
+      listingUrl,
+      kind: examKind as never,
+      editionKey,
+      detailUrl,
+      registrationEnd,
+      statusSource,
+      positions,
+      status: nextStatus as never,
+      lifecyclePhase: nextPhase as never,
+      sourceId: String(body.sourceId || ""),
+      sourceDomain: String(body.sourceDomain || ""),
+    };
+    const updateData = {
+      title,
+      org: (body.org as string) || null,
+      banca: (body.banca as string) || null,
+      emphasis: body.emphasis ?? [],
+      editalUrl,
+      kind: examKind as never,
+      editionKey,
+      detailUrl,
+      registrationEnd,
+      statusSource,
+      positions,
+      lastSeenAt: new Date(),
+      status: nextStatus as never,
+      lifecyclePhase: nextPhase as never,
+    };
+    const row = existing
+      ? await prisma.exam.update({ where: { id: existing.id }, data: updateData })
+      : await prisma.exam.create({ data: createData });
     return {
       record: examToWire(row),
       created: !existing,

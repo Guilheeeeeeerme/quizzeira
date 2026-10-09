@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "note": "Direct legislation URLs for amendment freshness checks. Direct mode (§11.4) — not a question seed.",
+  "entries": [
+    {
+      "id": "cf88",
+      "title": "Constituição Federal de 1988",
+      "url": "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
+      "topicTags": ["direito-constitucional"]
+    },
+    {
+      "id": "lei-8112",
+      "title": "Lei 8.112/1990 — Regime Jurídico dos Servidores",
+      "url": "https://www.planalto.gov.br/ccivil_03/leis/l8112cons.htm",
+      "topicTags": ["direito-administrativo", "servidor-publico"]
+    },
+    {
+      "id": "lei-9784",
+      "title": "Lei 9.784/1999 — Processo Administrativo Federal",
+      "url": "https://www.planalto.gov.br/ccivil_03/leis/l9784.htm",
+      "topicTags": ["direito-administrativo"]
+    },
+    {
+      "id": "lei-14133",
+      "title": "Lei 14.133/2021 — Nova Lei de Licitações",
+      "url": "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm",
+      "topicTags": ["licitacoes", "direito-administrativo"]
+    },
+    {
+      "id": "cpc",
+      "title": "Código de Processo Civil (Lei 13.105/2015)",
+      "url": "https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13105.htm",
+      "topicTags": ["processo-civil"]
+    },
+    {
+      "id": "cp",
+      "title": "Código Penal",
+      "url": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848.htm",
+      "topicTags": ["direito-penal"]
+    },
+    {
+      "id": "cpp",
+      "title": "Código de Processo Penal",
+      "url": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689.htm",
+      "topicTags": ["processo-penal"]
+    },
+    {
+      "id": "clt",
+      "title": "CLT",
+      "url": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm",
+      "topicTags": ["direito-trabalho"]
+    },
+    {
+      "id": "cdc",
+      "title": "Código de Defesa do Consumidor",
+      "url": "https://www.planalto.gov.br/ccivil_03/leis/l8078.htm",
+      "topicTags": ["direito-consumidor"]
+    },
+    {
+      "id": "ctn",
+      "title": "Código Tributário Nacional",
+      "url": "https://www.planalto.gov.br/ccivil_03/leis/l5172.htm",
+      "topicTags": ["direito-tributario"]
+    },
+    {
+      "id": "eoab",
+      "title": "Estatuto da Advocacia — Lei 8.906/1994",
+      "url": "https://www.planalto.gov.br/ccivil_03/leis/l8906.htm",
+      "topicTags": ["oab", "etica"]
+    },
+    {
+      "id": "cnj-res-75",
+      "title": "CNJ Resolução 75/2009 — Ingresso na Magistratura",
+      "url": "https://atos.cnj.jus.br/atos/detalhar/100",
+      "topicTags": ["magistratura"]
+    }
+  ]
+}

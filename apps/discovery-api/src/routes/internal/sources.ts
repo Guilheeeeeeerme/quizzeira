@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { crawlerSourceId, domainFromUrl } from "@quizzeira/shared";
+import { requestForceCrawl } from "../../lib/force-crawl";
 import { prisma } from "../../lib/prisma";
 import { strategyToWire } from "./helpers";
 
@@ -7,9 +8,13 @@ export async function registerInternalSourceRoutes(app: FastifyInstance): Promis
   // ── Source registry ───────────────────────────────────────────────────────
 
   app.get("/internal/sources", async (request) => {
-    const q = request.query as { status?: string };
+    const q = request.query as { status?: string; includeDisabled?: string };
+    const includeDisabled = q.includeDisabled === "1" || q.includeDisabled === "true";
     const items = await prisma.source.findMany({
-      where: { enabled: true, ...(q.status ? { status: q.status as never } : {}) },
+      where: {
+        ...(includeDisabled ? {} : { enabled: true }),
+        ...(q.status ? { status: q.status as never } : {}),
+      },
       orderBy: { updatedAt: "desc" },
     });
     return {
@@ -48,7 +53,14 @@ export async function registerInternalSourceRoutes(app: FastifyInstance): Promis
       const source = await prisma.source.update({
         where: { id: request.params.id },
         data: ok
-          ? { failCount: 0, lastOkAt: new Date(), lastError: null, status: "active" }
+          ? {
+              failCount: 0,
+              lastOkAt: new Date(),
+              lastError: null,
+              status: "active",
+              // Portal-monitor recovery should re-surface previously disabled rows.
+              enabled: true,
+            }
           : {
               failCount: { increment: 1 },
               lastError: (request.body?.error || "crawl failed").slice(0, 500),
@@ -58,6 +70,16 @@ export async function registerInternalSourceRoutes(app: FastifyInstance): Promis
       return { source };
     },
   );
+
+  /** Worker-facing force-crawl queue (mirrors /admin/crawl/force). */
+  app.post<{ Body: { sourceId?: string | null } }>("/internal/crawl/force", async (request) => {
+    const sourceId =
+      request.body?.sourceId === undefined || request.body?.sourceId === ""
+        ? null
+        : String(request.body.sourceId);
+    await requestForceCrawl(sourceId);
+    return { queued: true, sourceId };
+  });
 
   /**
    * Crawler proposes new domains found in outbound links. Proposals stay inert

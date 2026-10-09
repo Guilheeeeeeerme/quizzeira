@@ -8,7 +8,7 @@ The local dev compose (`docker-compose.yml`) is untouched and is NOT this stack.
 
 | File | Purpose |
 | --- | --- |
-| `deploy/compose.prod.yml` | Dokploy stack (redis, one-shot `migrate`, `api`, `quiz-corrector`, `discovery-api`, `content-api` core; profiles `content`, `discovery`, `social`, `migrate`) |
+| `deploy/compose.prod.yml` | Dokploy stack (redis, one-shot `migrate`, `api`, `quiz-corrector`, `discovery-api`, `content-api` core; profiles `content`, `discovery`, `social`, `migrate`). Content profile includes `content-freshness`; discovery profile includes source-scout + portal-monitor. |
 | `deploy/compose.smoke.yml` | CI-runner-only override (local pgvector postgres + hosted api port) |
 | `deploy/docker/*.Dockerfile` | 8 self-contained images, per-service ports (see below) |
 | `deploy/migrate.sh` | three-schema `prisma migrate deploy` + users-only platform seed |
@@ -38,19 +38,21 @@ The local dev compose (`docker-compose.yml`) is untouched and is NOT this stack.
   `DOC_PROCESSOR_URL`/doc-processor reference in `apps/quiz-corrector`).
   `quiz-corrector` grades via the study api + LLM only.
 - **Images** (GHCR `ghcr.io/guilheeeeeeerme/quizzeira/<name>`): `api`,
-  `discoveryapi`, `discoverylifecycle`, `discoverycrawler`, `contentapi`,
-  `contentworker`, `contentquality`, `docprocessor`, `quizcorrector` — same
-  matrix as `infra/scripts/build.sh`, including `discoverysocial` for the
-  social profile. Tags: immutable `<sha>` + moving `production`, `pull_policy: always`.
-  Workers are a single Dockerfile (`deploy/docker/worker.Dockerfile`, `ARG APP`)
-  and run from TS via `tsx` like the infra images (no prisma client needed —
-  workers only ever reach their APIs over HTTP).
+  `discoveryapi`, `discoverylifecycle`, `discoverycrawler`,
+  `discoverysourcescout`, `discoveryportalmonitor`, `discoverysocial`,
+  `contentapi`, `contentworker`, `contentquality`, `contentfreshness`,
+  `docprocessor`, `quizcorrector` — built by `.github/workflows/deploy.yml`.
+  Tags: immutable `<sha>` + moving `production`, `pull_policy: always`.
+  See `docs/self-sustaining-discovery.md`. LLM workers use
+  `deploy/docker/worker.Dockerfile` (`ARG APP`) and run via `tsx` (no Prisma
+  client — HTTP to plane APIs only).
 - **Crawler** keeps `mcr.microsoft.com/playwright:v1.50.1-jammy` (matches the
   pinned `playwright@1.50.1` dep), runs as `pwuser`, and the compose service
   sets `shm_size: 1gb` (Chromium /dev/shm).
 - **Ports** at runtime: api 3000 (Traefik), discovery-api 3010, content-api
-  3020, lifecycle 3012, social scout 3013, doc-processor 3030, redis 6379.
-  `/health` and `/version` (returns `{service, gitsha}`) exist on the three APIs.
+  3020, lifecycle 3012, source-scout 3014, portal-monitor 3015, social 3013,
+  freshness 3024, doc-processor 3030, redis 6379. `/health` and `/version`
+  (returns `{service, gitsha}`) exist on the three APIs.
 
 ## Panel steps (Dokploy, generic Git source)
 
