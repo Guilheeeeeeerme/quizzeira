@@ -29,6 +29,7 @@ export async function registerInternalSourceRoutes(app: FastifyInstance): Promis
         openPatterns: s.openPatterns,
         trust: s.trust,
         status: s.status,
+        enabled: s.enabled,
         intervalSec: s.intervalSec,
         politenessMs: s.politenessMs,
         failCount: s.failCount,
@@ -50,6 +51,12 @@ export async function registerInternalSourceRoutes(app: FastifyInstance): Promis
     "/internal/sources/:id/health",
     async (request) => {
       const ok = request.body?.ok !== false;
+      const existing = await prisma.source.findUnique({ where: { id: request.params.id } });
+      if (!existing) {
+        return { source: null };
+      }
+      // Never auto-enable intentionally disabled Sources (commercial / flaky deny).
+      // Reachability still clears fail counters when the row is already enabled.
       const source = await prisma.source.update({
         where: { id: request.params.id },
         data: ok
@@ -57,9 +64,7 @@ export async function registerInternalSourceRoutes(app: FastifyInstance): Promis
               failCount: 0,
               lastOkAt: new Date(),
               lastError: null,
-              status: "active",
-              // Portal-monitor recovery should re-surface previously disabled rows.
-              enabled: true,
+              status: existing.enabled ? "active" : existing.status,
             }
           : {
               failCount: { increment: 1 },
