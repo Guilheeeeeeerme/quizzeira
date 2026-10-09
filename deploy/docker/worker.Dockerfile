@@ -38,8 +38,12 @@ RUN npm run build -w @quizzeira/shared \
     && npm run build -w @quizzeira/worker-kit
 
 ARG APP
+ARG GIT_SHA=unknown
 FROM node:22-bookworm-slim
 WORKDIR /app
+# ARG must be re-declared after FROM for ENV interpolation in this stage.
+ARG APP
+ARG GIT_SHA=unknown
 COPY --from=build /app ./
 ENV NODE_ENV=production \
     WORKER_APP=${APP} \

@@ -223,7 +223,9 @@ services:
       start_period: 40s
     mem_limit: ${MEM_DISCOVERY_API:-384m}
     networks:
+      # private alone has no egress; Supabase pooler needs dokploy-network
       - private
+      - dokploy-network
 
   content-api:
     image: ghcr.io/guilheeeeeeerme/quizzeira/contentapi:${IMAGE_TAG:-production}
@@ -260,7 +262,9 @@ services:
       start_period: 40s
     mem_limit: ${MEM_CONTENT_API:-512m}
     networks:
+      # private alone has no egress; Supabase pooler needs dokploy-network
       - private
+      - dokploy-network
 
   # ── Content plane (profile: content) ─────────────────────────────────────
   doc-processor:
@@ -324,6 +328,8 @@ services:
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
       CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
+      # worker.Dockerfile CMD uses apps/$WORKER_APP; bake + compose both set it
+      WORKER_APP: content-worker
       GIT_SHA: ${GIT_SHA}
       <<: *llm-direct
     depends_on:
@@ -397,6 +403,7 @@ services:
       CONTENT_QUALITY_PUBLISH_EXTRACTION_WITHOUT_JUDGE: ${CONTENT_QUALITY_PUBLISH_EXTRACTION_WITHOUT_JUDGE:-false}
       CONTENT_QUALITY_PUBLISH_THRESHOLD: ${CONTENT_QUALITY_PUBLISH_THRESHOLD:-0.8}
       CONTENT_QUALITY_FAIL_THRESHOLD: ${CONTENT_QUALITY_FAIL_THRESHOLD:-0.5}
+      WORKER_APP: content-quality
       GIT_SHA: ${GIT_SHA}
       <<: *llm-direct
     depends_on:
