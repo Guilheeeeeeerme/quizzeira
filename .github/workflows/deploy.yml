@@ -20,7 +20,7 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -209,10 +209,19 @@ jobs:
         run: |
           echo "::error::DOKPLOY_DEPLOY_HOOK_URL secret missing  create the Dokploy Compose stack (panel: https://dokploy.ferredemo.dev), copy its deploy hook URL, add it as this repo's secret. See deploy/README.md + infra docs/RUNBOOK-REBUILD.md"
           exit 1
+      - name: advance production branch (Dokploy tracks production)
+        if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Dokploy Generic Git watches `production`; keep it at the released SHA.
+          git fetch origin "${DEPLOY_SHA}"
+          git push origin "${DEPLOY_SHA}:refs/heads/production"
       - name: trigger Dokploy webhook
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL != '' }}
         run: |
-          code=$(curl -s -o /tmp/hook.out -w '%{http_code}' -X POST "${DOKPLOY_DEPLOY_HOOK_URL}")
+          # -L: some Dokploy URLs 301; branch must match stack customGitBranch=production
+          code=$(curl -sL -o /tmp/hook.out -w '%{http_code}' -X POST "${DOKPLOY_DEPLOY_HOOK_URL}")
           echo "webhook status: $code"; cat /tmp/hook.out
           [ "$code" -ge 200 ] && [ "$code" -lt 300 ]
       - name: skip note
