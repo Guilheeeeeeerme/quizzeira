@@ -6,29 +6,31 @@ export interface ProbeResult {
   lastModified?: string | null;
 }
 
+/** Browser-like UA — gov.br / Planalto often 403 bot-style HEAD probes. */
+const PROBE_UA =
+  "Mozilla/5.0 (compatible; QuizzeiraPortalMonitor/1.1; +https://concurseria.ferredemo.dev)";
+
 /**
  * Lightweight reachability check for a Source startUrl.
- * Prefers HEAD; falls back to GET when HEAD is rejected.
+ * Prefers HEAD; falls back to GET when HEAD is rejected or WAF-blocked (403).
  */
 export async function probeUrl(url: string, timeoutMs: number): Promise<ProbeResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = { "user-agent": PROBE_UA, accept: "text/html,application/xhtml+xml,*/*;q=0.8" };
   try {
     let res = await fetch(url, {
       method: "HEAD",
       redirect: "follow",
       signal: controller.signal,
-      headers: { "user-agent": "QuizzeiraPortalMonitor/1.0 (+https://concurseria.ferredemo.dev)" },
+      headers,
     });
-    if (res.status === 405 || res.status === 501) {
+    if (res.status === 403 || res.status === 405 || res.status === 501) {
       res = await fetch(url, {
         method: "GET",
         redirect: "follow",
         signal: controller.signal,
-        headers: {
-          "user-agent": "QuizzeiraPortalMonitor/1.0 (+https://concurseria.ferredemo.dev)",
-          range: "bytes=0-0",
-        },
+        headers: { ...headers, range: "bytes=0-0" },
       });
     }
     const ok = res.status >= 200 && res.status < 400;

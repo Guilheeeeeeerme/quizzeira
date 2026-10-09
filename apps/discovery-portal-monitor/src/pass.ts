@@ -10,6 +10,7 @@ export interface SourceRow {
   name: string;
   startUrls: unknown;
   status: string;
+  enabled?: boolean;
   discoveryMode?: string;
   lastOkAt: string | null;
   failCount: number;
@@ -91,8 +92,10 @@ export async function runPortalMonitorPass(): Promise<PortalMonitorPassSummary> 
 
     const wasBroken = source.status === "broken" || source.failCount > 0;
     const stale = isStale(source.lastOkAt, portalMonitorEnv.staleHours);
+    // Only force-crawl enabled Sources — disabled rows stay opt-out.
     if (
       probe.ok &&
+      source.enabled !== false &&
       portalMonitorEnv.forceCrawlOnRecover &&
       (wasBroken || stale)
     ) {
