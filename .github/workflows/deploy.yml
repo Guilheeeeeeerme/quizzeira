@@ -224,8 +224,10 @@ jobs:
       - name: trigger Dokploy webhook
         if: ${{ env.DOKPLOY_DEPLOY_HOOK_URL != '' }}
         run: |
-          # -L: some Dokploy URLs 301; branch must match stack customGitBranch=production
-          code=$(curl -sL -o /tmp/hook.out -w '%{http_code}' -X POST "${DOKPLOY_DEPLOY_HOOK_URL}")
+          # Dokploy push-trigger hooks require a ref matching customGitBranch.
+          # Bare POST returns 301 {"message":"Branch Not Match"}.
+          payload=$(printf '{"ref":"refs/heads/production","after":"%s","repository":{"full_name":"%s"}}' "${DEPLOY_SHA}" "${{ github.repository }}")
+          code=$(curl -sL -o /tmp/hook.out -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -H 'X-GitHub-Event: push'             -d "${payload}"             "${DOKPLOY_DEPLOY_HOOK_URL}")
           echo "webhook status: $code"; cat /tmp/hook.out
           [ "$code" -ge 200 ] && [ "$code" -lt 300 ]
       - name: skip note
