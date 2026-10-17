@@ -15,8 +15,8 @@ import {
 import { circuitGuard, circuitRecordFailure, circuitRecordSuccess } from "./circuit";
 import { logInfo, logWarn } from "./log";
 
-export type JevTask = "classify" | "mapping" | "judge";
-export const JEV_TASKS: readonly JevTask[] = ["classify", "mapping", "judge"];
+export type JevTask = "classify" | "mapping" | "judge" | "corrector";
+export const JEV_TASKS: readonly JevTask[] = ["classify", "mapping", "judge", "corrector"];
 
 export interface JevChoiceQuestion {
   type: "choice";
@@ -135,6 +135,8 @@ export function jevModeFor(task: JevTask): JevMode {
       return workerEnv.jevMappingMode;
     case "judge":
       return workerEnv.jevJudgeMode;
+    case "corrector":
+      return workerEnv.jevCorrectorMode;
   }
 }
 
@@ -159,6 +161,7 @@ export function checkJevReadiness(): JevReadiness {
     classify: jevModeFor("classify"),
     mapping: jevModeFor("mapping"),
     judge: jevModeFor("judge"),
+    corrector: jevModeFor("corrector"),
   };
   const configured = jevConfigured();
   const problems = JEV_TASKS.filter((task) => modes[task] !== "off" && !configured).map(

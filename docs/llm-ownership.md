@@ -9,8 +9,8 @@ Headroom on workers).
 
 | Layer | Owner | Why |
 | --- | --- | --- |
-| Closed Choice / Score (classify T3, mapping T3, judge scores + `answerIndex`) | **JEV** when mode=`active` | Cheap, fast, typed; no Gemini substitute on failure |
-| Open Portuguese generation + embeddings + quiz corrector | **Gemini** pinned `GEMINI_MODEL=gemini-3.1-flash-lite` / `CONTENT_GEMINI_EMBEDDING_MODEL=gemini-embedding-001` | Bulk JSON + vectors; no models.list |
+| Closed Choice / Score (classify T3, mapping T3, judge scores + `answerIndex`, MCQ corrector) | **JEV** when mode=`active` | Cheap, fast, typed; no Gemini substitute on failure |
+| Open Portuguese generation + embeddings + open-text correction + `generalComment` | **Gemini** pinned `GEMINI_MODEL=gemini-3.1-flash-lite` / `CONTENT_GEMINI_EMBEDDING_MODEL=gemini-embedding-001` | Bulk JSON + vectors; no models.list |
 | Staging comparison | mode=`shadow` | Fires **both** JEV and Gemini — double spend; staging/holdout only |
 | Discovery topic search | allowlist / `SEARCH_API_*` / fixture | No LLM; Firecrawl removed |
 
@@ -25,7 +25,8 @@ Portuguese holdout evaluation before promoting a rubric change; never leave prod
 | Classify T3 role residue | **JEV Choice** over the closed `DocumentRole` set (`JEV_CLASSIFY_MODE`) | `apps/content-worker/src/stages/classify-llm.ts` |
 | Mapping T3 syllabus residue | **JEV Choice**, batched (≤8 chunks × ≤12 leaves + `none`) (`JEV_MAPPING_MODE`) | `apps/content-worker/src/stages/knowledge/mapping-llm.ts` |
 | Eval judge scores + `answerIndex` | **JEV Score×4 + Choice**; reason tags and notes are code templates (`JEV_JUDGE_MODE`) | `apps/content-quality/src/judge.ts` |
-| Syllabus residue topics, KU distill, question generation, quiz corrector | **Gemini** `gemini-3.1-flash-lite` via `generateJson` | content-worker stages, `quiz-corrector` |
+| Quiz MCQ keyed grades | **JEV Choice** `correct`/`incorrect` (`JEV_CORRECTOR_MODE`) | `apps/quiz-corrector/src/correct.ts` |
+| Syllabus residue topics, KU distill, question generation, open-text grades, `generalComment` | **Gemini** `gemini-3.1-flash-lite` via `generateJson` | content-worker stages, `quiz-corrector` |
 | Chunk / leaf embeddings | **Gemini** `gemini-embedding-001` @ 768 | `apps/content-worker/src/embeddings/index.ts` |
 | T0–T2 classify/mapping, budgets, circuits, publish gate | Code | — |
 
@@ -38,7 +39,8 @@ refresh, no model-rank `setInterval`, and no cross-model failover. Embeddings us
 ## JEV transport and contract
 
 - `packages/worker-kit/src/jev.ts`: `POST {JEV_BASE_URL}/v1/systemone`, bearer `JEV_API_KEY`,
-  model `JEV_MODEL` (`jev-1.13.0`), 10 s timeout, direct to TypeSafe (never Headroom).
+  model `JEV_MODEL` (`jev-1.13.0`; promote to `jev-1.14.0` after Portuguese holdout),
+  10 s timeout, direct to TypeSafe (never Headroom).
 - Questions: `choice` (`criteria` = option → description, 2..255 options) and `score`
   (`criteria` = ordered level descriptions, 2..10). Answers are validated strictly: exact
   question-id set, matching types, option names from the supplied criteria, finite
@@ -66,7 +68,9 @@ calls/tokens, per-stage caps). `shadow` calls use their own caps (`JEV_SHADOW_RA
 starve the generation/judge production slots. Both share the `jev` circuit breaker.
 
 Readiness still requires Gemini when JEV is fully `active`: generation, embeddings, and
-quiz-corrector are Gemini-owned.
+quiz-corrector open-text / `generalComment` remain Gemini-owned.
+
+Cross-app routing: infra `docs/intelligence-routing.md`.
 
 ## Promotion checklist (Stage C — per task, operator config only)
 
@@ -80,8 +84,9 @@ holdout window ends, for a frozen set with the rubric versions below pinned:
 3. No new schema, tenant or failure-handling defects (shadow error rate reviewed).
 4. Acceptance artifact tied to `JEV_MODEL`, rubric version, prompt/config fingerprint.
 
-Rubric versions: `role-t3-jev-v1`, `map-t3-jev-v1`, `judge-jev-v1`. Changing a rubric,
-model or threshold returns that task to `shadow` until re-evaluated, then back to `active`.
+Rubric versions: `role-t3-jev-v1`, `map-t3-jev-v1`, `judge-jev-v1`, `corrector-mcq-jev-v1`.
+Changing a rubric, model or threshold returns that task to `shadow` until re-evaluated,
+then back to `active`.
 
 Rollback = set the mode to `shadow`/`off` and recreate. Never introduce a second generation
 provider.

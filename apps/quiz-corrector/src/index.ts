@@ -1,18 +1,16 @@
-import type { AttemptCorrectionInput, PendingReviewAttempt } from "@quizzeira/shared";
+import type { PendingReviewAttempt } from "@quizzeira/shared";
 import {
   checkProviderReadiness,
   dmzPost,
-  generateJson,
   hasLlmProvider,
   llmErrorCode,
-  loadPrompt,
   logError,
   logInfo,
   logWarn,
   runLoop,
-  screenModelStrings,
   workerEnv,
 } from "@quizzeira/worker-kit";
+import { correctAttempt } from "./correct";
 
 process.env.SERVICE_NAME ||= "quizzeira-quizcorrector";
 const NAME = "quiz-corrector";
@@ -32,47 +30,7 @@ async function tick(): Promise<void> {
   }
 
   try {
-    const system = await loadPrompt("quiz-correction");
-    const user = JSON.stringify(
-      {
-        attemptId: attempt.attemptId,
-        locale: attempt.locale,
-        levelSlug: attempt.levelSlug,
-        questions: attempt.questions.map((q) => ({
-          questionId: q.questionId,
-          type: q.type,
-          prompt: q.prompt,
-          options: q.options,
-          correctIndex: q.correctIndex,
-          referenceAnswer: q.referenceAnswer,
-          selectedIndex: q.selectedIndex,
-          openText: q.openText,
-        })),
-      },
-      null,
-      2,
-    );
-
-    const result = await generateJson<AttemptCorrectionInput>(system, user, {
-      requiredKeys: ["answers", "generalComment"],
-      tier: "cheap",
-      stage: "corrector",
-    });
-    if (!Array.isArray(result.answers) || typeof result.generalComment !== "string") {
-      throw new Error("Invalid correction payload from model");
-    }
-
-    // Correction text is rendered back to the learner, so it gets the same
-    // output-side screen as generated and judged content (OWASP LLM10).
-    screenModelStrings(
-      result.generalComment,
-      ...result.answers.flatMap((a) => [
-        a.comment,
-        a.explanation,
-        a.correctAnswerSummary,
-      ]),
-    );
-
+    const result = await correctAttempt(attempt);
     const completed = await dmzPost<{ attemptId: string; score: number }>(
       `/internal/reviews/${attempt.attemptId}/complete`,
       result,
@@ -81,6 +39,8 @@ async function tick(): Promise<void> {
       worker: NAME,
       attemptId: completed.attemptId,
       score: completed.score,
+      event: "corrector_complete",
+      jevCorrectorMode: workerEnv.jevCorrectorMode,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

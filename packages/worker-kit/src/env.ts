@@ -107,6 +107,8 @@ export const workerEnv = {
   jevClassifyMode: parseJevMode(process.env.JEV_CLASSIFY_MODE, Boolean(jevApiKey)),
   jevMappingMode: parseJevMode(process.env.JEV_MAPPING_MODE, Boolean(jevApiKey)),
   jevJudgeMode: parseJevMode(process.env.JEV_JUDGE_MODE, Boolean(jevApiKey)),
+  /** MCQ keyed grades via JEV Choice; Gemini keeps open-text + generalComment. */
+  jevCorrectorMode: parseJevMode(process.env.JEV_CORRECTOR_MODE, Boolean(jevApiKey)),
   /**
    * Shadow headroom rule: shadow JEV calls have their own per-minute and daily
    * call caps and never draw from the shared `llm:rate:*` limiter, so a wide

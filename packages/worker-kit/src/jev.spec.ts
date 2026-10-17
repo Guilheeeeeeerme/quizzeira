@@ -69,6 +69,7 @@ beforeEach(() => {
   workerEnv.jevClassifyMode = "shadow";
   workerEnv.jevMappingMode = "shadow";
   workerEnv.jevJudgeMode = "shadow";
+  workerEnv.jevCorrectorMode = "shadow";
   workerEnv.jevShadowRatePerMinute = 100;
   workerEnv.jevShadowDailyCalls = 1000;
   workerEnv.geminiApiKey = "test-gemini";
@@ -105,6 +106,7 @@ describe("JEV readiness", () => {
     workerEnv.jevClassifyMode = "off";
     workerEnv.jevMappingMode = "off";
     workerEnv.jevJudgeMode = "off";
+    workerEnv.jevCorrectorMode = "off";
     expect(checkJevReadiness()).toMatchObject({ ok: true, configured: false, problems: [] });
     workerEnv.jevJudgeMode = "active";
     const r = checkJevReadiness();
