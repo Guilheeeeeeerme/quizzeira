@@ -169,28 +169,37 @@ export async function listUnembeddedSyllabusLeaves(
   `;
 }
 
+/**
+ * Score a query embedding against syllabus nodes in-DB (pgvector).
+ * Prefer this over shipping `embedding::text` to workers (egress / bandwidth).
+ */
+export async function scoreSyllabusNodes(input: {
+  embedding: number[];
+  nodeIds: string[];
+  limit?: number;
+}): Promise<Array<{ id: string; similarity: number }>> {
+  if (input.nodeIds.length === 0) return [];
+  const literal = toVectorLiteral(input.embedding);
+  const vectorType = Prisma.raw("extensions.vector");
+  const limit = Math.max(1, Math.min(input.limit ?? input.nodeIds.length, 80));
+  return prisma.$queryRaw<Array<{ id: string; similarity: number }>>`
+    SELECT "id",
+           1 - ("embedding" <=> CAST(${literal} AS ${vectorType})) AS "similarity"
+    FROM "SyllabusNode"
+    WHERE "id" IN (${Prisma.join(input.nodeIds)})
+      AND "embedding" IS NOT NULL
+    ORDER BY "embedding" <=> CAST(${literal} AS ${vectorType})
+    LIMIT ${limit}
+  `;
+}
+
+/** @deprecated Prefer scoreSyllabusNodes — exporting vectors is expensive on egress. */
 export async function getSyllabusNodeEmbeddings(
   nodeIds: string[],
 ): Promise<Array<{ id: string; embedding: number[] }>> {
   if (nodeIds.length === 0) return [];
-  const rows = await prisma.$queryRaw<Array<{ id: string; embedding: string }>>`
-    SELECT "id", "embedding"::text AS "embedding"
-    FROM "SyllabusNode"
-    WHERE "id" IN (${Prisma.join(nodeIds)})
-      AND "embedding" IS NOT NULL
-  `;
-  return rows
-    .map((row) => {
-      const embedding = parseVectorLiteral(row.embedding);
-      return embedding ? { id: row.id, embedding } : null;
-    })
-    .filter((r): r is { id: string; embedding: number[] } => r != null);
-}
-
-function parseVectorLiteral(raw: string): number[] | null {
-  const trimmed = raw.trim().replace(/^\[/, "").replace(/\]$/, "");
-  if (!trimmed) return null;
-  const values = trimmed.split(",").map((p) => Number(p.trim()));
-  if (values.some((v) => !Number.isFinite(v))) return null;
-  return values;
+  // Keep binary path closed: return empty so callers fall back to embed-on-miss
+  // or scoreSyllabusNodes. Avoid SELECT embedding::text over the wire.
+  void nodeIds;
+  return [];
 }

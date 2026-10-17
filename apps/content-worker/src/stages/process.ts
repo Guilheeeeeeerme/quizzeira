@@ -30,7 +30,6 @@ import { distillKnowledgeUnits } from "./knowledge/distill.js";
 import { decideEligibility } from "./knowledge/eligibility.js";
 import {
   leafEmbeddingText,
-  mapChunksEmbedding,
   mapChunksLexical,
   mergeMapResults,
   type SyllabusLeafRef,
@@ -379,28 +378,52 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
       let embMaps: typeof mapResults = [];
       if (leaves.length > 0 && hasEmbeddingProvider() && deduped.chunks.length > 0) {
         try {
-          const { items: leafEmbs } = await content.post<{
-            items: Array<{ id: string; embedding: number[] }>;
-          }>("/internal/syllabus-nodes/embeddings", {
-            ids: leaves.map((l) => l.id),
-          });
-          const embById = new Map(leafEmbs.map((row) => [row.id, row.embedding]));
-          const leavesWithEmb: SyllabusLeafRef[] = [];
-          for (const leaf of leaves) {
-            let embedding = embById.get(leaf.id) ?? null;
-            if (!embedding) {
-              embedding = await embedText(leafEmbeddingText(leaf));
-              await content
-                .put(`/internal/syllabus-nodes/${leaf.id}/embedding`, { embedding })
-                .catch(() => undefined);
-            }
-            leavesWithEmb.push({ ...leaf, embedding });
-          }
-          const chunkEmbeddings = new Map<number, number[]>();
+          // Score in-DB via content-api (no embedding::text export). Fill missing
+          // leaf embeddings with embed-on-miss, then map each chunk query remotely.
+          const leafIds = leaves.map((l) => l.id);
+          const embMapsAcc: typeof mapResults = [];
           for (const chunk of deduped.chunks.slice(0, 24)) {
-            chunkEmbeddings.set(chunk.ordinal, await embedText(chunk.text.slice(0, 4000)));
+            const query = await embedText(chunk.text.slice(0, 4000));
+            const { items: scored } = await content.post<{
+              items: Array<{ id: string; similarity: number }>;
+            }>("/internal/syllabus-nodes/score", { embedding: query, ids: leafIds });
+            if (scored.length === 0) {
+              // Leaves may lack embeddings yet — seed then re-score once.
+              for (const leaf of leaves.slice(0, 40)) {
+                const embedding = await embedText(leafEmbeddingText(leaf));
+                await content
+                  .put(`/internal/syllabus-nodes/${leaf.id}/embedding`, { embedding })
+                  .catch(() => undefined);
+              }
+              const retry = await content.post<{
+                items: Array<{ id: string; similarity: number }>;
+              }>("/internal/syllabus-nodes/score", { embedding: query, ids: leafIds });
+              for (const row of retry.slice(0, 2)) {
+                const leaf = leaves.find((l) => l.id === row.id);
+                if (!leaf || row.similarity < 0.62) continue;
+                embMapsAcc.push({
+                  chunkOrdinal: chunk.ordinal,
+                  syllabusNodeId: leaf.id,
+                  canonicalKey: leaf.canonicalKey,
+                  score: row.similarity,
+                  method: "embedding_t2",
+                });
+              }
+              continue;
+            }
+            for (const row of scored.slice(0, 2)) {
+              const leaf = leaves.find((l) => l.id === row.id);
+              if (!leaf || row.similarity < 0.62) continue;
+              embMapsAcc.push({
+                chunkOrdinal: chunk.ordinal,
+                syllabusNodeId: leaf.id,
+                canonicalKey: leaf.canonicalKey,
+                score: row.similarity,
+                method: "embedding_t2",
+              });
+            }
           }
-          embMaps = mapChunksEmbedding(deduped.chunks, leavesWithEmb, chunkEmbeddings);
+          embMaps = embMapsAcc;
         } catch (err) {
           logWarn("mapping tier2 skipped", {
             worker: NAME,
