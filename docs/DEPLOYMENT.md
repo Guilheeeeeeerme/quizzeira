@@ -13,7 +13,7 @@ the private **infra** repo; this page explains what happens when you push.
 | GHCR | `ghcr.io/guilheeeeeeerme/quizzeira/{api,discoveryapi,contentapi,discoverycrawler,contentworker,contentquality,quizcorrector,docprocessor,app}:<appSha>.<infraSha>` |
 | VPS — Compose project `quizzeira` | `api` (Study, loopback `13200`), `discoveryapi` (`13201`, private), `contentapi` (`13202`, private), `discoverycrawler` (Playwright), `contentworker`, `contentquality`, `quizcorrector`, `docprocessor` (`3030` internal), `app` (nginx fallback, `18280`) |
 | VPS — shared `infra_data` | Redis DB `/2`, MinIO bucket `quizzeira` (`artifacts/` raw bytes, `normalized/` extracted text, `briefs/`; lifecycle backstop 30d/never/365d set by infra `shared_ensure.py`) |
-| Supabase Free (`zgoscslzyizwnzqoyqul`, eu-west-1) | Postgres schemas `quizzeira_study`, `quizzeira_discovery`, `quizzeira_content` (pgvector), role `quizzeira`, reached over the IPv6 direct host |
+| Hostinger VPS Postgres (`postgres-quizzeira`) | Schemas `quizzeira_study`, `quizzeira_discovery`, `quizzeira_content` (pgvector), role `quizzeira` (Supabase is Argus-only) |
 | Cloudflare Pages `quizzeira-web` | `apps/web` static build → `app.concurseria.ferredemo.dev` |
 | Cloudflare DNS (proxied) | `api.concurseria.ferredemo.dev` → VPS nginx (Let's Encrypt origin) |
 | Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) — deploy only via infra **Quizzeira edge** (no duplicate Pages/Worker workflow in this repo) |

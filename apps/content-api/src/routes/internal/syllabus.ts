@@ -4,6 +4,7 @@ import {
   listUnembeddedSyllabusLeaves,
   setSyllabusNodeEmbedding,
   getSyllabusNodeEmbeddings,
+  scoreSyllabusNodes,
 } from "../../lib/vectors";
 
 const stripNul = (text: string): string => text.replace(/\u0000/g, "");
@@ -174,7 +175,25 @@ export async function registerInternalSyllabusRoutes(app: FastifyInstance): Prom
 
   app.post<{ Body: { ids: string[] } }>("/internal/syllabus-nodes/embeddings", async (request) => {
     const ids = Array.isArray(request.body?.ids) ? request.body.ids.map(String) : [];
+    // Intentionally empty: do not ship embedding::text (egress). Use /score.
     const items = await getSyllabusNodeEmbeddings(ids.slice(0, 80));
     return { items };
   });
+
+  app.post<{ Body: { embedding: number[]; ids: string[]; limit?: number } }>(
+    "/internal/syllabus-nodes/score",
+    async (request) => {
+      const embedding = request.body?.embedding;
+      const ids = Array.isArray(request.body?.ids) ? request.body.ids.map(String) : [];
+      if (!Array.isArray(embedding)) {
+        throw Object.assign(new Error("embedding must be a number array"), { statusCode: 400 });
+      }
+      const items = await scoreSyllabusNodes({
+        embedding,
+        nodeIds: ids.slice(0, 80),
+        limit: request.body?.limit,
+      });
+      return { items };
+    },
+  );
 }
