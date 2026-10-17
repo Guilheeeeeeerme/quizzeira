@@ -62,15 +62,18 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/auth/demo", async (_request, reply) => {
-    const email = "guest@quizzeira-demo.local";
+    // Shared-tenant demo user — passwordless button entry (same pattern as PromptDesk / Argus).
+    const email = "demo@quizzeira.ferredemo.dev";
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       user = await prisma.user
         .create({
           data: {
             email,
+            // Unusable hash — demo entry is button-only (no password login).
             passwordHash: await bcrypt.hash(randomUUID(), 10),
-            displayName: "Demo Guest",
+            displayName: "Demo",
+            role: "USER",
           },
         })
         .catch(() => prisma.user.findUnique({ where: { email } }));

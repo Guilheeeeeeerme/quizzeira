@@ -29,9 +29,9 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "kind:programa": "Programme",
     "kind:other": "Other",
     or: "or",
-    "Try the demo": "Try the demo",
-    "Instant guest access to sample quizzes — no signup required.":
-      "Instant guest access — explore the product without signup (no seeded exam content).",
+    "Explore as a demo user": "Explore as a demo user",
+    "Instant access to the sample workspace — no password needed.":
+      "Instant access to the sample workspace — no password needed.",
     "Demo sign-in failed": "Demo sign-in failed",
     "Failed to prepare": "Failed to prepare",
     "Action failed": "Action failed",
@@ -364,9 +364,9 @@ const dictionaries: Record<Locale, Record<string, string>> = {
     "file required": "arquivo obrigatório",
     "url required": "url obrigatória",
     or: "ou",
-    "Try the demo": "Experimentar o demo",
-    "Instant guest access to sample quizzes — no signup required.":
-      "Acesso convidado instantâneo — explore o produto sem cadastro (sem conteúdo de exame semeado).",
+    "Explore as a demo user": "Entrar como usuário demo",
+    "Instant access to the sample workspace — no password needed.":
+      "Acesso instantâneo ao workspace de demonstração — sem senha.",
     "Demo sign-in failed": "Falha no acesso demo",
     "Failed to prepare": "Falha ao preparar",
     "Action failed": "Ação falhou",

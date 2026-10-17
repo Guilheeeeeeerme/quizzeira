@@ -82,10 +82,10 @@ export function LoginPage() {
             <span>{t("or")}</span>
           </div>
           <Button type="button" variant="secondary" fullWidth loading={demoLoading} onClick={handleDemo}>
-            {t("Try the demo")}
+            {t("Explore as a demo user")}
           </Button>
           <Text size="caption" tone="secondary">
-            {t("Instant guest access to sample quizzes — no signup required.")}
+            {t("Instant access to the sample workspace — no password needed.")}
           </Text>
           <Text size="caption" tone="secondary">
             {t("No account?")} <InlineLink to="/register">{t("Register")}</InlineLink>
