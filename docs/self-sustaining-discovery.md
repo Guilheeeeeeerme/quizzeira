@@ -62,7 +62,7 @@ lifecycle archives past-year noise
 | Judge scores + `answerIndex` | **JEV Score×4 + Choice** | `JEV_JUDGE_MODE` |
 | Legislation freshness detect | Code (`content-freshness`) | |
 | Quiz corrector | **Gemini** | |
-| Headroom | **Never** for Quizzeira workers | Argus-only |
+| Gemini transport | Public API | Headroom proxy is removed |
 
 ## P0 sources to register first
 

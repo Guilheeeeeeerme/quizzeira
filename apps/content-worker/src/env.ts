@@ -57,7 +57,10 @@ export const contentEnv = {
   maxChunksPerDocument: num("CONTENT_MAX_CHUNKS_PER_DOCUMENT", 200),
 
   embeddingDimensions: num("CONTENT_EMBEDDING_DIMENSIONS", 768),
-  geminiEmbeddingModel: process.env.CONTENT_GEMINI_EMBEDDING_MODEL || "gemini-embedding-001",
+  geminiEmbeddingModel:
+    process.env.GEMINI_EMBEDDING_MODEL ||
+    process.env.CONTENT_GEMINI_EMBEDDING_MODEL ||
+    "gemini-embedding-001",
 
   discoveryApiUrl: (process.env.DISCOVERY_API_URL ?? "http://discovery-api:3010").replace(
     /\/$/,

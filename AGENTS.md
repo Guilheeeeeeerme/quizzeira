@@ -26,7 +26,7 @@ Coding-agent rules for this repository.
 | **Publish gate** | Study Sampling may use Eval-approved items only. |
 | **Planes separate** | Discovery / Content / Study use distinct VPS Postgres schemas. No Supabase for Quizzeira. |
 | **Study is Postgres** | `quizzeira_study`; do not reintroduce MySQL. |
-| **LLM** | Workers `LLM_USE_HEADROOM=false`. Gemini `gemini-3.1-flash-lite` for generation/embeddings; JEV `jev-1.13.0` for closed decisions (`JEV_*_MODE=active` when key present). Never share JEV key across stacks. See [docs/llm-ownership.md](./docs/llm-ownership.md). |
+| **LLM** | Gemini `gemini-3.1-flash-lite` direct for generation/embeddings; JEV `jev-1.13.0` direct for closed decisions (`JEV_*_MODE=active` when key present). Never share JEV key across stacks. See [docs/llm-ownership.md](./docs/llm-ownership.md). |
 | **Keys** | Scoped `INTERNAL_API_KEY_*`; never commit real secrets or default internal keys for prod. |
 | **Env** | `.env.sample` → `.env`; never commit `.env`. |
 | **Crawler spec** | [docs/crawler-redesign-spec.md](./docs/crawler-redesign-spec.md) wins over `specs/001-crawler-redesign/spec.md` on any disagreement. |

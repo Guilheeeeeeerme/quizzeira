@@ -73,7 +73,6 @@ beforeEach(() => {
   workerEnv.jevShadowRatePerMinute = 100;
   workerEnv.jevShadowDailyCalls = 1000;
   workerEnv.geminiApiKey = "test-gemini";
-  workerEnv.llmProviderOrder = "gemini";
   workerEnv.llmRateLimitPerMinute = 100;
   workerEnv.llmDailyBudget = 1000;
   workerEnv.redisUrl = "";

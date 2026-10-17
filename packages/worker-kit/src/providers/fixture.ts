@@ -16,17 +16,12 @@ export interface FixtureTurn {
 
 /**
  * Deterministic provider: prefers `key` equality, then first `match` substring.
- * Enable with `LLM_PROVIDER=fixture` or provider order `fixture`.
+ * Enable with `LLM_PROVIDER=fixture`.
  */
 export function createFixtureProvider(turns: FixtureTurn[] = defaultTurns()): LlmProvider {
   return {
     name: "fixture",
-    available: () =>
-      process.env.LLM_PROVIDER === "fixture" ||
-      (process.env.LLM_PROVIDER_ORDER ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .includes("fixture"),
+    available: () => process.env.LLM_PROVIDER === "fixture",
     defaultModel: () => "fixture-v1",
     async complete(input: ProviderCompleteInput): Promise<LlmCompletion> {
       const haystack = `${input.system}\n${input.user}`;

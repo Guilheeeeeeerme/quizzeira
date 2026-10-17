@@ -11,7 +11,7 @@ Agent behavioral rules: see [AGENTS.md](./AGENTS.md). Concept map: [docs/ai-swe-
 | Web | https://app.concurseria.ferredemo.dev |
 | API | https://api.concurseria.ferredemo.dev |
 
-Production deploys are owned by the **infra** repo (GitHub Actions `Deploy app` → GHCR → VPS; `Quizzeira edge` → Cloudflare Pages/Workers). This repo only dispatches via `.github/workflows/deploy-infra.yml` (`INFRA_DISPATCH_TOKEN`); do not add a second Pages/Worker deploy path here. Study/Discovery/Content Postgres run on Hostinger VPS (`postgres-quizzeira`); workers skip Headroom (`LLM_USE_HEADROOM=false`) — see infra `docs/quizzeira-headroom.md`, `docs/supabase.md` (Argus-only), and step-by-step [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+Production deploys are owned by the **infra** repo (GitHub Actions `Deploy app` → GHCR → VPS; `Quizzeira edge` → Cloudflare Pages/Workers). This repo only dispatches via `.github/workflows/deploy-infra.yml` (`INFRA_DISPATCH_TOKEN`); do not add a second Pages/Worker deploy path here. Study/Discovery/Content Postgres run on Hostinger VPS (`postgres-quizzeira`); workers call Gemini and JEV directly — see infra `docs/quizzeira-headroom.md`, `docs/supabase.md` (Argus-only), and step-by-step [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 User-facing brand is **Concurseria** (subtitle **Gourmet**). Engineering names (`quizzeira` schemas, packages, GHCR paths) stay as-is.
 
@@ -33,7 +33,7 @@ Specs / agent tooling: `docs/`, `specs/`, `.specify/`, `.agents/skills/` (e.g. R
 
 - TypeScript/Node, Prisma, React
 - Postgres/pgvector (Study + Discovery + Content) + Redis + MinIO
-- LLM via `worker-kit` (workers: `LLM_USE_HEADROOM=false`): Gemini `gemini-3.1-flash-lite` owns generation + embeddings; JEV (TypeSafe `jev-1.13.0`) owns closed Choice/Score decisions under `JEV_*_MODE` (default `active` with key; `shadow` = staging only). See [docs/llm-ownership.md](./docs/llm-ownership.md).
+- LLM via `worker-kit`: Gemini `gemini-3.1-flash-lite` owns generation + embeddings; JEV (TypeSafe `jev-1.13.0`) owns closed Choice/Score decisions under `JEV_*_MODE` (default `active` with key; `shadow` = staging only). Both are direct. See [docs/llm-ownership.md](./docs/llm-ownership.md).
 
 ## Local
 

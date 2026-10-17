@@ -30,10 +30,6 @@
 # safe primaries only and the tier files are the real budget.
 
 x-llm-direct: &llm-direct
-  # HARD RULE — Quizzeira LLM workers skip Headroom by design
-  # (infra docs/quizzeira-headroom.md): direct public provider endpoints even
-  # when env values look like Headroom; never "fix" this to headroom:8787.
-  LLM_USE_HEADROOM: "false"
   GEMINI_BASE_URL: https://generativelanguage.googleapis.com
 
 services:
@@ -164,7 +160,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
-      JEV_API_KEY: ${QUIZZEIRA_JEV_API_KEY:-${JEV_API_KEY:-}}
+      JEV_API_KEY: ${JEV_API_KEY:-}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
@@ -238,7 +234,7 @@ services:
       CONTENT_DATABASE_DIRECT_URL: ${CONTENT_DATABASE_DIRECT_URL}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_CONTENT}
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
-      CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}}
       S3_ENDPOINT: ${S3_ENDPOINT}
       S3_REGION: ${S3_REGION:-auto}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
@@ -306,7 +302,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
-      JEV_API_KEY: ${QUIZZEIRA_JEV_API_KEY:-${JEV_API_KEY:-}}
+      JEV_API_KEY: ${JEV_API_KEY:-}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}
@@ -326,7 +322,7 @@ services:
       LLM_RATE_GENERATION_PER_MINUTE: ${LLM_RATE_GENERATION_PER_MINUTE:-1}
       LLM_RATE_JUDGE_PER_MINUTE: ${LLM_RATE_JUDGE_PER_MINUTE:-1}
       CONTENT_EMBEDDING_DIMENSIONS: ${CONTENT_EMBEDDING_DIMENSIONS:-768}
-      CONTENT_GEMINI_EMBEDDING_MODEL: ${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-${CONTENT_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}}
       CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
       # worker.Dockerfile CMD uses apps/$WORKER_APP; bake + compose both set it
       WORKER_APP: content-worker
@@ -360,7 +356,6 @@ services:
       CONTENT_FRESHNESS_DRY_RUN: ${CONTENT_FRESHNESS_DRY_RUN:-true}
       CONTENT_FRESHNESS_MAX_PER_PASS: ${CONTENT_FRESHNESS_MAX_PER_PASS:-8}
       CONTENT_FRESHNESS_PROBE_TIMEOUT_MS: ${CONTENT_FRESHNESS_PROBE_TIMEOUT_MS:-15000}
-      LLM_USE_HEADROOM: "false"
       GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_CONTENT_FRESHNESS:-192m}
     networks:
@@ -384,7 +379,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
-      JEV_API_KEY: ${QUIZZEIRA_JEV_API_KEY:-${JEV_API_KEY:-}}
+      JEV_API_KEY: ${JEV_API_KEY:-}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
       JEV_MODEL: ${JEV_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_SECONDS: ${JEV_TIMEOUT_SECONDS:-10}

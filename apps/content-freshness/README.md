@@ -15,7 +15,6 @@ amended — without seeding questions.
 | Re-distill KUs / regenerate drafts | **Gemini** `gemini-3.1-flash-lite` |
 | Re-judge published replacements | **JEV** Score+Choice (`JEV_JUDGE_MODE`) |
 
-This worker never calls Gemini or JEV directly (`LLM_USE_HEADROOM` irrelevant).
 
 ## Safety
 

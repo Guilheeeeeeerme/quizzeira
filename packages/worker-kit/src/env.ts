@@ -10,16 +10,6 @@ function num(key: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-function flag(key: string, fallback: boolean): boolean {
-  const raw = process.env[key];
-  if (raw == null || raw === "") return fallback;
-  return raw !== "false" && raw !== "0";
-}
-
-function looksLikeHeadroom(url: string): boolean {
-  return /headroom|:8787\b/i.test(url);
-}
-
 export const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 export const DEFAULT_JEV_MODEL = "jev-1.13.0";
@@ -28,23 +18,6 @@ export const DEFAULT_JEV_BASE_URL = "https://api.typesafe.ai";
 /** Staged authority for a JEV-owned decision (JEV audit plan §6). */
 export type JevMode = "off" | "shadow" | "active";
 export const JEV_MODES: readonly JevMode[] = ["off", "shadow", "active"];
-
-/**
- * When false, workers talk to the public Gemini URL even if GEMINI_BASE_URL
- * points at Headroom. Use this when Headroom breaks a path (auth, Docker
- * networking to 127.0.0.1:8787, etc.). Host-side tooling can keep using
- * Headroom independently. JEV never goes through Headroom.
- */
-const llmUseHeadroom = flag("LLM_USE_HEADROOM", true);
-
-function resolveLlmBaseUrl(
-  configured: string | undefined,
-  publicDefault: string,
-): string {
-  const raw = (configured || publicDefault).replace(/\/$/, "");
-  if (!llmUseHeadroom && looksLikeHeadroom(raw)) return publicDefault;
-  return raw;
-}
 
 /**
  * Provider roots are operator configuration, not user input, but a typo that
@@ -85,17 +58,14 @@ export function parseJevMode(raw: string | undefined, hasKey: boolean): JevMode 
 const jevApiKey = (process.env.JEV_API_KEY ?? "").trim();
 
 export const workerEnv = {
-  /** Explicit opt-in/out for Headroom LLM proxy. */
-  llmUseHeadroom,
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
-  geminiBaseUrl: resolveLlmBaseUrl(process.env.GEMINI_BASE_URL, DEFAULT_GEMINI_BASE_URL),
+  geminiBaseUrl: normalizeProviderRoot(process.env.GEMINI_BASE_URL, DEFAULT_GEMINI_BASE_URL),
   /**
    * Generation owner list. Only `gemini` and `fixture` are registered; the
    * list exists so deterministic CI can select `fixture`. There is no
    * cross-provider failover any more (JEV audit plan §6 Stage A).
    */
-  llmProviderOrder: process.env.LLM_PROVIDER_ORDER || "gemini",
   /** JEV (TypeSafe) — typed Choice/Score decisions, direct transport. */
   jevApiKey,
   jevBaseUrl: normalizeProviderRoot(process.env.JEV_BASE_URL, DEFAULT_JEV_BASE_URL),

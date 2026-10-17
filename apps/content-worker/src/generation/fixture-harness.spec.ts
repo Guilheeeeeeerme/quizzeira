@@ -9,12 +9,10 @@ import { buildGenerationPromptV2, GENERATION_SYSTEM_PROMPT_V2 } from "./prompt.j
 
 describe("generation fixture harness (§41.3)", () => {
   const prevProvider = process.env.LLM_PROVIDER;
-  const prevOrder = process.env.LLM_PROVIDER_ORDER;
   const prevMem = workerEnv.allowMemoryBudget;
 
   before(() => {
     process.env.LLM_PROVIDER = "fixture";
-    process.env.LLM_PROVIDER_ORDER = "fixture";
     workerEnv.allowMemoryBudget = true;
     resetBudgetForTests();
   });
@@ -22,8 +20,6 @@ describe("generation fixture harness (§41.3)", () => {
   after(() => {
     if (prevProvider === undefined) delete process.env.LLM_PROVIDER;
     else process.env.LLM_PROVIDER = prevProvider;
-    if (prevOrder === undefined) delete process.env.LLM_PROVIDER_ORDER;
-    else process.env.LLM_PROVIDER_ORDER = prevOrder;
     workerEnv.allowMemoryBudget = prevMem;
   });
 

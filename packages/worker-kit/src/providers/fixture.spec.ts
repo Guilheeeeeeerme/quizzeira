@@ -7,7 +7,6 @@ import { createFixtureProvider } from "./fixture.js";
 
 describe("fixture LLM provider (§41.3)", () => {
   const prevProvider = process.env.LLM_PROVIDER;
-  const prevOrder = process.env.LLM_PROVIDER_ORDER;
 
   beforeEach(() => {
     resetBudgetForTests();
@@ -16,8 +15,6 @@ describe("fixture LLM provider (§41.3)", () => {
   afterEach(() => {
     if (prevProvider === undefined) delete process.env.LLM_PROVIDER;
     else process.env.LLM_PROVIDER = prevProvider;
-    if (prevOrder === undefined) delete process.env.LLM_PROVIDER_ORDER;
-    else process.env.LLM_PROVIDER_ORDER = prevOrder;
   });
 
   it("matches recorded turns by prompt substring", async () => {
@@ -49,7 +46,6 @@ describe("fixture LLM provider (§41.3)", () => {
 
   it("generateJson + parseGeneratedQuestionsV2 yields a draftable MCQ", async () => {
     process.env.LLM_PROVIDER = "fixture";
-    process.env.LLM_PROVIDER_ORDER = "fixture";
     const response = await generateJson<{ questions: unknown }>(
       "Você é um elaborador.",
       [

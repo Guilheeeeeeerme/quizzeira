@@ -172,10 +172,6 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY_CORRECTOR:-dev-corrector-key}
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-60000}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
-      # Quizzeira workers do not use Headroom (Docker cannot reach host :8787
-      # reliably; local Headroom also 401s this stack's Gemini key). Opt out
-      # explicitly — host Cursor tooling can still use Headroom separately.
-      LLM_USE_HEADROOM: "false"
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
       JEV_API_KEY: ${JEV_API_KEY:-}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
@@ -530,7 +526,6 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       # See quiz-corrector: Quizzeira workers skip Headroom.
-      LLM_USE_HEADROOM: "false"
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
       JEV_API_KEY: ${JEV_API_KEY:-}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
@@ -590,7 +585,6 @@ services:
       WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      LLM_USE_HEADROOM: "false"
       DOC_PROCESSOR_URL: http://doc-processor:3030
       SERVICE_NAME: quizzeira-contentworker-documents
     volumes:
@@ -627,7 +621,6 @@ services:
       WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      LLM_USE_HEADROOM: "false"
       SERVICE_NAME: quizzeira-contentworker-embeddings
     volumes:
       - ./apps/content-worker:/app/apps/content-worker
@@ -659,7 +652,6 @@ services:
       WORKER_INTERVAL_MS: ${CONTENT_WORKER_INTERVAL_MS:-120000}
       WORKER_TZ: ${WORKER_TZ:-UTC}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      LLM_USE_HEADROOM: "false"
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
       JEV_API_KEY: ${JEV_API_KEY:-}
@@ -710,7 +702,6 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       # See quiz-corrector: Quizzeira workers skip Headroom.
-      LLM_USE_HEADROOM: "false"
       GEMINI_BASE_URL: https://generativelanguage.googleapis.com
       JEV_API_KEY: ${JEV_API_KEY:-}
       JEV_BASE_URL: ${JEV_BASE_URL:-https://api.typesafe.ai}
@@ -767,7 +758,6 @@ services:
       CONTENT_FRESHNESS_DRY_RUN: ${CONTENT_FRESHNESS_DRY_RUN:-true}
       CONTENT_FRESHNESS_MAX_PER_PASS: ${CONTENT_FRESHNESS_MAX_PER_PASS:-8}
       CONTENT_FRESHNESS_PROBE_TIMEOUT_MS: ${CONTENT_FRESHNESS_PROBE_TIMEOUT_MS:-15000}
-      LLM_USE_HEADROOM: "false"
     volumes:
       - ./apps/content-freshness:/app/apps/content-freshness
       - ./packages/shared:/app/packages/shared

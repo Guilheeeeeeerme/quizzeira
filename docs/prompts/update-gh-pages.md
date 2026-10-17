@@ -35,7 +35,6 @@ affect Quizzeira claims.
 
 **Do not invent** Agents, token streaming, full semantic RAG, question-bank
 seeds, or Quizzeira Headroom-on without code evidence. Workers use
-`LLM_USE_HEADROOM=false` by design.
 
 ## 2. Diff against documented claims
 

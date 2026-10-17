@@ -49,7 +49,6 @@ beforeEach(() => {
   calls.length = 0;
   geminiStatus = 200;
   workerEnv.geminiApiKey = "test-gemini";
-  workerEnv.llmProviderOrder = "gemini";
   workerEnv.llmRateLimitPerMinute = 100;
   workerEnv.llmDailyBudget = 1000;
   workerEnv.geminiModel = "gemini-3.1-flash-lite";
@@ -115,8 +114,8 @@ describe("single generation owner (OpenAI removed)", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("ignores unknown names in LLM_PROVIDER_ORDER", async () => {
-    workerEnv.llmProviderOrder = "bogus,gemini";
+  it("uses Gemini when LLM_PROVIDER is unset", async () => {
+    delete process.env.LLM_PROVIDER;
     const result = await generateJson<{ ok: boolean }>("system", "user");
     expect(result).toEqual({ ok: true });
     expect(calls.map((c) => c.url)).toEqual([expect.stringContaining(":generateContent")]);

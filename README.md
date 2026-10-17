@@ -25,7 +25,7 @@ Concurso-only study platform: continuous **Ingestion** of public exams → **Ext
 | --- | --- |
 | Three planes (Discovery / Content / Study); workers use **runLoop** (not BullMQ) | **VERIFIED** |
 | Intervals 60s study/quality/corrector, 120s content-worker, 30m crawler; Eval 0.8/0.5; BANK_READY≥5; MIN_KU/TARGET 4/12; PUBLISHED_TARGET 40 | **VERIFIED** |
-| Headroom **OFF** (`LLM_USE_HEADROOM=false`); no question-bank seed | **VERIFIED** |
+| Gemini + JEV direct; no question-bank seed | **VERIFIED** |
 | Embeddings 768d | **VERIFIED** |
 | `searchChunks` in generation / `googleSearch` | **UNUSED** |
 | Full semantic RAG on gen path | **NOT FOUND** |

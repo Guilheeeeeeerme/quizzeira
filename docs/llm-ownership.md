@@ -3,7 +3,7 @@
 Implements the Quizzeira JEV/Gemini audit (`JEV_GEMINI_AUDIT_PLAN.md`, Stage A + B).
 Engineering truth for which model owns which call. Discovery has no LLM. Study API/web
 never call providers. Stack is **Gemini + JEV only** (no OpenAI, no Firecrawl, no
-Headroom on workers).
+no proxy).
 
 ## Cost-aware routing (cheapest stable)
 
@@ -40,7 +40,7 @@ refresh, no model-rank `setInterval`, and no cross-model failover. Embeddings us
 
 - `packages/worker-kit/src/jev.ts`: `POST {JEV_BASE_URL}/v1/systemone`, bearer `JEV_API_KEY`,
   model `JEV_MODEL` (`jev-1.13.0`; promote to `jev-1.14.0` after Portuguese holdout),
-  10 s timeout, direct to TypeSafe (never Headroom).
+  10 s timeout, direct to TypeSafe.
 - Questions: `choice` (`criteria` = option → description, 2..255 options) and `score`
   (`criteria` = ordered level descriptions, 2..10). Answers are validated strictly: exact
   question-id set, matching types, option names from the supplied criteria, finite
@@ -95,6 +95,6 @@ provider.
 
 The Quizzeira JEV key is Quizzeira-only. It lives in infra SOPS / Dokploy panel under
 `quizzeira:` → Compose `env_file`. Never reuse an Argus, PromptDesk, `providers` or
-`headroom` token; never put it in `.env.sample`, build args, images, workflow logs or docs.
+token; never put it in `.env.sample`, build args, images, workflow logs or docs.
 Panel checks: `JEV_*` present on `content-worker`, `content-quality`, `quiz-corrector`;
 no retired provider keys.

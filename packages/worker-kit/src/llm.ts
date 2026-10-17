@@ -15,7 +15,7 @@ import { circuitGuard, circuitRecordFailure, circuitRecordSuccess } from "./circ
  * Generation owners. Stack is Gemini (+ fixture in CI) and JEV for typed
  * decisions. Exactly one provider owns a `generateJson` call and uses the
  * pinned env model (`GEMINI_MODEL` / fixture) — no models.list discovery,
- * no cross-model failover. Unknown names in LLM_PROVIDER_ORDER are ignored.
+ * no cross-model failover. Tests select the fixture with LLM_PROVIDER=fixture.
  */
 const PROVIDERS: Record<string, LlmProvider> = {
   gemini: geminiProvider,
@@ -54,22 +54,14 @@ export function requireJsonShape<T>(
 }
 
 /**
- * Resolve the single generation owner. `fixture` wins when explicitly selected
- * (LLM_PROVIDER=fixture or listed in LLM_PROVIDER_ORDER, §41.3); otherwise
- * Gemini when its key is present. Returns an empty list when nothing is
- * configured so readiness can report `no_configured_provider`.
+ * Resolve the single generation owner. `fixture` wins when LLM_PROVIDER=fixture;
+ * otherwise Gemini when its key is present. Returns an empty list when nothing
+ * is configured so readiness can report `no_configured_provider`.
  */
 function providerOrder(): LlmProvider[] {
-  const names: string[] = [];
-  if ((process.env.LLM_PROVIDER ?? "").trim().toLowerCase() === "fixture") {
-    names.push("fixture");
+  if ((process.env.LLM_PROVIDER ?? "").trim().toLowerCase() === "fixture" && PROVIDERS.fixture.available()) {
+    return [PROVIDERS.fixture];
   }
-  for (const raw of (process.env.LLM_PROVIDER_ORDER || workerEnv.llmProviderOrder).split(",")) {
-    const name = raw.trim().toLowerCase();
-    if (name) names.push(name);
-  }
-  const fixture = names.includes("fixture") ? PROVIDERS.fixture : null;
-  if (fixture && fixture.available()) return [fixture];
   const gemini = PROVIDERS.gemini;
   return gemini.available() ? [gemini] : [];
 }

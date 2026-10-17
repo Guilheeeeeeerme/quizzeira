@@ -23,8 +23,8 @@ must not be revived.
 - `packages/worker-kit` adds `logInfo` / `logWarn` / `logError` (secret-key redaction) and uses them in `runLoop`.
 - Compose/production injects `SERVICE_NAME=quizzeira-<service>`.
 
-ChrisLOG scrapes Docker logs for every container on the VPS (including Headroom
-and Dokploy). Filter by container/service name in the UI.
+ChrisLOG scrapes Docker logs for every container on the VPS (including Dokploy).
+Filter by container/service name in the UI.
 
 ## Rollback
 
