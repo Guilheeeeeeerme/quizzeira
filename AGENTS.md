@@ -42,7 +42,7 @@ Use existing connections before installing replacements. Verify access with a na
 | Cloudflare MCP | Pages `quizzeira-web`, Worker `quizzeira-edge-watchdog`, proxied DNS. |
 | Supabase plugin | Project `zgoscslzyizwnzqoyqul`; preserve schema ownership. |
 | Hostinger MCP | Domains/DNS/web hosting; does not grant VPS access. Verify authoritative DNS source before changes. |
-| Grafana MCP | Dashboards + Loki/Prometheus for production diagnosis. |
+| Ops plane (infra) | ChrisLOG / Uptime Kuma / Beszel / Flipt — [observability](./docs/observability.md), infra [OPS.md](../infra/docs/OPS.md). |
 
 Connection setup does not authorize deployments, DB writes, DNS changes, purchases, or plan upgrades. Keep tokens/credentials out of tracked files.
 
