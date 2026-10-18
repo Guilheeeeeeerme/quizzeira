@@ -184,7 +184,9 @@ services:
         condition: service_healthy
     mem_limit: ${MEM_QUIZ_CORRECTOR:-384m}
     networks:
+      # private has no egress. Gemini and JEV are public APIs.
       - private
+      - dokploy-network
 
   discovery-api:
     image: ghcr.io/guilheeeeeeerme/quizzeira/discoveryapi:${IMAGE_TAG:-production}
@@ -335,7 +337,9 @@ services:
         condition: service_healthy
     mem_limit: ${MEM_CONTENT_WORKER:-768m}
     networks:
+      # private has no egress. Gemini and JEV are public APIs.
       - private
+      - dokploy-network
 
   content-freshness:
     image: ghcr.io/guilheeeeeeerme/quizzeira/contentfreshness:${IMAGE_TAG:-production}
@@ -408,7 +412,9 @@ services:
         condition: service_healthy
     mem_limit: ${MEM_CONTENT_QUALITY:-256m}
     networks:
+      # private has no egress. Gemini and JEV are public APIs.
       - private
+      - dokploy-network
 
   # ── Discovery plane (profile: discovery) ─────────────────────────────────
   discovery-crawler:
@@ -439,7 +445,9 @@ services:
     shm_size: 1gb
     mem_limit: ${MEM_DISCOVERY_CRAWLER:-1536m}
     networks:
+      # private has no egress. The crawler fetches public exam pages.
       - private
+      - dokploy-network
 
   discovery-lifecycle:
     image: ghcr.io/guilheeeeeeerme/quizzeira/discoverylifecycle:${IMAGE_TAG:-production}
@@ -489,7 +497,9 @@ services:
       GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_DISCOVERY_SOURCE_SCOUT:-192m}
     networks:
+      # private has no egress. Source scout calls public search APIs.
       - private
+      - dokploy-network
 
   discovery-portal-monitor:
     image: ghcr.io/guilheeeeeeerme/quizzeira/discoveryportalmonitor:${IMAGE_TAG:-production}
@@ -556,7 +566,9 @@ services:
       GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_SOCIAL:-192m}
     networks:
+      # private has no egress. Social scout calls public platform APIs.
       - private
+      - dokploy-network
 
 networks:
   # Stack-private network (no host/LAN egress). Named to avoid collisions with
