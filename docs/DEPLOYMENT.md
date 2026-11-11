@@ -1,22 +1,22 @@
 # Quizzeira — deployment
 
-Quizzeira is split across three places: **Supabase Free** for Postgres,
+Quizzeira is split across three places: **VPS Postgres** for the three database schemas,
 **Cloudflare** for the static web app, DNS proxy and the edge watchdog, and the
 **Hostinger VPS** for every API and worker. The build/deploy machinery lives in
-the private **infra** repo; this page explains what happens when you push.
+this repository's `.github/workflows` and `deploy/` directories; this page explains what happens when you push.
 
 ## What runs where
 
 | Place | What |
 | --- | --- |
-| GitHub Actions (`infra` repo) | `Deploy app`, `Migrate app`, `Quizzeira edge` workflows |
-| GHCR | `ghcr.io/guilheeeeeeerme/quizzeira/{api,discoveryapi,contentapi,discoverycrawler,contentworker,contentquality,quizcorrector,docprocessor,app}:<appSha>.<infraSha>` |
-| VPS — Compose project `quizzeira` | `api` (Study, loopback `13200`), `discoveryapi` (`13201`, private), `contentapi` (`13202`, private), `discoverycrawler` (Playwright), `contentworker`, `contentquality`, `quizcorrector`, `docprocessor` (`3030` internal), `app` (nginx fallback, `18280`) |
-| VPS — shared `infra_data` | Redis DB `/2`, MinIO bucket `quizzeira` (`artifacts/` raw bytes, `normalized/` extracted text, `briefs/`; lifecycle backstop 30d/never/365d set by infra `shared_ensure.py`) |
+| GitHub Actions (this repo) | `Deploy quizzeira`, `Pages + edge`, `Pipeline v2 gates` |
+| GHCR | `ghcr.io/guilheeeeeeerme/quizzeira/<service>:<sha>` and `:production` |
+| VPS — Dokploy Compose stack | Study API (3000 via Traefik), private Discovery API (3010), Content API (3020), workers and doc-processor (3030 internal); `deploy/compose.prod.yml` |
+| App-owned Redis + Cloudflare R2 | Redis for this stack; S3-compatible R2 object storage |
 | Hostinger VPS Postgres (`postgres-quizzeira`) | Schemas `quizzeira_study`, `quizzeira_discovery`, `quizzeira_content` (pgvector), role `quizzeira` (Supabase is Argus-only) |
 | Cloudflare Pages `quizzeira-web` | `apps/web` static build → `app.concurseria.ferredemo.dev` |
-| Cloudflare DNS (proxied) | `api.concurseria.ferredemo.dev` → VPS nginx (Let's Encrypt origin) |
-| Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) — deploy only via infra **Quizzeira edge** (no duplicate Pages/Worker workflow in this repo) |
+| Public API DNS | `api.concurseria.ferredemo.dev` → VPS Traefik |
+| Cloudflare Workers | `quizzeira-edge-watchdog` (cron `*/5`, KV `WATCH_STATE`) — deploy via this repo's **Pages + edge** workflow |
 | LLM | Workers call Gemini (generation + embeddings) and TypeSafe JEV (typed decisions, `JEV_*_MODE`, default `active` with key) directly — see [llm-ownership.md](./llm-ownership.md) |
 
 **File triage & retention.** `contentworker` runs a `triage` pass every
@@ -29,61 +29,35 @@ any terminal document after `CONTENT_RETENTION_GRACE_DAYS` (default 7). A
 reprocess after purge re-fetches `sourceUrl`. `CONTENT_WORKER_PROFILE=maintenance`
 runs only this pass if it should live in its own container.
 
-Secrets: `/opt/infra/secrets/quizzeira.env` on the VPS, sourced from `infra/secrets/production.enc.yaml` (SOPS).
+Secrets: Dokploy stack environment plus GitHub repository secrets; keep an operator backup outside git.
 Worker secrets (`WATCH_TARGETS`, `ALERT_WEBHOOK`) are set with `wrangler secret put`.
 
 ## Step by step: push → production
 
-1. Push to `main`. `.github/workflows/deploy-infra.yml` sends `repository_dispatch`
-   (`project=quizzeira`, this repo, the commit SHA) to `infra` using secret `INFRA_DISPATCH_TOKEN`.
-   (`pipeline-v2.yml` gates still run here on PRs/pushes.)
-2. `infra` → **Deploy app**:
-   1. `resolve`: SHA must be the current head of `main` (older pushes are skipped).
-   2. `build` (GitHub runner): `scripts/app_test.sh quizzeira` runs `npm ci`,
-      `test:shared`, `test:i18n`; `build.sh` builds the shared deps base and every
-      service image from `infra/containers/quizzeira/*` and pushes to GHCR.
-   3. `deploy` (VPS over SSH): `deploy.sh quizzeira <release> deploy` — pulls the
-      images, **checks `prisma migrate status` in `api`, `discoveryapi` and `contentapi`
-      (fails closed if pending)**, `docker compose up -d --wait`, smoke (`api`,
-      `discovery-api`, `content-api` `/health`), promotes the release. Failure restores
-      the previous release automatically.
-   4. Dispatches **Quizzeira edge**: builds `apps/web` with
-      `VITE_API_ORIGIN=https://api.concurseria.ferredemo.dev`, adds SPA `_redirects`,
-      `wrangler pages deploy` to project `quizzeira-web`; then `wrangler deploy` in
-      `edge/edge-watchdog` (after its `npm test`).
-3. Nothing else restarts: Argus and PromptDesk are separate Compose projects.
+1. Push to `main`. This repo's `.github/workflows/deploy.yml` runs **Deploy quizzeira**.
+2. Unit tests and the content-worker typecheck must pass before the GHCR image matrix builds. Images use immutable `<sha>` and moving `production` tags.
+3. Runner smoke starts Redis, a temporary Postgres database, migrations and the Study API; it checks `/health` and `/version`.
+4. The deploy job advances this repo's `production` branch, calls the Dokploy webhook and polls the public API `/version` for the released SHA.
+5. Independently, `.github/workflows/pages.yml` builds/publishes the web app to Cloudflare Pages and typechecks/deploys the watchdog Worker. This workflow does not wait for the API deployment.
 
-Manual triggers: `infra` → Actions → **Deploy app** (`project=quizzeira`, optional `sha`)
-and **Quizzeira edge** (optional `sha`).
+Manual triggers: this repo → Actions → **Deploy quizzeira** (optional `sha`) and **Pages + edge**. The separate **Pipeline v2 gates** workflow provides wider validation; it is not a dependency of the deploy workflow.
 
-## Step by step: schema change (Prisma, three schemas)
+A public `/health` response proves HTTP availability only. Verify `/version` and the individual worker/container status after a release; an API SHA alone does not prove every worker uses that release.
 
-1. Add the migration under `apps/api/prisma`, `apps/discovery-api/prisma` or
-   `apps/content-api/prisma` and push.
-2. In `infra`, run **Deploy app** with `migrate=true` (or **Migrate app** then **Deploy app**).
-   On the VPS this runs `docker compose run --rm <service> npx prisma migrate deploy` for
-   `api`, `discoveryapi` and `contentapi` against Supabase, then `npm run db:seed:platform`.
-   `seed_demo=true` adds `db:seed:demo`.
-3. A plain deploy never migrates. `discovery-api` and `content-api` images **no longer run
-   `prisma migrate deploy` on start**.
+## Schema changes (Prisma, three schemas)
+
+Add migrations under `apps/api/prisma`, `apps/discovery-api/prisma` or `apps/content-api/prisma`. Keep the Dokploy `migrate` profile enabled: `deploy/migrate.sh` runs `prisma migrate deploy` for all three schemas and the users-only platform seed before dependent services start. Configure database URLs in the Dokploy stack, not in tracked files. See [deploy/README.md](../deploy/README.md).
 
 ## Rollback
 
-`infra` → **Deploy app** with the previous `sha` (VPS side), then **Quizzeira edge** with
-the same `sha` (Pages/Worker). On the VPS only:
-`bash /opt/infra/repository/scripts/deploy.sh quizzeira <previous release> rollback`.
+Set `SKIP_MIGRATIONS=1` in the Dokploy stack before a schema-compatible rollback, then dispatch **Deploy quizzeira** with the previous good `sha` and `skip_migrations=true`. The workflow input prints an operator reminder; it does not change the stack environment. Reset the stack setting after rollback. To restore the web/Worker code, run **Pages + edge** from the desired repository ref.
 
 ## Local
 
 ```bash
 cp .env.sample .env
-bash ../infra/scripts/supabase_dev_tunnel.sh -f
-python3 ../infra/scripts/write_local_supabase_env.py   # .env DATABASE_* → tunnel
+# Configure DATABASE_* for your development target; replace sample placeholders.
 docker compose up --build
 ```
 
-Single `.env`: change hosts there (staging Supabase via `host.docker.internal:15432`,
-or Compose `postgres` for rare fully-local DBs). Redis/MinIO default to Compose.
-
-Full infra view: `infra/docs/DEPLOYMENT.md`; Cloudflare setup: `infra/docs/quizzeira-cloudflare.md`;
-Supabase topology: `infra/docs/supabase.md`.
+Single `.env`: configure `DATABASE_*` for your development target. The sample tunnel placeholders require replacement; do not use the Argus Supabase helper. Redis/MinIO default to development Compose. Production uses VPS Postgres and R2. Operator details: [deploy/README.md](../deploy/README.md); shared host operations: sibling infra repo.

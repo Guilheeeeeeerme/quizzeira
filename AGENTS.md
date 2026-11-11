@@ -14,8 +14,8 @@ Coding-agent rules for this repository.
 ## Scope
 
 - Work inside this monorepo (`apps/`, `packages/`, `docs/`, `specs/`).
-- Production Compose and GitHub Actions workflows live in **infra** — GHA + GHCR is the sole supported production control plane (do not use Jenkins; VPS Jenkins removal is CONFIRM-gated in infra after GHA is proven). Do not invent a parallel prod deploy path here.
-- Cloudflare Pages (`quizzeira-web`) and Worker (`quizzeira-edge-watchdog`) deploy only via infra **Quizzeira edge**; this repo’s `.github/workflows/deploy-infra.yml` dispatches VPS deploy — do not add a competing Pages/Worker workflow here.
+- Production Compose lives in `deploy/compose.prod.yml`. This repo's **Deploy quizzeira** workflow builds GHCR images, runs smoke checks, and triggers Dokploy. Infra owns shared host operations; do not add a competing deploy path.
+- Cloudflare Pages (`quizzeira-web`) and Worker (`quizzeira-edge-watchdog`) deploy through this repo's **Pages + edge** workflow (`.github/workflows/pages.yml`).
 - Prefer targeted changes. Do not run the full `npm test` matrix unless asked or the change spans planes.
 
 ## Hard rules
@@ -38,9 +38,9 @@ Use existing connections before installing replacements. Verify access with a na
 
 | Integration | Purpose |
 | --- | --- |
-| GitHub plugin | `Guilheeeeeeerme/quizzeira` + sibling `infra`. Production: infra `Deploy app`/`Migrate app`/`Quizzeira edge` workflows + GHCR. |
+| GitHub plugin | `Guilheeeeeeerme/quizzeira` + sibling `infra`. Production: app-owned `Deploy quizzeira` / `Pages + edge`, GHCR, Dokploy. |
 | Cloudflare MCP | Pages `quizzeira-web`, Worker `quizzeira-edge-watchdog`, proxied DNS. |
-| Supabase plugin | Project `zgoscslzyizwnzqoyqul`; preserve schema ownership. |
+| Supabase plugin | Argus-only; Quizzeira uses VPS Postgres. |
 | Hostinger MCP | Domains/DNS/web hosting; does not grant VPS access. Verify authoritative DNS source before changes. |
 | Ops plane (infra) | ChrisLOG / Uptime Kuma / Beszel / Flipt — [observability](./docs/observability.md), infra [OPS.md](../infra/docs/OPS.md). |
 

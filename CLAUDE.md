@@ -11,7 +11,7 @@ Agent behavioral rules: see [AGENTS.md](./AGENTS.md). Concept map: [docs/ai-swe-
 | Web | https://app.concurseria.ferredemo.dev |
 | API | https://api.concurseria.ferredemo.dev |
 
-Production deploys are owned by the **infra** repo (GitHub Actions `Deploy app` → GHCR → VPS; `Quizzeira edge` → Cloudflare Pages/Workers). This repo only dispatches via `.github/workflows/deploy-infra.yml` (`INFRA_DISPATCH_TOKEN`); do not add a second Pages/Worker deploy path here. Study/Discovery/Content Postgres run on Hostinger VPS (`postgres-quizzeira`); workers call Gemini and JEV directly — see infra `docs/quizzeira-headroom.md`, `docs/supabase.md` (Argus-only), and step-by-step [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+Production deploys use this repo's **Deploy quizzeira** workflow (GitHub Actions → GHCR → Dokploy, `deploy/compose.prod.yml`) and **Pages + edge** workflow (Cloudflare Pages/Workers). Infra owns shared host operations; do not add a competing deployment path. Study/Discovery/Content Postgres run on Hostinger VPS; workers call Gemini and JEV directly. See [deploy/README.md](./deploy/README.md) and [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 User-facing brand is **Concurseria** (subtitle **Gourmet**). Engineering names (`quizzeira` schemas, packages, GHCR paths) stay as-is.
 
@@ -39,12 +39,12 @@ Specs / agent tooling: `docs/`, `specs/`, `.specify/`, `.agents/skills/` (e.g. R
 
 ```bash
 cp .env.sample .env
-bash ../infra/scripts/supabase_dev_tunnel.sh -f
-python3 ../infra/scripts/write_local_supabase_env.py   # .env → staging via tunnel
+# Configure DATABASE_* in .env for an explicitly selected local database.
+# The sample's tunnel placeholders require replacement before startup.
 docker compose up --build
 ```
 
-**DB switch:** one `.env` — change `DATABASE_*` hosts (staging tunnel vs Compose `postgres`). Redis/MinIO hosts likewise. Study is Postgres (not MySQL).
+**DB switch:** one `.env` — configure `DATABASE_*` hosts for your development target; do not reuse the Argus Supabase helper. Redis/MinIO hosts likewise. Study is Postgres (not MySQL).
 
 User seed only (no question-bank seed):
 
@@ -71,7 +71,7 @@ npm run db:migrate:discovery
 npm run db:migrate:content
 ```
 
-Pre-deploy gate (infra `app_test.sh`): `npm run test:shared && npm run test:i18n`.
+Pre-deploy gates are defined in `.github/workflows/deploy.yml`; content-worker typecheck and all listed test steps fail closed before image builds.
 
 ## Conventions
 

@@ -44,8 +44,12 @@ async function stubFetch(input: unknown, init?: RequestInit): Promise<Response> 
 }
 
 const saved = { ...workerEnv } as Record<string, unknown>;
+const savedProvider = process.env.LLM_PROVIDER;
 
 beforeEach(() => {
+  // This suite exercises Gemini with a stubbed HTTP boundary, even when the
+  // surrounding CI job selects fixture generation for other packages.
+  delete process.env.LLM_PROVIDER;
   calls.length = 0;
   geminiStatus = 200;
   workerEnv.geminiApiKey = "test-gemini";
@@ -60,6 +64,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (savedProvider === undefined) delete process.env.LLM_PROVIDER;
+  else process.env.LLM_PROVIDER = savedProvider;
   Object.assign(workerEnv, saved);
   vi.unstubAllGlobals();
 });

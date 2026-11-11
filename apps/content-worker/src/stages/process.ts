@@ -395,7 +395,7 @@ export async function runProcessPass(): Promise<ProcessPassResult> {
                   .put(`/internal/syllabus-nodes/${leaf.id}/embedding`, { embedding })
                   .catch(() => undefined);
               }
-              const retry = await content.post<{
+              const { items: retry } = await content.post<{
                 items: Array<{ id: string; similarity: number }>;
               }>("/internal/syllabus-nodes/score", { embedding: query, ids: leafIds });
               for (const row of retry.slice(0, 2)) {

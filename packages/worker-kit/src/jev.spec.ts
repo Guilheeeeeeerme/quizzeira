@@ -43,6 +43,7 @@ const goodAnswers = {
 };
 
 const saved = { ...workerEnv } as Record<string, unknown>;
+const savedProvider = process.env.LLM_PROVIDER;
 type Call = { url: string; init: RequestInit };
 const calls: Call[] = [];
 let responses: Array<() => Response> = [];
@@ -60,6 +61,8 @@ const fetchImpl = (async (input: unknown, init?: RequestInit) => {
 const noSleep = async () => {};
 
 beforeEach(() => {
+  // Readiness cases exercise Gemini + JEV regardless of the CI fixture setting.
+  delete process.env.LLM_PROVIDER;
   calls.length = 0;
   responses = [];
   workerEnv.jevApiKey = "test-jev-key-SECRET";
@@ -82,6 +85,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (savedProvider === undefined) delete process.env.LLM_PROVIDER;
+  else process.env.LLM_PROVIDER = savedProvider;
   Object.assign(workerEnv, saved);
   vi.unstubAllGlobals();
 });

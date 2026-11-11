@@ -18,7 +18,7 @@ The local dev compose (`docker-compose.yml`) is untouched and is NOT this stack.
 ## Architecture decisions
 
 - **Private plane.** `discovery-api` (3010), `content-api` (3020) and every
-  worker live only on the `quizzeira-internal` bridge (`internal: true`). No
+  worker communicates over the `quizzeira-internal` bridge (`internal: true`). Workers that call public providers also join the egress network. No
   Traefik routers, no host ports — matching `infra/projects.json`
   (`private_routes`). Only the study `api` (3000) is routed:
   `api.concurseria.ferredemo.dev` with the
@@ -73,15 +73,15 @@ The local dev compose (`docker-compose.yml`) is untouched and is NOT this stack.
    - Gemini and JEV base URLs are the public APIs for quizzeira workers
      (quiz-corrector, content-worker, content-quality). Headroom is removed.
      Set `S3_BUCKET=quizzeira-objects`.
-   - DB target: discovery on Supabase `ferredemo`; content + study → VPS Postgres
-     (pgvector) when that cutover lands — not “three schemas forever on one Free project”.
+   - DB target: VPS Postgres (pgvector) for `quizzeira_discovery`,
+     `quizzeira_content` and `quizzeira_study`. Supabase is Argus-only.
 4. **Profiles.** Dokploy → this stack → Services/Profiles: enable `migrate`
    (keep enabled), and enable `content` / `discovery` / `social` when their
    budget exists (see Secret-free sizing below). A profile's service only runs
    when enabled, no restart of unrelated services (deployment isolation).
 5. **DNS + Traefik.** `api.concurseria.ferredemo.dev` = DNS-only A record to the
    VPS (Cloudflare Free can't issue TS certs for two-level names). Traefik
-   issues Let's Encrypt; the SPA lives on Cloudflare Pages (`quizzeira-app`).
+   issues Let's Encrypt; the SPA lives on Cloudflare Pages (`quizzeira-web`).
 6. **Webhook.** Copy the stack's deploy webhook URL → GitHub repo secret
    `DOKPLOY_DEPLOY_HOOK_URL`. `Deploy quizzeira` fires it after tests, build
    matrix and the runner smoke pass; then polls `/version` until `gitsha`
@@ -99,7 +99,7 @@ Dispatch `Deploy quizzeira` with `sha` = previous good commit and
 1. `GET https://api.concurseria.ferredemo.dev/health` → 200.
 2. `GET /version` → `gitsha` equals the deployed commit.
 3. Login flow against the Pages SPA (cookies on `.ferredemo.dev`).
-4. `GET https://.../internal/...` from outside → **404** (edge noop router).
+4. `GET https://.../internal/...` from outside must be blocked (current Traefik returns **418**); no private response may be exposed.
 5. R2 object roundtrip: upload via admin → fetch back (S3_* env →
    `https://<account>.r2.cloudflarestorage.com`, bucket `quizzeira`, forced path style).
 6. Edge watchdog: the `quizzeira-edge-watchdog` Worker still pings `/health`
@@ -111,14 +111,9 @@ Dispatch `Deploy quizzeira` with `sha` = previous good commit and
 - MinIO on the VPS is gone (its image is archived/CVE-pinned); objects move to
   **Cloudflare R2** via the S3 API. Keys are app-scoped, one bucket
   (`quizzeira`), `S3_FORCE_PATH_STYLE=true`, `S3_REGION=auto`.
-- R2 free tier is ample for this workload; Supabase Free (500 MB/project) is
-  the real cap. The study DB stays modest, but the **content bank may outgrow
-  500 MB** — at that point the honest options are pruning raw discovery
-  artifacts, splitting content into its own project (still free, 2-project
-  cap) — or moving to a VPS Postgres. **No Supabase Pro upgrade without budget
-  approval** (repo hard rule). No backups on Supabase Free → the weekly
-  `pg_dump`-to-R2 task in the infra runbook is mandatory, and keep an R2
-  lifecycle check on object size.
+- All three database schemas use VPS Postgres. Monitor database/storage capacity
+  and verify the current infra backup/restore procedure against this VPS target;
+  the retired Supabase keepalive and backup jobs do not protect it.
 - Quizzeira never joins shared platform services: this stack owns its own Redis
   (`password + noeviction`) and its own schemas
   (`quizzeira_study` / `quizzeira_discovery` / `quizzeira_content`).

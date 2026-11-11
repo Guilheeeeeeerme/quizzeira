@@ -3,16 +3,26 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseGeneratedQuestionsV2 } from "@quizzeira/shared";
 import { generateJson, resetBudgetForTests } from "../llm.js";
+import { workerEnv } from "../env.js";
 import { createFixtureProvider } from "./fixture.js";
 
 describe("fixture LLM provider (§41.3)", () => {
   const prevProvider = process.env.LLM_PROVIDER;
+  const savedBudgetEnv = {
+    redisUrl: workerEnv.redisUrl,
+    allowMemoryBudget: workerEnv.allowMemoryBudget,
+  };
 
   beforeEach(() => {
+    // Fixture generation still traverses the real budgets/circuit code. Keep
+    // those in memory rather than connecting to Redis from the developer .env.
+    workerEnv.redisUrl = "";
+    workerEnv.allowMemoryBudget = true;
     resetBudgetForTests();
   });
 
   afterEach(() => {
+    Object.assign(workerEnv, savedBudgetEnv);
     if (prevProvider === undefined) delete process.env.LLM_PROVIDER;
     else process.env.LLM_PROVIDER = prevProvider;
   });

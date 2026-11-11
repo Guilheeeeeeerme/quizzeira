@@ -37,23 +37,22 @@ Guardrails: [`docs/guardrails.md`](docs/guardrails.md). Concepts: [`docs/ai-swe-
 
 | Plane | Apps | Store |
 | --- | --- | --- |
-| Discovery | `discovery-api`, `discovery-crawler` | Supabase (`quizzeira_discovery`) + R2 objects |
-| Content | `content-api`, `content-worker`, `content-quality` | Supabase (`quizzeira_content`) + pgvector |
-| Study | `api`, `web`, `quiz-corrector` | Supabase `quizzeira_study` + per-app Redis |
+| Discovery | `discovery-api`, `discovery-crawler` | VPS Postgres (`quizzeira_discovery`) + R2 objects |
+| Content | `content-api`, `content-worker`, `content-quality` | VPS Postgres (`quizzeira_content`) + pgvector |
+| Study | `api`, `web`, `quiz-corrector` | VPS Postgres `quizzeira_study` + per-app Redis |
 
 Brand mark: [`branding/quizzeira.svg`](branding/quizzeira.svg) — exam card + Eval check gate (filename kept for engineering continuity).
 
 ## What stays `quizzeira`
 
-Package names (`@quizzeira/*`), GHCR images (`ghcr.io/…/quizzeira/…`), Compose project, Supabase schemas (`quizzeira_*`), scoped `INTERNAL_API_KEY_*`, and most operator docs still use the engineering name. User-facing UI, titles, and public hosts use **Concurseria**.
+Package names (`@quizzeira/*`), GHCR images (`ghcr.io/…/quizzeira/…`), Compose project, Postgres schemas (`quizzeira_*`), scoped `INTERNAL_API_KEY_*`, and most operator docs still use the engineering name. User-facing UI, titles, and public hosts use **Concurseria**.
 
 ## Quick start
 
 ```bash
-# Single .env — hosts are the switch (primary: local apps → staging Supabase).
+# Single .env — configure DATABASE_* for your development target.
 cp .env.sample .env
-bash ../infra/scripts/supabase_dev_tunnel.sh -f   # 127.0.0.1:15432 via VPS
-python3 ../infra/scripts/write_local_supabase_env.py  # DATABASE_* → host.docker.internal:15432
+# Replace the sample's tunnel placeholders before startup; Quizzeira is not on Supabase.
 docker compose up --build
 ```
 
@@ -67,8 +66,8 @@ npm run db:seed -w @quizzeira/api
 
 - Agent map: [`CLAUDE.md`](CLAUDE.md) · [`AGENTS.md`](AGENTS.md)
 - Crawler SoT: [`docs/crawler-redesign-spec.md`](docs/crawler-redesign-spec.md)
-- Production deploy: private **infra** repo (GitHub Actions → GHCR → VPS; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md))
+- Production deploy: app-owned GitHub Actions → GHCR → Dokploy; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Deployment
 
-Push to `main` → infra GitHub Actions builds to GHCR and deploys. Details: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Push to `main` → **Deploy quizzeira** builds to GHCR and deploys through Dokploy; **Pages + edge** publishes the web app and watchdog. Details: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
