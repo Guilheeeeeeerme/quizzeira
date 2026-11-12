@@ -33,6 +33,7 @@ ARG GIT_SHA=""
 FROM node:22-bookworm-slim
 WORKDIR /app
 COPY --from=build /app ./
+ARG GIT_SHA=""
 ENV NODE_ENV=production \
     GIT_SHA=${GIT_SHA}
 USER node

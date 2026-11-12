@@ -19,7 +19,6 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      GIT_SHA: ${GIT_SHA}
       DEV_ROOT_EMAIL: ${SMOKE_DEV_ROOT_EMAIL}
       DEV_ROOT_PASSWORD: ${SMOKE_DEV_ROOT_PASSWORD}
       DATABASE_URL: ${DATABASE_URL}
@@ -38,7 +37,6 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      GIT_SHA: ${GIT_SHA}
       WEB_ORIGIN: ${WEB_ORIGIN}
       API_ORIGIN: ${API_ORIGIN}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN}

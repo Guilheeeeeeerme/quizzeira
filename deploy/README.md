@@ -43,6 +43,8 @@ The local dev compose (`docker-compose.yml`) is untouched and is NOT this stack.
   `contentapi`, `contentworker`, `contentquality`, `contentfreshness`,
   `docprocessor`, `quizcorrector` — built by `.github/workflows/deploy.yml`.
   Tags: immutable `<sha>` + moving `production`, `pull_policy: always`.
+  `GIT_SHA` comes from the image build; do not set it in the Dokploy panel or
+  Compose environment, since that would hide which image is actually running.
   See `docs/self-sustaining-discovery.md`. LLM workers use
   `deploy/docker/worker.Dockerfile` (`ARG APP`) and run via `tsx` (no Prisma
   client — HTTP to plane APIs only).

@@ -107,7 +107,6 @@ services:
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SERVICE_NAME: quizzeira-api
-      GIT_SHA: ${GIT_SHA}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -175,7 +174,6 @@ services:
       LLM_RATE_GENERATION_PER_MINUTE: ${LLM_RATE_GENERATION_PER_MINUTE:-1}
       LLM_RATE_JUDGE_PER_MINUTE: ${LLM_RATE_JUDGE_PER_MINUTE:-1}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      GIT_SHA: ${GIT_SHA}
       <<: *llm-direct
     depends_on:
       api:
@@ -206,7 +204,6 @@ services:
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SERVICE_NAME: quizzeira-discovery-api
-      GIT_SHA: ${GIT_SHA}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -245,7 +242,6 @@ services:
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SERVICE_NAME: quizzeira-content-api
-      GIT_SHA: ${GIT_SHA}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -273,7 +269,6 @@ services:
     environment:
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      GIT_SHA: ${GIT_SHA}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3030/health"]
       interval: 10s
@@ -328,7 +323,6 @@ services:
       CONTENT_PUBLISHED_TARGET: ${CONTENT_PUBLISHED_TARGET:-40}
       # worker.Dockerfile CMD uses apps/$WORKER_APP; bake + compose both set it
       WORKER_APP: content-worker
-      GIT_SHA: ${GIT_SHA}
       <<: *llm-direct
     depends_on:
       redis:
@@ -360,7 +354,6 @@ services:
       CONTENT_FRESHNESS_DRY_RUN: ${CONTENT_FRESHNESS_DRY_RUN:-true}
       CONTENT_FRESHNESS_MAX_PER_PASS: ${CONTENT_FRESHNESS_MAX_PER_PASS:-8}
       CONTENT_FRESHNESS_PROBE_TIMEOUT_MS: ${CONTENT_FRESHNESS_PROBE_TIMEOUT_MS:-15000}
-      GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_CONTENT_FRESHNESS:-192m}
     networks:
       - private
@@ -403,7 +396,6 @@ services:
       CONTENT_QUALITY_PUBLISH_THRESHOLD: ${CONTENT_QUALITY_PUBLISH_THRESHOLD:-0.8}
       CONTENT_QUALITY_FAIL_THRESHOLD: ${CONTENT_QUALITY_FAIL_THRESHOLD:-0.5}
       WORKER_APP: content-quality
-      GIT_SHA: ${GIT_SHA}
       <<: *llm-direct
     depends_on:
       redis:
@@ -441,7 +433,6 @@ services:
       DISCOVERY_CRAWLER_NAV_TIMEOUT_MS: ${DISCOVERY_CRAWLER_NAV_TIMEOUT_MS:-45000}
       SEARCH_API_URL: ${SEARCH_API_URL}
       SEARCH_API_KEY: ${SEARCH_API_KEY}
-      GIT_SHA: ${GIT_SHA}
     shm_size: 1gb
     mem_limit: ${MEM_DISCOVERY_CRAWLER:-1536m}
     networks:
@@ -471,7 +462,6 @@ services:
       DISCOVERY_LIFECYCLE_HARD_DELETE_DAYS: ${DISCOVERY_LIFECYCLE_HARD_DELETE_DAYS:-90}
       DISCOVERY_LIFECYCLE_DROP_TOMBSTONE: ${DISCOVERY_LIFECYCLE_DROP_TOMBSTONE:-false}
       DISCOVERY_LIFECYCLE_BATCH_SIZE: ${DISCOVERY_LIFECYCLE_BATCH_SIZE:-50}
-      GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_DISCOVERY_LIFECYCLE:-256m}
     networks:
       - private
@@ -494,7 +484,6 @@ services:
       DISCOVERY_SOURCE_SCOUT_ENABLED: ${DISCOVERY_SOURCE_SCOUT_ENABLED:-false}
       DISCOVERY_SOURCE_SCOUT_MAX_PER_PASS: ${DISCOVERY_SOURCE_SCOUT_MAX_PER_PASS:-6}
       DISCOVERY_SOURCE_SCOUT_PRIORITY: ${DISCOVERY_SOURCE_SCOUT_PRIORITY:-P0}
-      GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_DISCOVERY_SOURCE_SCOUT:-192m}
     networks:
       # private has no egress. Source scout calls public search APIs.
@@ -521,7 +510,6 @@ services:
       DISCOVERY_PORTAL_MONITOR_FORCE_CRAWL: ${DISCOVERY_PORTAL_MONITOR_FORCE_CRAWL:-true}
       DISCOVERY_PORTAL_MONITOR_STALE_HOURS: ${DISCOVERY_PORTAL_MONITOR_STALE_HOURS:-36}
       DISCOVERY_PORTAL_MONITOR_PROBE_TIMEOUT_MS: ${DISCOVERY_PORTAL_MONITOR_PROBE_TIMEOUT_MS:-15000}
-      GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_DISCOVERY_PORTAL_MONITOR:-192m}
     networks:
       - private
@@ -563,7 +551,6 @@ services:
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      GIT_SHA: ${GIT_SHA}
     mem_limit: ${MEM_SOCIAL:-192m}
     networks:
       # private has no egress. Social scout calls public platform APIs.

@@ -33,6 +33,7 @@ ARG GIT_SHA=""
 FROM mcr.microsoft.com/playwright:v1.50.1-jammy
 WORKDIR /app
 COPY --from=build --chown=pwuser:pwuser /app ./
+ARG GIT_SHA=""
 ENV NODE_ENV=production \
     GIT_SHA=${GIT_SHA}
 USER pwuser
